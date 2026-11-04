@@ -69,7 +69,7 @@
   }
 
   function matchId(match) {
-    return String(match.tracker?.id || match.url || "");
+    return String(match?.tracker?.id || match?.url || "");
   }
 
   function statValue(stats, keyword) {
@@ -121,8 +121,6 @@
     };
   }
 
-  // AKTUÁLNE ŠTATISTIKY ZÁPASU
-
   function renderCurrentStats(card, stats) {
     addText(card, "ŠTATISTIKY ZÁPASU", "15px");
 
@@ -154,85 +152,214 @@
     }
   }
 
+  // ZÍSKANIE VŠETKÝCH MERANÍ KONKRÉTNEHO ZÁPASU
+
   function historyRecords(historyData, id) {
     const snapshots = [];
 
     if (!Array.isArray(historyData)) return snapshots;
 
     historyData.forEach(batch => {
-      (batch.records || []).forEach(record => {
+      if (!Array.isArray(batch.records)) return;
+
+      batch.records.forEach(record => {
         const match = record.match;
 
         if (!match || matchId(match) !== id) return;
 
         const time = Date.parse(
-          record.collected_at || batch.collected_at || ""
+          record.collected_at ||
+          batch.collected_at ||
+          ""
         );
 
         if (!Number.isFinite(time)) return;
 
-        snapshots.push({ time, match });
+        snapshots.push({
+          time,
+          match
+        });
       });
     });
 
     return snapshots.sort((a, b) => a.time - b.time);
   }
 
-  function getSnapshot(match, historyData) {
-    const id = matchId(match);
-    const stats = match.stats || [];
+  function sameStats(statsA, statsB) {
+    const keys = [
+      "shots on target",
+      "dangerous attacks"
+    ];
 
-    const shots = statValue(stats, "shots on target");
-    const attacks = statValue(stats, "dangerous attacks");
+    return keys.every(key => {
+      const a = statValue(statsA, key);
+      const b = statValue(statsB, key);
 
-    const records = historyRecords(historyData, id);
-    const now = Date.now();
+      if (!a || !b) return false;
 
-    const oldRecords = records.filter(record => {
-      const age = now - record.time;
-
-      return age >= 4 * 60000 && age <= 20 * 60000;
+      return (
+        a.home === b.home &&
+        a.away === b.away
+      );
     });
+  }
 
-    const old = oldRecords.length
-      ? oldRecords[oldRecords.length - 1]
-      : null;
+  // POROVNANIE POSLEDNÝCH DVOCH MERANÍ
 
-    if (!old) {
+  function getSnapshot(match, historyData, collectedAt) {
+    const id = matchId(match);
+    const currentStats = match.stats || [];
+
+    const currentShots = statValue(
+      currentStats,
+      "shots on target"
+    );
+
+    const currentAttacks = statValue(
+      currentStats,
+      "dangerous attacks"
+    );
+
+    if (!currentShots || !currentAttacks) {
       return {
         ready: false,
-        text: "Zbieram historické dáta – čakám na ďalšie meranie."
+        text: "Čakám na kompletné štatistiky zápasu."
       };
     }
 
+    const records = historyRecords(historyData, id);
+
+    if (!records.length) {
+      return {
+        ready: false,
+        text: "Zbieram prvé historické meranie."
+      };
+    }
+
+    const currentTime = Date.parse(collectedAt || "");
+
+    let previousRecords;
+
+    if (Number.isFinite(currentTime)) {
+      // Vynecháme aktuálne meranie z histórie.
+      previousRecords = records.filter(record =>
+        record.time < currentTime - 1000
+      );
+    } else {
+      // Záložný režim, ak chýba čas aktuálneho zberu.
+      previousRecords = records.slice();
+
+      const last = previousRecords[previousRecords.length - 1];
+
+      if (
+        last &&
+        sameStats(last.match.stats || [], currentStats)
+      ) {
+        previousRecords.pop();
+      }
+    }
+
+    if (!previousRecords.length) {
+      return {
+        ready: false,
+        text: "Čakám na druhé meranie tohto zápasu."
+      };
+    }
+
+    // Posledné dostupné staršie meranie.
+    const old = previousRecords[previousRecords.length - 1];
+
     const oldStats = old.match.stats || [];
 
-    const oldShots = statValue(oldStats, "shots on target");
-    const oldAttacks = statValue(oldStats, "dangerous attacks");
+    const oldShots = statValue(
+      oldStats,
+      "shots on target"
+    );
 
-    const homeShots = shots && oldShots
-      ? Math.max(0, shots.home - oldShots.home) : 0;
+    const oldAttacks = statValue(
+      oldStats,
+      "dangerous attacks"
+    );
 
-    const awayShots = shots && oldShots
-      ? Math.max(0, shots.away - oldShots.away) : 0;
+    if (!oldShots || !oldAttacks) {
+      return {
+        ready: false,
+        text: "Staršie meranie nemá kompletné štatistiky."
+      };
+    }
 
-    const homeAttacks = attacks && oldAttacks
-      ? Math.max(0, attacks.home - oldAttacks.home) : 0;
+    const minutes = (Date.now() - old.time) / 60000;
 
-    const awayAttacks = attacks && oldAttacks
-      ? Math.max(0, attacks.away - oldAttacks.away) : 0;
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      return {
+        ready: false,
+        text: "Čakám na platné časové údaje."
+      };
+    }
+
+    // Ochrana pred použitím príliš starých dát.
+    if (minutes > 60) {
+      return {
+        ready: false,
+        text: "Historické meranie je staršie ako 60 minút."
+      };
+    }
+
+    const homeShots = Math.max(
+      0,
+      currentShots.home - oldShots.home
+    );
+
+    const awayShots = Math.max(
+      0,
+      currentShots.away - oldShots.away
+    );
+
+    const homeAttacks = Math.max(
+      0,
+      currentAttacks.home - oldAttacks.home
+    );
+
+    const awayAttacks = Math.max(
+      0,
+      currentAttacks.away - oldAttacks.away
+    );
+
+    const homeActivity =
+      homeShots * 3 + homeAttacks;
+
+    const awayActivity =
+      awayShots * 3 + awayAttacks;
+
+    // Prepočet aktivity na 10 minút.
+    const homeActivityRate =
+      homeActivity / minutes * 10;
+
+    const awayActivityRate =
+      awayActivity / minutes * 10;
 
     return {
       ready: true,
+
       homeShots,
       awayShots,
+
       homeAttacks,
       awayAttacks,
-      homeActivity: homeShots * 3 + homeAttacks,
-      awayActivity: awayShots * 3 + awayAttacks,
-      minutes: Math.round((now - old.time) / 60000)
+
+      homeActivity,
+      awayActivity,
+
+      homeActivityRate,
+      awayActivityRate,
+
+      minutes: Math.round(minutes),
+
+      oldTime: new Date(old.time).toLocaleTimeString("sk-SK")
     };
   }
+
+  // ORIENTAČNÉ SKÓRE HROZBY
 
   function calculateThreat(pressure, snapshot) {
     if (!pressure || !snapshot.ready) return null;
@@ -241,7 +368,7 @@
       100,
       Math.round(
         pressure.home * 0.45 +
-        Math.min(snapshot.homeActivity * 3, 40) * 0.55
+        Math.min(snapshot.homeActivityRate * 3, 40) * 0.55
       )
     );
 
@@ -249,12 +376,14 @@
       100,
       Math.round(
         pressure.away * 0.45 +
-        Math.min(snapshot.awayActivity * 3, 40) * 0.55
+        Math.min(snapshot.awayActivityRate * 3, 40) * 0.55
       )
     );
 
     return { home, away };
   }
+
+  // VYTVORENIE SIGNÁLU
 
   function makeSignal(match, threat, snapshot) {
     const minute = Number(match.live_minute);
@@ -268,14 +397,14 @@
         side: "home",
         team: match.home,
         score: threat.home,
-        activity: snapshot.homeActivity,
+        activity: snapshot.homeActivityRate,
         difference: threat.home - threat.away
       },
       {
         side: "away",
         team: match.away,
         score: threat.away,
-        activity: snapshot.awayActivity,
+        activity: snapshot.awayActivityRate,
         difference: threat.away - threat.home
       }
     ];
@@ -305,17 +434,22 @@
       away: match.away,
       side: signal.side,
       team: signal.team,
+
       startGoals: signal.side === "home"
         ? Number(match.home_score || 0)
         : Number(match.away_score || 0),
+
       startMinute: minute,
       deadlineMinute: Math.min(90, minute + 15),
+
       createdAt: new Date().toISOString(),
       status: "OPEN"
     });
 
     saveSignals();
   }
+
+  // VYHODNOTENIE SIGNÁLOV
 
   function settleSignals(matches) {
     let changed = false;
@@ -334,14 +468,17 @@
         : Number(match.away_score || 0);
 
       const minute = Number(match.live_minute);
-      const status = String(match.status || "").toLowerCase();
+      const status = String(
+        match.status_text || match.status || ""
+      ).toLowerCase();
 
       if (goals > signal.startGoals) {
         signal.status = "WIN";
         signal.settledAt = new Date().toISOString();
         changed = true;
       } else if (
-        (Number.isFinite(minute) && minute >= signal.deadlineMinute) ||
+        (Number.isFinite(minute) &&
+          minute >= signal.deadlineMinute) ||
         status.includes("finished")
       ) {
         signal.status = "LOSS";
@@ -354,9 +491,17 @@
   }
 
   function renderSummary() {
-    const wins = signalHistory.filter(s => s.status === "WIN").length;
-    const losses = signalHistory.filter(s => s.status === "LOSS").length;
-    const open = signalHistory.filter(s => s.status === "OPEN").length;
+    const wins = signalHistory.filter(
+      s => s.status === "WIN"
+    ).length;
+
+    const losses = signalHistory.filter(
+      s => s.status === "LOSS"
+    ).length;
+
+    const open = signalHistory.filter(
+      s => s.status === "OPEN"
+    ).length;
 
     const total = wins + losses;
 
@@ -365,16 +510,31 @@
       : 0;
 
     addText(engine, "HISTÓRIA SIGNÁLOV", "16px");
-    addText(engine, `Výhry: ${wins} | Prehry: ${losses} | Otvorené: ${open}`);
-    addText(engine, `Úspešnosť vyhodnotených signálov: ${rate}%`);
 
     addText(
       engine,
-      "Pozor: ide o technické vyhodnotenie signálov, nie garantovaný zisk."
+      `Výhry: ${wins} | Prehry: ${losses} | Otvorené: ${open}`
+    );
+
+    addText(
+      engine,
+      `Úspešnosť vyhodnotených signálov: ${rate}%`
+    );
+
+    addText(
+      engine,
+      "GOAL THREAT je orientačné skóre tlaku, nie pravdepodobnosť gólu."
+    );
+
+    addText(
+      engine,
+      "Výsledky signálov nie sú zárukou zisku."
     );
   }
 
-  function renderMatch(match, historyData) {
+  // ZOBRAZENIE ZÁPASU
+
+  function renderMatch(match, historyData, collectedAt) {
     const card = document.createElement("div");
 
     card.style.cssText =
@@ -395,11 +555,16 @@
       `${match.competition || "Futbal"} | ${minute}. minúta`
     );
 
-    // ZOBRAZENIE VŠETKÝCH DOSTUPNÝCH ŠTATISTÍK
     renderCurrentStats(card, match.stats || []);
 
     const pressure = calculatePressure(match.stats || []);
-    const snapshot = getSnapshot(match, historyData);
+
+    const snapshot = getSnapshot(
+      match,
+      historyData,
+      collectedAt
+    );
+
     const threat = calculateThreat(pressure, snapshot);
 
     if (pressure) {
@@ -414,17 +579,27 @@
     if (snapshot.ready) {
       addText(
         card,
-        `Zmena za ${snapshot.minutes} min: strely na bránu ${snapshot.homeShots} : ${snapshot.awayShots}`
+        `Porovnávané merania: ${snapshot.oldTime} | Rozdiel ${snapshot.minutes} min`
       );
 
       addText(
         card,
-        `Zmena nebezpečných útokov: ${snapshot.homeAttacks} : ${snapshot.awayAttacks}`
+        `Nové strely na bránu: ${snapshot.homeShots} : ${snapshot.awayShots}`
       );
 
       addText(
         card,
-        `Aktivita: Domáci ${snapshot.homeActivity} | Hostia ${snapshot.awayActivity}`
+        `Nové nebezpečné útoky: ${snapshot.homeAttacks} : ${snapshot.awayAttacks}`
+      );
+
+      addText(
+        card,
+        `Aktivita spolu: Domáci ${snapshot.homeActivity} | Hostia ${snapshot.awayActivity}`
+      );
+
+      addText(
+        card,
+        `Aktivita za 10 min: Domáci ${snapshot.homeActivityRate.toFixed(1)} | Hostia ${snapshot.awayActivityRate.toFixed(1)}`
       );
     } else {
       addText(card, snapshot.text);
@@ -449,11 +624,16 @@
 
       recordSignal(match, signal);
     } else {
-      addText(card, "LIVE SIGNÁL: Zatiaľ bez potvrdeného signálu.");
+      addText(
+        card,
+        "LIVE SIGNÁL: Zatiaľ bez potvrdeného signálu."
+      );
     }
 
     matchesEl.appendChild(card);
   }
+
+  // HLAVNÉ SKENOVANIE
 
   async function scan() {
     if (scanning) return;
@@ -482,7 +662,7 @@
       matchesEl.innerHTML = "";
       engine.innerHTML = "";
 
-      addText(engine, "SMART SIGNAL ENGINE v6", "18px");
+      addText(engine, "SMART SIGNAL ENGINE v7", "18px");
 
       addText(
         engine,
@@ -495,11 +675,27 @@
       );
 
       if (!matches.length) {
-        addText(matchesEl, "Momentálne nie sú dostupné LIVE zápasy.");
+        addText(
+          matchesEl,
+          "Momentálne nie sú dostupné LIVE zápasy."
+        );
       }
 
-      matches.forEach(match => {
-        renderMatch(match, historyData);
+      records.forEach(record => {
+        const match = record.match;
+
+        if (
+          !match ||
+          !String(match.status || "").toLowerCase().includes("live")
+        ) {
+          return;
+        }
+
+        renderMatch(
+          match,
+          historyData,
+          record.collected_at || latest.collected_at
+        );
       });
 
       renderSummary();
@@ -515,7 +711,7 @@
 
       engine.innerHTML = "";
 
-      addText(engine, "SMART SIGNAL ENGINE v6");
+      addText(engine, "SMART SIGNAL ENGINE v7");
       addText(engine, "Nepodarilo sa načítať LIVE dáta.");
 
     } finally {
