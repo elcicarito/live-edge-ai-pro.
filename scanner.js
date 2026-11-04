@@ -1,7 +1,11 @@
+
 (() => {
   const LATEST_URL = "./data/live-latest.json";
   const HISTORY_URL = "./data/live-history.json";
   const SIGNAL_KEY = "live_edge_signals_v6";
+
+  const MIN_GAP_MINUTES = 3;
+  const MAX_GAP_MINUTES = 15;
 
   const matchesEl = document.getElementById("matches");
   const signalEl = document.getElementById("signal");
@@ -69,7 +73,18 @@
   }
 
   function matchId(match) {
-    return String(match?.tracker?.id || match?.url || "");
+    return String(
+      match?.tracker?.id ||
+      match?.url ||
+      match?.id ||
+      ""
+    );
+  }
+
+  function isLive(match) {
+    return String(
+      match?.status || match?.status_text || ""
+    ).toLowerCase().includes("live");
   }
 
   function statValue(stats, keyword) {
@@ -152,12 +167,14 @@
     }
   }
 
-  // ZÍSKANIE VŠETKÝCH MERANÍ KONKRÉTNEHO ZÁPASU
+  // HISTORICKÉ MERANIA KONKRÉTNEHO ZÁPASU
 
   function historyRecords(historyData, id) {
     const snapshots = [];
 
-    if (!Array.isArray(historyData)) return snapshots;
+    if (!Array.isArray(historyData) || !id) {
+      return snapshots;
+    }
 
     historyData.forEach(batch => {
       if (!Array.isArray(batch.records)) return;
@@ -166,6 +183,8 @@
         const match = record.match;
 
         if (!match || matchId(match) !== id) return;
+
+        if (!isLive(match)) return;
 
         const time = Date.parse(
           record.collected_at ||
@@ -185,26 +204,7 @@
     return snapshots.sort((a, b) => a.time - b.time);
   }
 
-  function sameStats(statsA, statsB) {
-    const keys = [
-      "shots on target",
-      "dangerous attacks"
-    ];
-
-    return keys.every(key => {
-      const a = statValue(statsA, key);
-      const b = statValue(statsB, key);
-
-      if (!a || !b) return false;
-
-      return (
-        a.home === b.home &&
-        a.away === b.away
-      );
-    });
-  }
-
-  // POROVNANIE POSLEDNÝCH DVOCH MERANÍ
+  // VÝBER NAJNOVŠIEHO POUŽITEĽNÉHO MERANIA
 
   function getSnapshot(match, historyData, collectedAt) {
     const id = matchId(match);
@@ -227,6 +227,22 @@
       };
     }
 
+    if (!id) {
+      return {
+        ready: false,
+        text: "Chýba identifikátor zápasu."
+      };
+    }
+
+    const currentTime = Date.parse(collectedAt || "");
+
+    if (!Number.isFinite(currentTime)) {
+      return {
+        ready: false,
+        text: "Chýba čas aktuálneho merania."
+      };
+    }
+
     const records = historyRecords(historyData, id);
 
     if (!records.length) {
@@ -236,28 +252,10 @@
       };
     }
 
-    const currentTime = Date.parse(collectedAt || "");
-
-    let previousRecords;
-
-    if (Number.isFinite(currentTime)) {
-      // Vynecháme aktuálne meranie z histórie.
-      previousRecords = records.filter(record =>
-        record.time < currentTime - 1000
-      );
-    } else {
-      // Záložný režim, ak chýba čas aktuálneho zberu.
-      previousRecords = records.slice();
-
-      const last = previousRecords[previousRecords.length - 1];
-
-      if (
-        last &&
-        sameStats(last.match.stats || [], currentStats)
-      ) {
-        previousRecords.pop();
-      }
-    }
+    // Iba merania staršie ako aktuálne meranie.
+    const previousRecords = records.filter(record =>
+      record.time < currentTime - 1000
+    );
 
     if (!previousRecords.length) {
       return {
@@ -266,8 +264,33 @@
       };
     }
 
-    // Posledné dostupné staršie meranie.
-    const old = previousRecords[previousRecords.length - 1];
+    // Vyberieme najnovšie staršie meranie.
+    const old = previousRecords[
+      previousRecords.length - 1
+    ];
+
+    const minutes = (currentTime - old.time) / 60000;
+
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      return {
+        ready: false,
+        text: "Neplatný čas historického merania."
+      };
+    }
+
+    if (minutes < MIN_GAP_MINUTES) {
+      return {
+        ready: false,
+        text: `Meranie je príliš čerstvé (${minutes.toFixed(1)} min). Čakám na ďalší zber.`
+      };
+    }
+
+    if (minutes > MAX_GAP_MINUTES) {
+      return {
+        ready: false,
+        text: `STARÉ DÁTA: posledné meranie je spred ${Math.round(minutes)} minút. LIVE signál zablokovaný.`
+      };
+    }
 
     const oldStats = old.match.stats || [];
 
@@ -288,42 +311,30 @@
       };
     }
 
-    const minutes = (Date.now() - old.time) / 60000;
-
-    if (!Number.isFinite(minutes) || minutes <= 0) {
+    // Kontrola resetovania alebo zmeny štatistík.
+    if (
+      currentShots.home < oldShots.home ||
+      currentShots.away < oldShots.away ||
+      currentAttacks.home < oldAttacks.home ||
+      currentAttacks.away < oldAttacks.away
+    ) {
       return {
         ready: false,
-        text: "Čakám na platné časové údaje."
+        text: "Zmena alebo reset štatistík. LIVE signál zablokovaný."
       };
     }
 
-    // Ochrana pred použitím príliš starých dát.
-    if (minutes > 60) {
-      return {
-        ready: false,
-        text: "Historické meranie je staršie ako 60 minút."
-      };
-    }
+    const homeShots =
+      currentShots.home - oldShots.home;
 
-    const homeShots = Math.max(
-      0,
-      currentShots.home - oldShots.home
-    );
+    const awayShots =
+      currentShots.away - oldShots.away;
 
-    const awayShots = Math.max(
-      0,
-      currentShots.away - oldShots.away
-    );
+    const homeAttacks =
+      currentAttacks.home - oldAttacks.home;
 
-    const homeAttacks = Math.max(
-      0,
-      currentAttacks.home - oldAttacks.home
-    );
-
-    const awayAttacks = Math.max(
-      0,
-      currentAttacks.away - oldAttacks.away
-    );
+    const awayAttacks =
+      currentAttacks.away - oldAttacks.away;
 
     const homeActivity =
       homeShots * 3 + homeAttacks;
@@ -331,7 +342,6 @@
     const awayActivity =
       awayShots * 3 + awayAttacks;
 
-    // Prepočet aktivity na 10 minút.
     const homeActivityRate =
       homeActivity / minutes * 10;
 
@@ -353,13 +363,13 @@
       homeActivityRate,
       awayActivityRate,
 
-      minutes: Math.round(minutes),
+      minutes: Number(minutes.toFixed(1)),
 
       oldTime: new Date(old.time).toLocaleTimeString("sk-SK")
     };
   }
 
-  // ORIENTAČNÉ SKÓRE HROZBY
+  // ORIENTAČNÉ SKÓRE TLAKU
 
   function calculateThreat(pressure, snapshot) {
     if (!pressure || !snapshot.ready) return null;
@@ -468,6 +478,7 @@
         : Number(match.away_score || 0);
 
       const minute = Number(match.live_minute);
+
       const status = String(
         match.status_text || match.status || ""
       ).toLowerCase();
@@ -652,17 +663,14 @@
 
       const matches = records
         .map(record => record.match)
-        .filter(match =>
-          match &&
-          String(match.status || "").toLowerCase().includes("live")
-        );
+        .filter(match => match && isLive(match));
 
       settleSignals(matches);
 
       matchesEl.innerHTML = "";
       engine.innerHTML = "";
 
-      addText(engine, "SMART SIGNAL ENGINE v7", "18px");
+      addText(engine, "SMART SIGNAL ENGINE v8", "18px");
 
       addText(
         engine,
@@ -672,6 +680,11 @@
       addText(
         engine,
         `LIVE zápasy: ${matches.length}`
+      );
+
+      addText(
+        engine,
+        `Povolený rozdiel meraní: ${MIN_GAP_MINUTES}–${MAX_GAP_MINUTES} min`
       );
 
       if (!matches.length) {
@@ -684,12 +697,7 @@
       records.forEach(record => {
         const match = record.match;
 
-        if (
-          !match ||
-          !String(match.status || "").toLowerCase().includes("live")
-        ) {
-          return;
-        }
+        if (!match || !isLive(match)) return;
 
         renderMatch(
           match,
@@ -711,7 +719,7 @@
 
       engine.innerHTML = "";
 
-      addText(engine, "SMART SIGNAL ENGINE v7");
+      addText(engine, "SMART SIGNAL ENGINE v8");
       addText(engine, "Nepodarilo sa načítať LIVE dáta.");
 
     } finally {
