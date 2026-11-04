@@ -1,4 +1,3 @@
-
 (() => {
   const LATEST_URL = "./data/live-latest.json";
   const HISTORY_URL = "./data/live-history.json";
@@ -7,10 +6,10 @@
   const MIN_GAP_MINUTES = 3;
   const MAX_GAP_MINUTES = 15;
 
-  // Dáta staršie ako 3 minúty sa už nepovažujú za aktuálne.
-  const MAX_DATA_AGE_MS = 3 * 60 * 1000;
+  // Collector pracuje každých 5 minút.
+  // Tolerancia umožňuje oneskorenie GitHub Actions.
+  const MAX_DATA_AGE_MS = 7 * 60 * 1000;
 
-  // Scanner kontroluje nové dáta každých 10 sekúnd.
   const SCAN_INTERVAL_MS = 10 * 1000;
 
   const matchesEl = document.getElementById("matches");
@@ -82,9 +81,29 @@
     return response.json();
   }
 
+  function getStatus(match) {
+    const value = match?.status;
+
+    if (typeof value === "string") {
+      return value.toLowerCase().trim();
+    }
+
+    if (value && typeof value === "object") {
+      return String(
+        value.type ||
+        value.name ||
+        value.short ||
+        ""
+      ).toLowerCase().trim();
+    }
+
+    return "";
+  }
+
   function matchId(match) {
     return String(
       match?.tracker?.id ||
+      match?.slug ||
       match?.url ||
       match?.id ||
       ""
@@ -94,32 +113,26 @@
   function isLive(match) {
     if (!match) return false;
 
-    const status = String(match.status || "").toLowerCase();
-    const statusText = String(match.status_text || "").toLowerCase();
+    const status = getStatus(match);
+    const statusText = String(
+      match.status_text || ""
+    ).toLowerCase();
 
     if (
-      status === "live" ||
-      status === "inplay" ||
-      status === "in_play"
+      ["live", "inplay", "in_play"].includes(status)
     ) {
       return true;
     }
 
-    if (
+    return (
       statusText.includes("1st half") ||
       statusText.includes("2nd half") ||
       statusText.includes("half-time") ||
       statusText.includes("extra time") ||
       statusText.includes("penalties")
-    ) {
-      return true;
-    }
-
-    return false;
+    );
   }
 
-  // Priebežný orientačný výpočet minúty zápasu.
-  // Skutočná minúta sa vždy znovu preberie z API.
   function getDisplayedMinute(match, collectedAt) {
     const raw = String(match.live_minute ?? "").trim();
 
@@ -133,7 +146,6 @@
       match.status_text || ""
     ).toLowerCase();
 
-    // Počas polčasu minúty nezvyšujeme.
     if (
       statusText.includes("half-time") ||
       statusText === "ht" ||
@@ -144,9 +156,7 @@
 
     const timestamp = Date.parse(collectedAt || "");
 
-    if (!Number.isFinite(timestamp)) {
-      return raw;
-    }
+    if (!Number.isFinite(timestamp)) return raw;
 
     const elapsed = Math.max(
       0,
@@ -246,6 +256,8 @@
     if (!Array.isArray(historyData) || !id) return snapshots;
 
     historyData.forEach(batch => {
+      // Čiastočné zbery sa nepoužívajú na výpočet aktivity.
+      if (batch.data_status !== "complete") return;
       if (!Array.isArray(batch.records)) return;
 
       batch.records.forEach(record => {
@@ -408,10 +420,13 @@
     if (!threat || !snapshot.ready) return null;
     if (!Number.isFinite(minute) || minute < 10 || minute > 90) return null;
 
-    // Nepoužívame signály z neaktuálnych meraní.
     const age = Date.now() - Date.parse(collectedAt || "");
 
-    if (!Number.isFinite(age) || age < 0 || age > MAX_DATA_AGE_MS) {
+    if (
+      !Number.isFinite(age) ||
+      age < 0 ||
+      age > MAX_DATA_AGE_MS
+    ) {
       return null;
     }
 
@@ -486,8 +501,8 @@
         : Number(match.away_score || 0);
 
       const minute = Number(match.live_minute);
-      const status = String(
-        match.status_text || match.status || ""
+      const status = (
+        getStatus(match) + " " + String(match.status_text || "")
       ).toLowerCase();
 
       if (goals > signal.startGoals) {
@@ -598,27 +613,25 @@
         "LIVE SIGNÁL: Zablokovaný – zber dát nie je kompletný.",
         "15px"
       );
-      matchesEl.appendChild(card);
-      return;
-    }
-
-    const signal = makeSignal(
-      match,
-      threat,
-      snapshot,
-      collectedAt
-    );
-
-    if (signal) {
-      addText(
-        card,
-        `LIVE SIGNÁL: ${signal.team} – tlak ${signal.score}/100`,
-        "16px"
+    } else {
+      const signal = makeSignal(
+        match,
+        threat,
+        snapshot,
+        collectedAt
       );
 
-      recordSignal(match, signal);
-    } else {
-      addText(card, "LIVE SIGNÁL: Zatiaľ bez potvrdeného signálu.");
+      if (signal) {
+        addText(
+          card,
+          `LIVE SIGNÁL: ${signal.team} – tlak ${signal.score}/100`,
+          "16px"
+        );
+
+        recordSignal(match, signal);
+      } else {
+        addText(card, "LIVE SIGNÁL: Zatiaľ bez potvrdeného signálu.");
+      }
     }
 
     matchesEl.appendChild(card);
@@ -640,7 +653,7 @@
       matchesEl.innerHTML = "";
       engine.innerHTML = "";
 
-      addText(engine, "SMART SIGNAL ENGINE v10", "18px");
+      addText(engine, "SMART SIGNAL ENGINE v11", "18px");
       addText(engine, `Zdroj: ${latest.source || "neznámy"}`);
       addText(engine, `Dáta: ${latest.collected_at || "neznámy čas"}`);
       addText(engine, `Posledná kontrola: ${new Date().toLocaleTimeString("sk-SK")}`);
@@ -653,7 +666,7 @@
         addText(engine, "STAV: NEAKTUÁLNE DÁTA", "16px");
         addText(
           engine,
-          "Posledný zber je starší ako 3 minúty. LIVE zápasy a signály sú zablokované."
+          "Posledný zber je starší ako 7 minút. LIVE signály sú zablokované."
         );
 
         addText(engine, "LIVE zápasy: 0");
@@ -695,30 +708,11 @@
         settleSignals(actualMatches);
       }
 
-      addText(
-        engine,
-        `Stav zberu: ${dataStatus.toUpperCase()}`
-      );
-
-      addText(
-        engine,
-        `Vek dát: ${Math.max(0, Math.round(age / 1000))} sekúnd`
-      );
-
-      addText(
-        engine,
-        `LIVE zápasy: ${matches.length}`
-      );
-
-      addText(
-        engine,
-        `Obnovovanie stránky: každých ${SCAN_INTERVAL_MS / 1000} sekúnd`
-      );
-
-      addText(
-        engine,
-        `Povolený rozdiel meraní: ${MIN_GAP_MINUTES}–${MAX_GAP_MINUTES} min`
-      );
+      addText(engine, `Stav zberu: ${dataStatus.toUpperCase()}`);
+      addText(engine, `Vek dát: ${Math.max(0, Math.round(age / 1000))} sekúnd`);
+      addText(engine, `LIVE zápasy: ${matches.length}`);
+      addText(engine, `Obnovovanie stránky: každých ${SCAN_INTERVAL_MS / 1000} sekúnd`);
+      addText(engine, `Povolený rozdiel meraní: ${MIN_GAP_MINUTES}–${MAX_GAP_MINUTES} min`);
 
       if (!allowSignals) {
         addText(
@@ -751,11 +745,10 @@
     } catch (error) {
       console.error("Scanner chyba:", error);
 
-      // Pri chybe nezostávajú na obrazovke staré zápasy.
       matchesEl.innerHTML = "";
       engine.innerHTML = "";
 
-      addText(engine, "SMART SIGNAL ENGINE v10");
+      addText(engine, "SMART SIGNAL ENGINE v11");
       addText(engine, "Nepodarilo sa načítať aktuálne LIVE dáta.");
       addText(engine, error.message);
 
@@ -774,4 +767,3 @@
   scan();
   setInterval(scan, SCAN_INTERVAL_MS);
 })();
-        
