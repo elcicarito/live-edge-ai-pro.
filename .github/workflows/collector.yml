@@ -1,0 +1,99 @@
+
+name: LIVE EDGE AUTO COLLECTOR
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-edge-collector
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Collect live football data
+        run: |
+          mkdir -p data
+
+          node <<'NODE'
+          const fs = require("fs");
+
+          const BASE = "https://sportscore.com/api/widget";
+          const MAX_MATCHES = 25;
+
+          async function getJSON(url) {
+            const response = await fetch(url, {
+              headers: { "User-Agent": "LIVE-EDGE-AI-PRO/1.0" }
+            });
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${url}`);
+            }
+            return response.json();
+          }
+
+          async function main() {
+            const list = await getJSON(
+              `${BASE}/matches/?sport=football&limit=50`
+            );
+
+            const matches = (list.matches || [])
+              .filter(m => m.status === "live")
+              .slice(0, MAX_MATCHES);
+
+            const records = [];
+
+            for (const item of matches) {
+              try {
+                if (!item.slug) continue;
+
+                const detail = await getJSON(
+                  `${BASE}/match/?sport=football&slug=${encodeURIComponent(item.slug)}`
+                );
+
+                records.push({
+                  collected_at: new Date().toISOString(),
+                  match: detail.match || item
+                });
+              } catch (error) {
+                console.log("Match error:", item.home, item.away, error.message);
+              }
+            }
+
+            const file = "data/live-history.jsonl";
+            const line = JSON.stringify({
+              collected_at: new Date().toISOString(),
+              live_count: matches.length,
+              records
+            }) + "\n";
+
+            fs.appendFileSync(file, line);
+            console.log(`Collected ${records.length} live matches.`);
+          }
+
+          main().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Save collected history
+        run: |
+          git config user.name "LIVE EDGE AUTO COLLECTOR"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/live-history.jsonl
+          git diff --cached --quiet || (
+            git commit -m "Automatic LIVE football data collection"
+            git push
+          )
+          
