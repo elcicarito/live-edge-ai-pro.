@@ -1,16 +1,13 @@
 (() => {
   const API = "https://sportscore.com/api/widget/matches/?sport=football&limit=50";
   const MATCH_API = "https://sportscore.com/api/widget/match/?sport=football&slug=";
+  const STORAGE_KEY = "live_edge_history_v2";
 
   const matchesEl = document.getElementById("matches");
   const signalEl = document.getElementById("signal");
 
-  if (!matchesEl || !signalEl) {
-    console.error("LIVE EDGE: Chýbajú HTML elementy.");
-    return;
-  }
+  if (!matchesEl || !signalEl) return;
 
-  // Vytvorenie panelu AI Engine
   let engine = document.getElementById("pressure-engine");
 
   if (!engine) {
@@ -22,8 +19,22 @@
   engine.style.cssText =
     "margin-top:15px;padding:14px;background:#172438;color:white;border-radius:12px;";
 
-  const history = new Map();
   let scanning = false;
+  let history = {};
+
+  try {
+    history = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+  } catch {
+    history = {};
+  }
+
+  function saveHistory() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    } catch (e) {
+      console.warn("Históriu sa nepodarilo uložiť", e);
+    }
+  }
 
   function slugFromUrl(url) {
     const parts = (url || "").split("/").filter(Boolean);
@@ -31,25 +42,18 @@
   }
 
   function statValue(stats, keyword) {
-    const item = stats.find(s =>
+    const item = (stats || []).find(s =>
       String(s.label).toLowerCase().includes(keyword)
     );
 
     if (!item) return null;
 
-    const value = Number(item.home);
+    const home = Number(item.home);
     const away = Number(item.away);
 
-    if (!Number.isFinite(value) || !Number.isFinite(away)) {
-      return null;
-    }
+    if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
 
-    return { home: value, away };
-  }
-
-  function share(a, b) {
-    const total = a + b;
-    return total > 0 ? a / total : 0.5;
+    return { home, away };
   }
 
   function calculatePressure(stats) {
@@ -61,85 +65,105 @@
 
     let home = 0;
     let away = 0;
-    let totalWeight = 0;
+    let weight = 0;
 
-    for (const measure of measures) {
-      const values = statValue(stats, measure.key);
-      if (!values) continue;
+    measures.forEach(m => {
+      const v = statValue(stats, m.key);
+      if (!v) return;
 
-      home += share(values.home, values.away) * measure.weight;
-      away += share(values.away, values.home) * measure.weight;
-      totalWeight += measure.weight;
-    }
+      const total = v.home + v.away;
+      const h = total ? v.home / total : 0.5;
 
-    if (!totalWeight) return null;
+      home += h * m.weight;
+      away += (1 - h) * m.weight;
+      weight += m.weight;
+    });
+
+    if (!weight) return null;
 
     return {
-      home: Math.round(home / totalWeight * 100),
-      away: Math.round(away / totalWeight * 100)
+      home: Math.round(home / weight * 100),
+      away: Math.round(away / weight * 100)
     };
   }
 
-  function getMomentum(id, stats) {
+  function momentum(id, stats) {
+    const now = Date.now();
+
+    if (!history[id]) history[id] = [];
+
     const shots = statValue(stats, "shots on target");
     const attacks = statValue(stats, "dangerous attacks");
 
-    if (!history.has(id)) history.set(id, []);
-
-    const records = history.get(id);
-    const now = Date.now();
-
-    records.push({
+    const current = {
       time: now,
-      homeShots: shots?.home ?? null,
-      awayShots: shots?.away ?? null,
-      homeAttacks: attacks?.home ?? null,
-      awayAttacks: attacks?.away ?? null
-    });
-
-    // Uchovávame posledných 10 meraní
-    while (records.length > 10) records.shift();
-
-    // Hľadáme meranie staré aspoň 4 minúty
-    const old = [...records].reverse().find(
-      r => now - r.time >= 4 * 60 * 1000
-    );
-
-    if (!old) return {
-      ready: false,
-      text: "Zbieram dáta – čakaj približne 5 minút."
+      hs: shots?.home ?? null,
+      as: shots?.away ?? null,
+      ha: attacks?.home ?? null,
+      aa: attacks?.away ?? null
     };
 
-    let homeChange = 0;
-    let awayChange = 0;
-    let available = 0;
+    const records = history[id];
 
-    if (shots && old.homeShots !== null) {
-      homeChange += Math.max(0, shots.home - old.homeShots) * 2;
-      awayChange += Math.max(0, shots.away - old.awayShots) * 2;
-      available++;
+    // Záznam ukladáme iba pri novej zmene alebo po minúte.
+    const last = records[records.length - 1];
+
+    if (!last || now - last.time >= 60000) {
+      records.push(current);
     }
 
-    if (attacks && old.homeAttacks !== null) {
-      homeChange += Math.max(0, attacks.home - old.homeAttacks);
-      awayChange += Math.max(0, attacks.away - old.awayAttacks);
-      available++;
+    // Uchovávame maximálne 24 hodín.
+    history[id] = records.filter(r => now - r.time <= 86400000).slice(-150);
+
+    const old = [...history[id]].reverse().find(
+      r => now - r.time >= 5 * 60000
+    );
+
+    saveHistory();
+
+    if (!old) {
+      return {
+        ready: false,
+        text: "Zbieram dáta – potrebných je 5 minút."
+      };
     }
 
-    if (!available) {
-      return { ready: false, text: "Momentum nemá dostatok údajov." };
+    let home = 0;
+    let away = 0;
+    let count = 0;
+
+    if (shots && old.hs !== null && old.as !== null) {
+      home += Math.max(0, shots.home - old.hs) * 2;
+      away += Math.max(0, shots.away - old.as) * 2;
+      count++;
     }
 
-    const difference = homeChange - awayChange;
+    if (attacks && old.ha !== null && old.aa !== null) {
+      home += Math.max(0, attacks.home - old.ha);
+      away += Math.max(0, attacks.away - old.aa);
+      count++;
+    }
+
+    if (!count) {
+      return { ready: false, text: "Nedostatok historických štatistík." };
+    }
+
+    const diff = home - away;
 
     let text = "Vyrovnané momentum";
 
-    if (difference >= 2) text = "Momentum domácich";
-    if (difference <= -2) text = "Momentum hostí";
+    if (diff >= 2) text = "Rastúce momentum domácich";
+    if (diff <= -2) text = "Rastúce momentum hostí";
+
+    if (home === 0 && away === 0) {
+      text = "Bez zaznamenanej zmeny";
+    }
 
     return {
       ready: true,
-      difference,
+      home,
+      away,
+      diff,
       text
     };
   }
@@ -153,7 +177,7 @@
       MATCH_API + encodeURIComponent(slug)
     );
 
-    if (!response.ok) throw new Error("Detail HTTP " + response.status);
+    if (!response.ok) throw new Error("HTTP " + response.status);
 
     const data = await response.json();
 
@@ -167,24 +191,22 @@
     parent.appendChild(p);
   }
 
-  function renderEngine(results) {
+  function render(results) {
     engine.replaceChildren();
-
-    addText(engine, "AI PRESSURE ENGINE v1", "18px");
+    addText(engine, "AI PRESSURE + MOMENTUM ENGINE v2", "18px");
 
     if (!results.length) {
-      addText(engine, "Momentálne nie sú dostupné LIVE zápasy.");
+      addText(engine, "Žiadne dostupné LIVE zápasy.");
       return;
     }
 
     results.forEach(result => {
-      const card = document.createElement("div");
-      card.style.cssText =
-        "padding:12px;margin-top:12px;background:#26364b;border-radius:9px;";
-
       const match = result.match;
       const stats = match.stats || [];
-      const pressure = calculatePressure(stats);
+      const card = document.createElement("div");
+
+      card.style.cssText =
+        "padding:12px;margin-top:12px;background:#26364b;border-radius:9px;";
 
       addText(
         card,
@@ -192,55 +214,51 @@
         "15px"
       );
 
-      addText(card, `Minúta: ${match.live_minute || match.status_text || "LIVE"}`);
-
-      if (!pressure) {
-        addText(card, "Pressure Score: nedostatok štatistík");
+      if (result.error) {
+        addText(card, "Chyba detailu: " + result.error);
         engine.appendChild(card);
         return;
       }
 
-      addText(card, `Tlak domácich: ${pressure.home}/100`);
-      addText(card, `Tlak hostí: ${pressure.away}/100`);
+      const pressure = calculatePressure(stats);
+      const id = match.tracker?.id || match.url;
+      const mom = momentum(id, stats);
 
-      for (const key of [
-        "possession",
-        "shots on target",
-        "dangerous attacks"
-      ]) {
-        const value = statValue(stats, key);
-        if (!value) continue;
+      addText(card, `Minúta: ${match.live_minute || match.status_text || "LIVE"}`);
 
-        const label = key === "possession"
-          ? "Držanie lopty"
-          : key === "shots on target"
-            ? "Strely na bránu"
-            : "Nebezpečné útoky";
-
-        addText(card, `${label}: ${value.home} – ${value.away}`);
+      if (pressure) {
+        addText(card, `Tlak domácich: ${pressure.home}/100`);
+        addText(card, `Tlak hostí: ${pressure.away}/100`);
+      } else {
+        addText(card, "Pressure Score: nedostatok údajov");
       }
 
-      const momentum = getMomentum(
-        match.tracker?.id || match.url,
-        stats
-      );
+      const s = statValue(stats, "shots on target");
+      const a = statValue(stats, "dangerous attacks");
+      const p = statValue(stats, "possession");
 
-      addText(card, `Momentum: ${momentum.text}`);
+      if (p) addText(card, `Držanie lopty: ${p.home} – ${p.away}`);
+      if (s) addText(card, `Strely na bránu: ${s.home} – ${s.away}`);
+      if (a) addText(card, `Nebezpečné útoky: ${a.home} – ${a.away}`);
 
-      let signal = "NO BET – zatiaľ bez potvrdeného tlaku";
+      addText(card, `Momentum: ${mom.text}`);
 
-      if (momentum.ready && pressure.home >= 65 &&
-          momentum.difference >= 2) {
-        signal = "TLAK DOMÁCICH – sledovať";
-      } else if (momentum.ready && pressure.away >= 65 &&
-                 momentum.difference <= -2) {
-        signal = "TLAK HOSTÍ – sledovať";
-      } else if (!momentum.ready) {
-        signal = "NO BET – čakám na Momentum";
+      if (mom.ready) {
+        addText(card, `Zmena za 5+ minút – domáci: ${mom.home}, hostia: ${mom.away}`);
+      }
+
+      let signal = "NO BET – bez potvrdeného momenta";
+
+      if (pressure && mom.ready) {
+        if (pressure.home >= 65 && mom.diff >= 2) {
+          signal = "TLAK DOMÁCICH – sledovať";
+        } else if (pressure.away >= 65 && mom.diff <= -2) {
+          signal = "TLAK HOSTÍ – sledovať";
+        }
       }
 
       addText(card, `LIVE stav: ${signal}`, "15px");
-      addText(card, "Upozornenie: bez overených kurzov nejde o stávkový tip.", "12px");
+      addText(card, "Heuristické hodnotenie, nie overená predikcia zisku.", "12px");
 
       engine.appendChild(card);
     });
@@ -255,15 +273,12 @@
       if (!response.ok) throw new Error("HTTP " + response.status);
 
       const data = await response.json();
+
       const live = (data.matches || []).filter(
         m => String(m.status).toLowerCase() === "live"
       );
 
       matchesEl.replaceChildren();
-
-      if (!live.length) {
-        addText(matchesEl, "Momentálne nie sú dostupné LIVE zápasy.");
-      }
 
       live.forEach(match => {
         const button = document.createElement("button");
@@ -280,25 +295,18 @@
         live.map(async match => {
           try {
             return { match: await getDetails(match) };
-          } catch (error) {
-            return { match, error: error.message };
+          } catch (e) {
+            return { match, error: e.message };
           }
         })
       );
 
-      const valid = results.filter(r => !r.error);
-      renderEngine(valid);
+      render(results);
+      signalEl.textContent =
+        "Aktualizované: " + new Date().toLocaleTimeString("sk-SK");
 
-      signalEl.textContent = results.some(r => r.error)
-        ? "Niektoré detaily zápasov sa nepodarilo načítať."
-        : `Aktualizované: ${new Date().toLocaleTimeString("sk-SK")}`;
-
-      results.filter(r => r.error).forEach(r => {
-        addText(engine, `${r.match.home} – chyba: ${r.error}`);
-      });
-
-    } catch (error) {
-      signalEl.textContent = "Chyba načítania: " + error.message;
+    } catch (e) {
+      signalEl.textContent = "Chyba načítania: " + e.message;
     } finally {
       scanning = false;
     }
