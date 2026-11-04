@@ -61,12 +61,13 @@ jobs:
 
             for (const item of matches) {
               try {
-                const rawUrl = item.url || "";
-                const slug = rawUrl
-                  .split("?")[0]
-                  .replace(/\/+$/, "")
-                  .split("/")
-                  .pop();
+              const rawUrl = item.url || "";
+              const pathParts = rawUrl
+              .split("?")[0]
+              .split("/")
+             .filter(Boolean);
+
+             const slug = pathParts[pathParts.length - 2];
 
                 if (!slug) {
                   errors.push("Missing URL: " + item.home);
