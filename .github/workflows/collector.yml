@@ -1,3 +1,4 @@
+
 name: LIVE EDGE AUTO COLLECTOR
 
 on:
@@ -29,6 +30,13 @@ jobs:
           const BASE = "https://sportscore.com/api/v1";
           const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+          const ARCHIVE_PATH = "data/live-archive.json";
+          const LATEST_PATH = "data/live-latest.json";
+          const HISTORY_PATH = "data/live-history.jsonl";
+          const HISTORY_JSON_PATH = "data/live-history.json";
+
+          const REQUIRED_MISSES = 3;
+
           async function getJSON(url, attempts = 3) {
             let lastError;
 
@@ -39,7 +47,7 @@ jobs:
 
                 const response = await fetch(freshUrl, {
                   headers: {
-                    "User-Agent": "LIVE-EDGE-AI-PRO/7.0",
+                    "User-Agent": "LIVE-EDGE-AI-PRO/8.0",
                     "Accept": "application/json",
                     "Cache-Control": "no-cache, no-store, max-age=0",
                     "Pragma": "no-cache"
@@ -73,6 +81,12 @@ jobs:
             throw lastError;
           }
 
+          function readJson(path, fallback) {
+            if (!fs.existsSync(path)) return fallback;
+
+            return JSON.parse(fs.readFileSync(path, "utf8"));
+          }
+
           function getStatus(match) {
             const value = match?.status;
 
@@ -93,13 +107,11 @@ jobs:
           }
 
           function isLive(match) {
-            const status = getStatus(match);
-
             return [
               "live",
               "inplay",
               "in_play"
-            ].includes(status);
+            ].includes(getStatus(match));
           }
 
           function getSlug(item) {
@@ -111,19 +123,58 @@ jobs:
               "https://sportscore.com"
             ).pathname.split("/").filter(Boolean);
 
-            const index = parts.indexOf("match");
+            return parts[parts.length - 1] || null;
+          }
 
-            return index >= 0 ? parts[index + 1] || null : null;
+          function getMatchId(record) {
+            const match = record?.match;
+
+            if (match?.tracker?.id) {
+              return String(match.tracker.id);
+            }
+
+            if (match?.url) {
+              return getSlug(match);
+            }
+
+            return null;
+          }
+
+          function makeArchiveSnapshot(record, id) {
+            return {
+              id,
+              collected_at: record.collected_at || null,
+              match: record.match
+            };
+          }
+
+          function normalizeArchive(data) {
+            if (!data || typeof data !== "object") {
+              throw new Error("Neplatný archív");
+            }
+
+            if (!Array.isArray(data.archived_matches)) {
+              throw new Error("Archív nemá archived_matches");
+            }
+
+            if (!Array.isArray(data.pending_matches)) {
+              throw new Error("Archív nemá pending_matches");
+            }
+
+            return data;
           }
 
           async function main() {
             const startedAt = new Date().toISOString();
 
             console.log("================================");
-            console.log("LIVE EDGE FRESH COLLECTOR v7");
+            console.log("LIVE EDGE FRESH COLLECTOR v8");
             console.log("Začiatok:", startedAt);
             console.log("Načítavam aktuálny LIVE zoznam...");
             console.log("================================");
+
+            // Starý LIVE snapshot načítame ešte pred jeho prepísaním.
+            const previousLatest = readJson(LATEST_PATH, null);
 
             const list = await getJSON(
               `${BASE}/fixtures/?sport=football&status=live&limit=200`
@@ -223,7 +274,7 @@ jobs:
               collected_at: new Date().toISOString(),
               collection_started_at: startedAt,
               source: "SportScore API v1",
-              collector_version: "7.0",
+              collector_version: "8.0",
               data_status: complete ? "complete" : "partial",
               fixture_count: uniqueFixtures.length,
               live_count: records.length,
@@ -232,25 +283,185 @@ jobs:
               records
             };
 
+            // =========================================
+            // ARCHÍV ZÁPASOV
+            // =========================================
+
+            const archive = normalizeArchive(
+              readJson(ARCHIVE_PATH, {
+                schema_version: 1,
+                updated_at: null,
+                archived_matches: [],
+                pending_matches: []
+              })
+            );
+
+            const archived = new Map();
+            const pending = new Map();
+
+            for (const item of archive.archived_matches) {
+              if (item?.id) {
+                archived.set(String(item.id), item);
+              }
+            }
+
+            for (const item of archive.pending_matches) {
+              if (item?.id) {
+                pending.set(String(item.id), item);
+              }
+            }
+
+            const currentById = new Map();
+
+            for (const record of records) {
+              const id = getMatchId(record);
+
+              if (id) {
+                currentById.set(
+                  id,
+                  makeArchiveSnapshot(record, id)
+                );
+              }
+            }
+
+            const now = new Date().toISOString();
+
+            // Ak sa čakajúci zápas znovu objaví,
+            // odstránime ho zo zoznamu čakajúcich.
+            for (const id of currentById.keys()) {
+              if (pending.has(id)) {
+                pending.delete(id);
+                console.log("SPÄŤ V LIVE:", id);
+              }
+            }
+
+            // Neprítomnosť počítame iba pri kompletnom zbere.
+            if (complete) {
+
+              // Spracujeme už existujúcich čakajúcich.
+              for (const [id, item] of [...pending.entries()]) {
+                if (currentById.has(id)) continue;
+
+                item.missing_complete_runs =
+                  (item.missing_complete_runs || 0) + 1;
+
+                item.last_missing_at = now;
+
+                if (item.missing_complete_runs >= REQUIRED_MISSES) {
+                  archived.set(id, {
+                    id,
+                    archived_at: now,
+                    first_missing_at: item.first_missing_at,
+                    last_seen_at: item.last_seen_at,
+                    missing_complete_runs: item.missing_complete_runs,
+                    archive_reason:
+                      "absent_from_live_feed_after_3_complete_collections",
+                    status_confirmation: "not_confirmed_finished",
+                    last_snapshot: item.last_snapshot
+                  });
+
+                  pending.delete(id);
+
+                  console.log("ARCHIVOVANÝ ZÁPAS:", id);
+                } else {
+                  pending.set(id, item);
+
+                  console.log(
+                    "ČAKÁ NA POTVRDENIE:",
+                    id,
+                    "|",
+                    item.missing_complete_runs,
+                    "/",
+                    REQUIRED_MISSES
+                  );
+                }
+              }
+
+              // Porovnáme predchádzajúci kompletný snapshot
+              // s aktuálnym LIVE zoznamom.
+              if (
+                previousLatest &&
+                previousLatest.data_status === "complete" &&
+                Array.isArray(previousLatest.records)
+              ) {
+                for (const record of previousLatest.records) {
+                  const id = getMatchId(record);
+
+                  if (!id) continue;
+                  if (currentById.has(id)) continue;
+                  if (pending.has(id)) continue;
+                  if (archived.has(id)) continue;
+
+                  const snapshot = makeArchiveSnapshot(record, id);
+
+                  const item = {
+                    id,
+                    first_missing_at: now,
+                    last_missing_at: now,
+                    last_seen_at: record.collected_at || null,
+                    missing_complete_runs: 1,
+                    last_snapshot: snapshot
+                  };
+
+                  if (item.missing_complete_runs >= REQUIRED_MISSES) {
+                    archived.set(id, {
+                      id,
+                      archived_at: now,
+                      first_missing_at: item.first_missing_at,
+                      last_seen_at: item.last_seen_at,
+                      missing_complete_runs: item.missing_complete_runs,
+                      archive_reason:
+                        "absent_from_live_feed_after_3_complete_collections",
+                      status_confirmation: "not_confirmed_finished",
+                      last_snapshot: item.last_snapshot
+                    });
+                  } else {
+                    pending.set(id, item);
+                  }
+
+                  console.log("NOVÝ KANDIDÁT ARCHÍVU:", id);
+                }
+              }
+            }
+
+            archive.updated_at = now;
+            archive.archived_matches = [...archived.values()];
+            archive.pending_matches = [...pending.values()];
+
             fs.writeFileSync(
-              "data/live-latest.json",
+              ARCHIVE_PATH,
+              JSON.stringify(archive, null, 2)
+            );
+
+            console.log("================================");
+            console.log("ARCHIVE RESULT");
+            console.log(JSON.stringify({
+              archived_matches: archive.archived_matches.length,
+              pending_matches: archive.pending_matches.length,
+              complete_collection: complete
+            }, null, 2));
+            console.log("================================");
+
+            // =========================================
+            // EXISTUJÚCE UKLADANIE LIVE DÁT
+            // =========================================
+
+            fs.writeFileSync(
+              LATEST_PATH,
               JSON.stringify(output, null, 2)
             );
 
             // Ukladáme aj čiastočné merania.
-            // Scanner ich rozpozná podľa data_status a zablokuje signály.
-
-            const jsonlPath = "data/live-history.jsonl";
+            // Scanner ich rozpozná podľa data_status.
 
             fs.appendFileSync(
-              jsonlPath,
+              HISTORY_PATH,
               JSON.stringify(output) + "\n"
             );
 
-            // Pre scanner uchovávame posledných 288 meraní.
-            // Pri päťminútovom intervale je to približne 24 hodín.
+            // Posledných 288 meraní pre scanner.
 
-            const history = fs.readFileSync(jsonlPath, "utf8")
+            const history = fs.readFileSync(HISTORY_PATH, "utf8")
               .split("\n")
               .filter(Boolean)
               .slice(-288)
@@ -264,7 +475,7 @@ jobs:
               .filter(Boolean);
 
             fs.writeFileSync(
-              "data/live-history.json",
+              HISTORY_JSON_PATH,
               JSON.stringify(history)
             );
 
@@ -277,13 +488,14 @@ jobs:
               saved_count: output.saved_count,
               errors: errors.length,
               history_updated: true,
+              archive_updated: true,
               collected_at: output.collected_at
             }, null, 2));
             console.log("================================");
 
             if (!complete) {
               console.log(
-                "UPOZORNENIE: Čiastočný zber. História uložená, signály budú blokované."
+                "UPOZORNENIE: Čiastočný zber. Neprítomnosť zápasov sa nezapočítava."
               );
             }
           }
@@ -294,14 +506,14 @@ jobs:
           });
           NODE
 
-      - name: Save collected LIVE data
+      - name: Save collected LIVE data and archive
         run: |
           git config user.name "LIVE EDGE AUTO COLLECTOR"
           git config user.email "actions@users.noreply.github.com"
 
-          git add data/live-history.jsonl data/live-latest.json data/live-history.json
+          git add data/live-history.jsonl data/live-latest.json data/live-history.json data/live-archive.json
 
           git diff --cached --quiet || (
-            git commit -m "Update LIVE football history"
+            git commit -m "Update LIVE football history and archive"
             git push
           )
