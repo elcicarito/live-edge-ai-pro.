@@ -50,24 +50,20 @@ jobs:
             );
 
             const matches = (list.matches || []).filter(
-              match => match.status === "live"
+              match => String(match.status).toLowerCase() === "live"
             );
-
-            console.log("MATCH DATA SAMPLE:");
-            console.log(JSON.stringify(matches[0] || null, null, 2));
 
             const records = [];
             const errors = [];
 
             for (const item of matches) {
               try {
-              const rawUrl = item.url || "";
-              const pathParts = rawUrl
-              .split("?")[0]
-              .split("/")
-             .filter(Boolean);
+                const parts = (item.url || "")
+                  .split("?")[0]
+                  .split("/")
+                  .filter(Boolean);
 
-             const slug = pathParts[pathParts.length - 2];
+                const slug = parts[parts.length - 2];
 
                 if (!slug) {
                   errors.push("Missing URL: " + item.home);
@@ -79,7 +75,7 @@ jobs:
                 );
 
                 if (!detail.match) {
-                  errors.push("Missing match detail: " + slug);
+                  errors.push("Missing detail: " + slug);
                   continue;
                 }
 
@@ -103,16 +99,44 @@ jobs:
               records
             };
 
+            const jsonlPath = "data/live-history.jsonl";
+
             fs.appendFileSync(
-              "data/live-history.jsonl",
+              jsonlPath,
               JSON.stringify(output) + "\n"
+            );
+
+            // Súbor s aktuálnymi LIVE zápasmi
+            fs.writeFileSync(
+              "data/live-latest.json",
+              JSON.stringify(output, null, 2)
+            );
+
+            // Posledných 288 zberov = približne 24 hodín
+            const history = fs.readFileSync(jsonlPath, "utf8")
+              .split("\n")
+              .filter(Boolean)
+              .slice(-288)
+              .map(line => {
+                try {
+                  return JSON.parse(line);
+                } catch {
+                  return null;
+                }
+              })
+              .filter(Boolean);
+
+            fs.writeFileSync(
+              "data/live-history.json",
+              JSON.stringify(history)
             );
 
             console.log("COLLECTION RESULT:");
             console.log(JSON.stringify({
               live_count: matches.length,
               saved_count: records.length,
-              errors
+              errors,
+              history_snapshots: history.length
             }, null, 2));
           }
 
@@ -126,9 +150,9 @@ jobs:
         run: |
           git config user.name "LIVE EDGE AUTO COLLECTOR"
           git config user.email "actions@users.noreply.github.com"
-          git add data/live-history.jsonl
+          git add data/live-history.jsonl data/live-latest.json data/live-history.json
           git diff --cached --quiet || (
-            git commit -m "Automatic LIVE football data collection"
+            git commit -m "Update automatic LIVE football data"
             git push
           )
           
