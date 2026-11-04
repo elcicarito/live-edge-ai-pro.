@@ -66,10 +66,11 @@
 
       const data = await response.json();
 
-      signalEl.textContent =
-        "Detail zápasu načítaný. Štruktúru štatistík ešte overujeme.";
+      signalEl.textContent = JSON.stringify(data, null, 2);
 
-      console.log("LIVE EDGE MATCH DATA:", data);
+signalEl.style.whiteSpace = "pre-wrap";
+signalEl.style.wordBreak = "break-word";
+signalEl.style.fontSize = "12px";
     } catch (error) {
       signalEl.textContent = "Detail sa nepodarilo načítať.";
       console.error(error);
