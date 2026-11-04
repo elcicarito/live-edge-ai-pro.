@@ -16,7 +16,7 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
@@ -30,18 +30,38 @@ jobs:
           const fs = require("fs");
           const BASE = "https://sportscore.com/api/widget";
 
-          async function getJSON(url) {
-            const response = await fetch(url, {
-              headers: {
-                "User-Agent": "LIVE-EDGE-AI-PRO/1.0"
-              }
-            });
+          const sleep = ms =>
+            new Promise(resolve => setTimeout(resolve, ms));
 
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}: ${url}`);
+          async function getJSON(url, attempts = 3) {
+            let lastError;
+
+            for (let i = 1; i <= attempts; i++) {
+              try {
+                const response = await fetch(url, {
+                  headers: {
+                    "User-Agent": "LIVE-EDGE-AI-PRO/2.0"
+                  },
+                  signal: AbortSignal.timeout(12000)
+                });
+
+                if (!response.ok) {
+                  throw new Error(`HTTP ${response.status}: ${url}`);
+                }
+
+                return await response.json();
+
+              } catch (error) {
+                lastError = error;
+                console.log(`Pokus ${i}/${attempts}: ${error.message}`);
+
+                if (i < attempts) {
+                  await sleep(i * 1500);
+                }
+              }
             }
 
-            return response.json();
+            throw lastError;
           }
 
           async function main() {
@@ -50,24 +70,28 @@ jobs:
             );
 
             const matches = (list.matches || []).filter(
-              match => String(match.status).toLowerCase() === "live"
+              match =>
+                String(match.status).toLowerCase() === "live"
             );
 
             const records = [];
             const errors = [];
 
-            for (const item of matches) {
+            async function collectMatch(item) {
               try {
-                const parts = (item.url || "")
-                  .split("?")[0]
-                  .split("/")
-                  .filter(Boolean);
-
-                const slug = parts[parts.length - 2];
+                let slug = item.tracker?.id;
 
                 if (!slug) {
-                  errors.push("Missing URL: " + item.home);
-                  continue;
+                  const parts = (item.url || "")
+                    .split("?")[0]
+                    .split("/")
+                    .filter(Boolean);
+
+                  slug = parts[parts.length - 2];
+                }
+
+                if (!slug) {
+                  throw new Error("Missing match ID");
                 }
 
                 const detail = await getJSON(
@@ -75,20 +99,31 @@ jobs:
                 );
 
                 if (!detail.match) {
-                  errors.push("Missing detail: " + slug);
-                  continue;
+                  throw new Error("Missing match detail");
                 }
 
-                records.push({
+                return {
                   collected_at: new Date().toISOString(),
                   match: detail.match
-                });
+                };
 
               } catch (error) {
                 errors.push(
                   `${item.home || "?"} - ${item.away || "?"}: ${error.message}`
                 );
+
+                return null;
               }
+            }
+
+            // Najviac 10 súčasných požiadaviek
+            for (let i = 0; i < matches.length; i += 10) {
+              const batch = matches.slice(i, i + 10);
+              const results = await Promise.all(
+                batch.map(collectMatch)
+              );
+
+              records.push(...results.filter(Boolean));
             }
 
             const output = {
@@ -106,13 +141,19 @@ jobs:
               JSON.stringify(output) + "\n"
             );
 
-            // Súbor s aktuálnymi LIVE zápasmi
-            fs.writeFileSync(
-              "data/live-latest.json",
-              JSON.stringify(output, null, 2)
-            );
+            // Posledné LIVE dáta zachováme,
+            // ak všetky detail požiadavky zlyhali.
+            if (records.length > 0 || matches.length === 0) {
+              fs.writeFileSync(
+                "data/live-latest.json",
+                JSON.stringify(output, null, 2)
+              );
+            } else {
+              console.log(
+                "Všetky detaily zlyhali. Posledné úspešné LIVE dáta zostávajú zachované."
+              );
+            }
 
-            // Posledných 288 zberov = približne 24 hodín
             const history = fs.readFileSync(jsonlPath, "utf8")
               .split("\n")
               .filter(Boolean)
@@ -150,7 +191,9 @@ jobs:
         run: |
           git config user.name "LIVE EDGE AUTO COLLECTOR"
           git config user.email "actions@users.noreply.github.com"
+
           git add data/live-history.jsonl data/live-latest.json data/live-history.json
+
           git diff --cached --quiet || (
             git commit -m "Update automatic LIVE football data"
             git push
