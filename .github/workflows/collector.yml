@@ -1,3 +1,4 @@
+
 name: LIVE EDGE AUTO COLLECTOR
 
 on:
@@ -21,14 +22,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Collect LIVE football data
+      - name: Collect verified LIVE football data
         run: |
           mkdir -p data
 
           node <<'NODE'
           const fs = require("fs");
 
-          const BASE = "https://sportscore.com/api/widget";
+          const BASE = "https://sportscore.com/api/v1";
 
           const sleep = ms =>
             new Promise(resolve => setTimeout(resolve, ms));
@@ -40,7 +41,7 @@ jobs:
               try {
                 const response = await fetch(url, {
                   headers: {
-                    "User-Agent": "LIVE-EDGE-AI-PRO/4.0",
+                    "User-Agent": "LIVE-EDGE-AI-PRO/5.0",
                     "Accept": "application/json"
                   },
                   signal: AbortSignal.timeout(20000)
@@ -69,7 +70,6 @@ jobs:
 
           function getSlug(item) {
             if (item.slug) return item.slug;
-
             if (!item.url) return null;
 
             const parts = new URL(
@@ -79,11 +79,9 @@ jobs:
 
             const index = parts.indexOf("match");
 
-            if (index !== -1 && parts[index + 1]) {
-              return parts[index + 1];
-            }
-
-            return null;
+            return index !== -1
+              ? parts[index + 1] || null
+              : null;
           }
 
           function getStatus(match) {
@@ -103,35 +101,30 @@ jobs:
           }
 
           function isLive(match) {
-            const status = getStatus(match);
-
-            return [
-              "live",
-              "inplay",
-              "in_play",
-              "in-play"
-            ].includes(status);
+            return getStatus(match) === "live";
           }
 
           async function main() {
-            console.log("Načítavam pôvodný SportScore Widget API...");
+            console.log("Načítavam SportScore API v1...");
 
             const list = await getJSON(
-              `${BASE}/matches/?sport=football&limit=50`
+              `${BASE}/fixtures/?sport=football&status=live&limit=200`
             );
 
-            const fixtures = list.matches || [];
+            const fixtures = (list.matches || []).filter(
+              item => getStatus(item) === "live"
+            );
 
             const records = [];
             const errors = [];
 
             console.log(
-              `Zoznam obsahuje ${fixtures.length} zápasov.`
+              `Zoznam LIVE zápasov: ${fixtures.length}`
             );
 
             async function collectMatch(item) {
               const name =
-                `${item.home || item.home_team || "?"} - ${item.away || item.away_team || "?"}`;
+                `${item.home || "?"} - ${item.away || "?"}`;
 
               try {
                 const slug = getSlug(item);
@@ -144,11 +137,11 @@ jobs:
                   `${BASE}/match/?sport=football&slug=${encodeURIComponent(slug)}`
                 );
 
-                const match = detail.match;
-
-                if (!match) {
+                if (!detail.match) {
                   throw new Error("Detail zápasu neexistuje");
                 }
+
+                const match = detail.match;
 
                 if (!isLive(match)) {
                   console.log(
@@ -182,7 +175,7 @@ jobs:
 
             const output = {
               collected_at: new Date().toISOString(),
-              source: "SportScore Widget API",
+              source: "SportScore API v1",
               fixture_count: fixtures.length,
               live_count: records.length,
               saved_count: records.length,
@@ -244,7 +237,6 @@ jobs:
           git add data/live-history.jsonl data/live-latest.json data/live-history.json
 
           git diff --cached --quiet || (
-            git commit -m "Restore SportScore Widget LIVE collector"
+            git commit -m "Restore SportScore API v1 LIVE collector"
             git push
           )
-          
