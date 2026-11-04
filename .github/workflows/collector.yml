@@ -1,4 +1,3 @@
-
 name: LIVE EDGE AUTO COLLECTOR
 
 on:
@@ -114,6 +113,8 @@ jobs:
             ].includes(getStatus(match));
           }
 
+          // OPRAVENÉ: vyberáme slug za segmentom "match",
+          // nie posledný segment URL, ktorý je ID zápasu.
           function getSlug(item) {
             if (item.slug) return item.slug;
             if (!item.url) return null;
@@ -123,7 +124,13 @@ jobs:
               "https://sportscore.com"
             ).pathname.split("/").filter(Boolean);
 
-            return parts[parts.length - 1] || null;
+            const matchIndex = parts.indexOf("match");
+
+            if (matchIndex >= 0 && parts[matchIndex + 1]) {
+              return parts[matchIndex + 1];
+            }
+
+            return null;
           }
 
           function getMatchId(record) {
@@ -134,7 +141,12 @@ jobs:
             }
 
             if (match?.url) {
-              return getSlug(match);
+              const parts = new URL(
+                match.url,
+                "https://sportscore.com"
+              ).pathname.split("/").filter(Boolean);
+
+              return parts[parts.length - 1] || null;
             }
 
             return null;
@@ -168,12 +180,11 @@ jobs:
             const startedAt = new Date().toISOString();
 
             console.log("================================");
-            console.log("LIVE EDGE FRESH COLLECTOR v8");
+            console.log("LIVE EDGE FRESH COLLECTOR v8.1");
             console.log("Začiatok:", startedAt);
             console.log("Načítavam aktuálny LIVE zoznam...");
             console.log("================================");
 
-            // Starý LIVE snapshot načítame ešte pred jeho prepísaním.
             const previousLatest = readJson(LATEST_PATH, null);
 
             const list = await getJSON(
@@ -274,7 +285,7 @@ jobs:
               collected_at: new Date().toISOString(),
               collection_started_at: startedAt,
               source: "SportScore API v1",
-              collector_version: "8.0",
+              collector_version: "8.1",
               data_status: complete ? "complete" : "partial",
               fixture_count: uniqueFixtures.length,
               live_count: records.length,
@@ -326,8 +337,6 @@ jobs:
 
             const now = new Date().toISOString();
 
-            // Ak sa čakajúci zápas znovu objaví,
-            // odstránime ho zo zoznamu čakajúcich.
             for (const id of currentById.keys()) {
               if (pending.has(id)) {
                 pending.delete(id);
@@ -335,10 +344,8 @@ jobs:
               }
             }
 
-            // Neprítomnosť počítame iba pri kompletnom zbere.
             if (complete) {
 
-              // Spracujeme už existujúcich čakajúcich.
               for (const [id, item] of [...pending.entries()]) {
                 if (currentById.has(id)) continue;
 
@@ -377,8 +384,6 @@ jobs:
                 }
               }
 
-              // Porovnáme predchádzajúci kompletný snapshot
-              // s aktuálnym LIVE zoznamom.
               if (
                 previousLatest &&
                 previousLatest.data_status === "complete" &&
@@ -443,7 +448,7 @@ jobs:
             console.log("================================");
 
             // =========================================
-            // EXISTUJÚCE UKLADANIE LIVE DÁT
+            // UKLADANIE LIVE DÁT A HISTÓRIE
             // =========================================
 
             fs.writeFileSync(
@@ -451,15 +456,10 @@ jobs:
               JSON.stringify(output, null, 2)
             );
 
-            // Ukladáme aj čiastočné merania.
-            // Scanner ich rozpozná podľa data_status.
-
             fs.appendFileSync(
               HISTORY_PATH,
               JSON.stringify(output) + "\n"
             );
-
-            // Posledných 288 meraní pre scanner.
 
             const history = fs.readFileSync(HISTORY_PATH, "utf8")
               .split("\n")
@@ -517,3 +517,4 @@ jobs:
             git commit -m "Update LIVE football history and archive"
             git push
           )
+          
