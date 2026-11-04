@@ -1,3 +1,4 @@
+
 name: LIVE EDGE AUTO COLLECTOR
 
 on:
@@ -30,11 +31,17 @@ jobs:
           const BASE = "https://sportscore.com/api/widget";
 
           async function getJSON(url) {
-            const r = await fetch(url, {
-              headers: { "User-Agent": "LIVE-EDGE-AI-PRO/1.0" }
+            const response = await fetch(url, {
+              headers: {
+                "User-Agent": "LIVE-EDGE-AI-PRO/1.0"
+              }
             });
-            if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
-            return r.json();
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${url}`);
+            }
+
+            return response.json();
           }
 
           async function main() {
@@ -42,10 +49,12 @@ jobs:
               `${BASE}/matches/?sport=football&limit=50`
             );
 
-            const matches = (list.matches || [])
-              console.log("MATCH DATA SAMPLE:");
-           console.log(JSON.stringify(matches[0], null, 2));
-              .filter(m => m.status === "live");
+            const matches = (list.matches || []).filter(
+              match => match.status === "live"
+            );
+
+            console.log("MATCH DATA SAMPLE:");
+            console.log(JSON.stringify(matches[0] || null, null, 2));
 
             const records = [];
             const errors = [];
@@ -53,11 +62,14 @@ jobs:
             for (const item of matches) {
               try {
                 const rawUrl = item.url || "";
-                const slug =
-                  rawUrl.split("?")[0].replace(/\/+$/, "").split("/").pop();
+                const slug = rawUrl
+                  .split("?")[0]
+                  .replace(/\/+$/, "")
+                  .split("/")
+                  .pop();
 
                 if (!slug) {
-                  errors.push("Missing slug: " + item.home + " - " + item.away);
+                  errors.push("Missing URL: " + item.home);
                   continue;
                 }
 
@@ -66,7 +78,7 @@ jobs:
                 );
 
                 if (!detail.match) {
-                  errors.push("Missing detail.match: " + slug);
+                  errors.push("Missing match detail: " + slug);
                   continue;
                 }
 
@@ -75,10 +87,9 @@ jobs:
                   match: detail.match
                 });
 
-              } catch (e) {
+              } catch (error) {
                 errors.push(
-                  (item.home || "?") + " - " +
-                  (item.away || "?") + ": " + e.message
+                  `${item.home || "?"} - ${item.away || "?"}: ${error.message}`
                 );
               }
             }
@@ -96,6 +107,7 @@ jobs:
               JSON.stringify(output) + "\n"
             );
 
+            console.log("COLLECTION RESULT:");
             console.log(JSON.stringify({
               live_count: matches.length,
               saved_count: records.length,
@@ -103,8 +115,8 @@ jobs:
             }, null, 2));
           }
 
-          main().catch(e => {
-            console.error(e);
+          main().catch(error => {
+            console.error(error);
             process.exit(1);
           });
           NODE
