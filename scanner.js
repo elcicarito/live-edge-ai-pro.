@@ -102,6 +102,7 @@
 
     for (const measure of measures) {
       const value = statValue(stats, measure.key);
+
       if (!value) continue;
 
       const total = value.home + value.away;
@@ -119,7 +120,41 @@
       away: Math.round(away / totalWeight * 100)
     };
   }
-    function historyRecords(historyData, id) {
+
+  // AKTUÁLNE ŠTATISTIKY ZÁPASU
+
+  function renderCurrentStats(card, stats) {
+    addText(card, "ŠTATISTIKY ZÁPASU", "15px");
+
+    const items = [
+      { label: "Držanie lopty", key: "possession" },
+      { label: "Strely na bránu", key: "shots on target" },
+      { label: "Strely mimo brány", key: "shots off target" },
+      { label: "Nebezpečné útoky", key: "dangerous attacks" },
+      { label: "Celkové útoky", key: "attacks" }
+    ];
+
+    let found = 0;
+
+    items.forEach(item => {
+      const value = statValue(stats, item.key);
+
+      if (!value) return;
+
+      addText(
+        card,
+        `${item.label}: ${value.home} : ${value.away}`
+      );
+
+      found++;
+    });
+
+    if (!found) {
+      addText(card, "Štatistiky zatiaľ nie sú dostupné.");
+    }
+  }
+
+  function historyRecords(historyData, id) {
     const snapshots = [];
 
     if (!Array.isArray(historyData)) return snapshots;
@@ -155,6 +190,7 @@
 
     const oldRecords = records.filter(record => {
       const age = now - record.time;
+
       return age >= 4 * 60000 && age <= 20 * 60000;
     });
 
@@ -170,6 +206,7 @@
     }
 
     const oldStats = old.match.stats || [];
+
     const oldShots = statValue(oldStats, "shots on target");
     const oldAttacks = statValue(oldStats, "dangerous attacks");
 
@@ -220,9 +257,10 @@
   }
 
   function makeSignal(match, threat, snapshot) {
-    const minute = Number(match.live_minute || 0);
+    const minute = Number(match.live_minute);
 
     if (!threat || !snapshot.ready) return null;
+    if (!Number.isFinite(minute)) return null;
     if (minute < 10 || minute > 90) return null;
 
     const candidates = [
@@ -251,7 +289,7 @@
 
   function recordSignal(match, signal) {
     const id = matchId(match);
-    const minute = Number(match.live_minute || 0);
+    const minute = Number(match.live_minute);
 
     const existing = signalHistory.find(item =>
       item.matchId === id &&
@@ -278,7 +316,8 @@
 
     saveSignals();
   }
-    function settleSignals(matches) {
+
+  function settleSignals(matches) {
     let changed = false;
 
     signalHistory.forEach(signal => {
@@ -294,7 +333,7 @@
         ? Number(match.home_score || 0)
         : Number(match.away_score || 0);
 
-      const minute = Number(match.live_minute || 0);
+      const minute = Number(match.live_minute);
       const status = String(match.status || "").toLowerCase();
 
       if (goals > signal.startGoals) {
@@ -302,7 +341,7 @@
         signal.settledAt = new Date().toISOString();
         changed = true;
       } else if (
-        minute >= signal.deadlineMinute ||
+        (Number.isFinite(minute) && minute >= signal.deadlineMinute) ||
         status.includes("finished")
       ) {
         signal.status = "LOSS";
@@ -318,6 +357,7 @@
     const wins = signalHistory.filter(s => s.status === "WIN").length;
     const losses = signalHistory.filter(s => s.status === "LOSS").length;
     const open = signalHistory.filter(s => s.status === "OPEN").length;
+
     const total = wins + losses;
 
     const rate = total
@@ -327,7 +367,11 @@
     addText(engine, "HISTÓRIA SIGNÁLOV", "16px");
     addText(engine, `Výhry: ${wins} | Prehry: ${losses} | Otvorené: ${open}`);
     addText(engine, `Úspešnosť vyhodnotených signálov: ${rate}%`);
-    addText(engine, "Pozor: ide o technické vyhodnotenie signálov, nie garantovaný zisk.");
+
+    addText(
+      engine,
+      "Pozor: ide o technické vyhodnotenie signálov, nie garantovaný zisk."
+    );
   }
 
   function renderMatch(match, historyData) {
@@ -351,6 +395,9 @@
       `${match.competition || "Futbal"} | ${minute}. minúta`
     );
 
+    // ZOBRAZENIE VŠETKÝCH DOSTUPNÝCH ŠTATISTÍK
+    renderCurrentStats(card, match.stats || []);
+
     const pressure = calculatePressure(match.stats || []);
     const snapshot = getSnapshot(match, historyData);
     const threat = calculateThreat(pressure, snapshot);
@@ -372,7 +419,7 @@
 
       addText(
         card,
-        `Nebezpečné útoky: ${snapshot.homeAttacks} : ${snapshot.awayAttacks}`
+        `Zmena nebezpečných útokov: ${snapshot.homeAttacks} : ${snapshot.awayAttacks}`
       );
 
       addText(
@@ -410,6 +457,7 @@
 
   async function scan() {
     if (scanning) return;
+
     scanning = true;
 
     try {
@@ -435,6 +483,7 @@
       engine.innerHTML = "";
 
       addText(engine, "SMART SIGNAL ENGINE v6", "18px");
+
       addText(
         engine,
         `Posledná aktualizácia: ${new Date().toLocaleTimeString("sk-SK")}`
@@ -465,8 +514,10 @@
         "Chyba načítania dát: " + error.message;
 
       engine.innerHTML = "";
+
       addText(engine, "SMART SIGNAL ENGINE v6");
       addText(engine, "Nepodarilo sa načítať LIVE dáta.");
+
     } finally {
       scanning = false;
     }
