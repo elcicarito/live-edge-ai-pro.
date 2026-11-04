@@ -22,7 +22,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Collect verified LIVE football data
+      - name: Collect fresh LIVE football data
         run: |
           mkdir -p data
 
@@ -30,31 +30,43 @@ jobs:
           const fs = require("fs");
 
           const BASE = "https://sportscore.com/api/v1";
-
-          const sleep = ms =>
-            new Promise(resolve => setTimeout(resolve, ms));
+          const sleep = ms => new Promise(r => setTimeout(r, ms));
 
           async function getJSON(url, attempts = 3) {
             let lastError;
 
             for (let i = 1; i <= attempts; i++) {
               try {
-                const response = await fetch(url, {
+                const separator = url.includes("?") ? "&" : "?";
+                const freshUrl =
+                  `${url}${separator}_cache=${Date.now()}_${i}`;
+
+                const response = await fetch(freshUrl, {
                   headers: {
-                    "User-Agent": "LIVE-EDGE-AI-PRO/5.0",
-                    "Accept": "application/json"
+                    "User-Agent": "LIVE-EDGE-AI-PRO/6.0",
+                    "Accept": "application/json",
+                    "Cache-Control": "no-cache, no-store, max-age=0",
+                    "Pragma": "no-cache"
                   },
-                  signal: AbortSignal.timeout(20000)
+                  signal: AbortSignal.timeout(20000),
+                  cache: "no-store"
                 });
 
                 if (!response.ok) {
                   throw new Error(`HTTP ${response.status}`);
                 }
 
-                return await response.json();
+                const data = await response.json();
+
+                if (!data || typeof data !== "object") {
+                  throw new Error("Neplatná JSON odpoveď");
+                }
+
+                return data;
 
               } catch (error) {
                 lastError = error;
+
                 console.log(
                   `Pokus ${i}/${attempts}: ${error.message}`
                 );
@@ -68,6 +80,29 @@ jobs:
             throw lastError;
           }
 
+          function getStatus(match) {
+            const value = match?.status;
+
+            if (typeof value === "string") {
+              return value.toLowerCase().trim();
+            }
+
+            if (value && typeof value === "object") {
+              return String(
+                value.type ||
+                value.name ||
+                value.short ||
+                ""
+              ).toLowerCase().trim();
+            }
+
+            return "";
+          }
+
+          function isLive(match) {
+            return getStatus(match) === "live";
+          }
+
           function getSlug(item) {
             if (item.slug) return item.slug;
             if (!item.url) return null;
@@ -79,48 +114,48 @@ jobs:
 
             const index = parts.indexOf("match");
 
-            return index !== -1
+            return index >= 0
               ? parts[index + 1] || null
               : null;
           }
 
-          function getStatus(match) {
-            const value = match?.status;
-
-            if (typeof value === "string") {
-              return value.toLowerCase();
-            }
-
-            if (value && typeof value === "object") {
-              return String(
-                value.type || value.name || value.short || ""
-              ).toLowerCase();
-            }
-
-            return "";
-          }
-
-          function isLive(match) {
-            return getStatus(match) === "live";
-          }
-
           async function main() {
-            console.log("Načítavam SportScore API v1...");
+            const startedAt = new Date().toISOString();
+
+            console.log("================================");
+            console.log("LIVE EDGE FRESH COLLECTOR v6");
+            console.log("Začiatok:", startedAt);
+            console.log("Načítavam aktuálny LIVE zoznam...");
+            console.log("================================");
 
             const list = await getJSON(
               `${BASE}/fixtures/?sport=football&status=live&limit=200`
             );
 
-            const fixtures = (list.matches || []).filter(
-              item => getStatus(item) === "live"
+            if (!Array.isArray(list.matches)) {
+              throw new Error(
+                "API nevrátilo platné pole matches. Staré dáta nemením."
+              );
+            }
+
+            const fixtures = list.matches.filter(isLive);
+
+            const unique = new Map();
+
+            for (const item of fixtures) {
+              const slug = getSlug(item);
+              if (slug) unique.set(slug, item);
+            }
+
+            const uniqueFixtures = [...unique.values()];
+
+            console.log(
+              "LIVE zápasy podľa zoznamu API:",
+              uniqueFixtures.length
             );
 
             const records = [];
             const errors = [];
-
-            console.log(
-              `Zoznam LIVE zápasov: ${fixtures.length}`
-            );
 
             async function collectMatch(item) {
               const name =
@@ -130,7 +165,7 @@ jobs:
                 const slug = getSlug(item);
 
                 if (!slug) {
-                  throw new Error("Chýba slug zápasu");
+                  throw new Error("Chýba slug");
                 }
 
                 const detail = await getJSON(
@@ -138,17 +173,32 @@ jobs:
                 );
 
                 if (!detail.match) {
-                  throw new Error("Detail zápasu neexistuje");
+                  throw new Error("Chýba detail zápasu");
                 }
 
                 const match = detail.match;
 
                 if (!isLive(match)) {
                   console.log(
-                    `VYNECHANÝ ZÁPAS: ${name} | stav: ${getStatus(match) || "neznámy"}`
+                    "VYRADENÝ:",
+                    name,
+                    "| stav:",
+                    getStatus(match) || "neznámy"
                   );
                   return null;
                 }
+
+                console.log(
+                  "OVERENÝ LIVE:",
+                  name,
+                  "|",
+                  match.live_minute || "?",
+                  "min",
+                  "|",
+                  match.home_score,
+                  ":",
+                  match.away_score
+                );
 
                 return {
                   collected_at: new Date().toISOString(),
@@ -156,13 +206,15 @@ jobs:
                 };
 
               } catch (error) {
-                errors.push(`${name}: ${error.message}`);
+                const message = `${name}: ${error.message}`;
+                errors.push(message);
+                console.log("CHYBA:", message);
                 return null;
               }
             }
 
-            for (let i = 0; i < fixtures.length; i += 5) {
-              const batch = fixtures.slice(i, i + 5);
+            for (let i = 0; i < uniqueFixtures.length; i += 5) {
+              const batch = uniqueFixtures.slice(i, i + 5);
 
               const results = await Promise.all(
                 batch.map(collectMatch)
@@ -173,63 +225,89 @@ jobs:
               await sleep(1000);
             }
 
+            const complete = errors.length === 0;
+
             const output = {
               collected_at: new Date().toISOString(),
+              collection_started_at: startedAt,
               source: "SportScore API v1",
-              fixture_count: fixtures.length,
+              collector_version: "6.0",
+              data_status: complete ? "complete" : "partial",
+              fixture_count: uniqueFixtures.length,
               live_count: records.length,
               saved_count: records.length,
               errors,
               records
             };
 
+            // Ukladáme iba zápasy overené v tomto zbere.
+            // Staré zápasy sa nikdy nepridávajú do nového zoznamu.
+
             fs.writeFileSync(
               "data/live-latest.json",
               JSON.stringify(output, null, 2)
             );
 
-            const jsonlPath = "data/live-history.jsonl";
+            // História sa aktualizuje iba pri kompletnom zbere.
+            // Neúplné merania by skresľovali vyhodnocovanie.
 
-            fs.appendFileSync(
-              jsonlPath,
-              JSON.stringify(output) + "\n"
-            );
+            if (complete) {
+              const jsonlPath = "data/live-history.jsonl";
 
-            const history = fs.readFileSync(jsonlPath, "utf8")
-              .split("\n")
-              .filter(Boolean)
-              .slice(-288)
-              .map(line => {
-                try {
-                  return JSON.parse(line);
-                } catch {
-                  return null;
-                }
-              })
-              .filter(Boolean);
+              fs.appendFileSync(
+                jsonlPath,
+                JSON.stringify(output) + "\n"
+              );
 
-            fs.writeFileSync(
-              "data/live-history.json",
-              JSON.stringify(history)
-            );
+              const history = fs.readFileSync(
+                jsonlPath,
+                "utf8"
+              )
+                .split("\n")
+                .filter(Boolean)
+                .slice(-288)
+                .map(line => {
+                  try {
+                    return JSON.parse(line);
+                  } catch {
+                    return null;
+                  }
+                })
+                .filter(Boolean);
 
-            console.log("COLLECTION RESULT:");
+              fs.writeFileSync(
+                "data/live-history.json",
+                JSON.stringify(history)
+              );
+            }
+
+            console.log("================================");
+            console.log("COLLECTION RESULT");
             console.log(JSON.stringify({
-              fixture_count: fixtures.length,
-              verified_live: records.length,
-              saved_count: records.length,
-              errors,
-              history_snapshots: history.length
+              data_status: output.data_status,
+              fixture_count: output.fixture_count,
+              verified_live: output.live_count,
+              saved_count: output.saved_count,
+              errors: errors.length,
+              history_updated: complete,
+              collected_at: output.collected_at
             }, null, 2));
+            console.log("================================");
+
+            if (!complete) {
+              console.log(
+                "UPOZORNENIE: Čiastočný zber. História nebola aktualizovaná."
+              );
+            }
           }
 
           main().catch(error => {
-            console.error(error);
+            console.error("COLLECTOR FAILED:", error);
             process.exit(1);
           });
           NODE
 
-      - name: Save collected history
+      - name: Save collected LIVE data
         run: |
           git config user.name "LIVE EDGE AUTO COLLECTOR"
           git config user.email "actions@users.noreply.github.com"
@@ -237,6 +315,7 @@ jobs:
           git add data/live-history.jsonl data/live-latest.json data/live-history.json
 
           git diff --cached --quiet || (
-            git commit -m "Restore SportScore API v1 LIVE collector"
+            git commit -m "Update fresh verified LIVE football data"
             git push
           )
+          
