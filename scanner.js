@@ -1587,7 +1587,7 @@
     }
 
     addText(
-      card,
+      detail,
       `${getCompetitionFlag(match)} ${match.competition || "Neznáma súťaž"} | ${minute === "HT" ? "Prestávka" : minute + ". minúta"} | meranie: ${collectedAt || "neznámy čas"}`
     );
 
@@ -1609,24 +1609,24 @@
     addText(detail, "SPOĽAHLIVOSŤ ZBERU – HISTÓRIA", "14px");
     if (reliability) {
       addBadge(
-        card,
+        detail,
         reliability.label,
         reliability.background,
         reliability.border
       );
       addText(
-        card,
+        detail,
         `Vzorka: ${reliability.count} meraní | Momentum dostupné: ${reliability.momentumCoverage}% | Všetky kľúčové štatistiky: ${reliability.fullCoverage}%`
       );
       addText(
-        card,
+        detail,
         `Priemerný interval: ${reliability.averageGap === null ? "zatiaľ bez porovnania" : reliability.averageGap.toFixed(1) + " min"} | Najdlhšia medzera: ${reliability.maxGap === null ? "—" : reliability.maxGap.toFixed(1) + " min"} | Medzery nad 7 min: ${reliability.longGaps}`
       );
     } else {
       addText(detail, "Zatiaľ nie je dostupná história meraní tohto zápasu.");
     }
     addText(
-      card,
+      detail,
       "Ukazovateľ vychádza z uložených kompletných zberov (približne posledných 24 hodín); je iba informačný."
     );
 
@@ -1638,7 +1638,7 @@
 
     if (pressure) {
       addText(
-        card,
+        detail,
         `Tlak: Domáci ${pressure.home}/100 | Hostia ${pressure.away}/100`
       );
     } else {
@@ -1647,27 +1647,27 @@
 
     if (snapshot.ready) {
       addText(
-        card,
+        detail,
         `Porovnávané merania: ${snapshot.oldTime} | Rozdiel ${snapshot.minutes} min`
       );
 
       addText(
-        card,
+        detail,
         `Nové strely na bránu: ${snapshot.homeShots} : ${snapshot.awayShots}`
       );
 
       addText(
-        card,
+        detail,
         `Nové nebezpečné útoky: ${snapshot.homeAttacks} : ${snapshot.awayAttacks}`
       );
 
       addText(
-        card,
+        detail,
         `Aktivita spolu: Domáci ${snapshot.homeActivity} | Hostia ${snapshot.awayActivity}`
       );
 
       addText(
-        card,
+        detail,
         `Aktivita za 10 min: Domáci ${snapshot.homeActivityRate.toFixed(1)} | Hostia ${snapshot.awayActivityRate.toFixed(1)}`
       );
     } else {
@@ -1676,7 +1676,7 @@
 
     if (threat) {
       addText(
-        card,
+        detail,
         `GOAL THREAT: Domáci ${threat.home}/100 | Hostia ${threat.away}/100`,
         "15px"
       );
