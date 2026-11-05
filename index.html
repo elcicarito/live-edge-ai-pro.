@@ -42,7 +42,41 @@ button{
 small{
   color:#9baabe
 }
-.archive-card summary{  display:flex;  align-items:center;  justify-content:space-between;  gap:12px;  cursor:pointer;  list-style:none;  font-weight:800;  font-size:16px;  color:#ffffff;}.archive-card summary::-webkit-details-marker{display:none}.archive-card summary:after{content:"＋";color:#39e6a5;font-size:20px;margin-left:auto}.archive-card[open] summary:after{content:"−"}.archive-count{  display:inline-flex;  align-items:center;  justify-content:center;  min-width:28px;  height:28px;  padding:0 8px;  border-radius:20px;  background:#203d39;  color:#39e6a5;  font-size:13px;}.archive-card #match-archive{margin-top:14px}</style>
+.archive-card summary{  display:flex;  align-items:center;  justify-content:space-between;  gap:12px;  cursor:pointer;  list-style:none;  font-weight:800;  font-size:16px;  color:#ffffff;}.archive-card summary::-webkit-details-marker{display:none}.archive-card summary:after{content:"＋";color:#39e6a5;font-size:20px;margin-left:auto}.archive-card[open] summary:after{content:"−"}.archive-count{  display:inline-flex;  align-items:center;  justify-content:center;  min-width:28px;  height:28px;  padding:0 8px;  border-radius:20px;  background:#203d39;  color:#39e6a5;  font-size:13px;}.archive-card #match-archive{margin-top:14px}
+.archive-filters{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:7px;
+  margin:14px 0 16px;
+}
+.archive-filters label{
+  color:#9baabe;
+  font-size:12px;
+  font-weight:700;
+  margin-top:4px;
+}
+.archive-filters select,.archive-filters input{
+  width:100%;
+  box-sizing:border-box;
+  padding:12px;
+  border:1px solid #35465e;
+  border-radius:9px;
+  background:#101b2b;
+  color:#ffffff;
+  font-size:14px;
+  min-height:44px;
+}
+.archive-filters button{
+  width:100%;
+  margin-top:3px;
+  padding:11px;
+  background:#25354a;
+  color:#ffffff;
+  border:1px solid #40536c;
+  border-radius:9px;
+  font-size:12px;
+}
+</style>
 </head>
 
 <body>
@@ -70,6 +104,15 @@ small{
   <span>🏁 UKONČENÉ ZÁPASY</span>
   <span class="archive-count" id="match-archive-count">0</span>
 </summary>
+<div class="archive-filters">
+  <label for="match-archive-league">Liga</label>
+  <select id="match-archive-league">
+    <option value="">Všetky ligy</option>
+  </select>
+  <label for="match-archive-date">Dátum ukončenia</label>
+  <input id="match-archive-date" type="date">
+  <button id="match-archive-reset" type="button">VYMAZAŤ FILTER</button>
+</div>
 <div id="match-archive">
   <p>Načítavam konečné výsledky...</p>
 </div>
@@ -81,7 +124,7 @@ OBNOVIŤ SKENER
 
 <p><small>Experimental version · Powered by SportScore API v1</small></p>
 
-<script src="./scanner.js?v=33"></script>
+<script src="./scanner.js?v=34"></script>
 
 </body>
 </html>
