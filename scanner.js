@@ -775,13 +775,22 @@
       };
       const label = statusLabels[item.status] || String(item.status || "NEZNÁMY");
       const line = document.createElement("div");
-      line.style.cssText = "margin:8px 0;padding:10px;border-radius:9px;background:#0d1929;border:1px solid #31445c;";
+      const statusStyle = {
+        WIN: { background: "#052e1b", border: "#22c55e", color: "#4ade80" },
+        LOSS: { background: "#3b0a0a", border: "#ef4444", color: "#f87171" },
+        OPEN: { background: "#172554", border: "#3b82f6", color: "#93c5fd" },
+        UNRESOLVED: { background: "#292524", border: "#a8a29e", color: "#d6d3d1" }
+      };
+      const style = statusStyle[item.status] || {
+        background: "#0d1929", border: "#31445c", color: "#cbd5e1"
+      };
+      line.style.cssText = `margin:8px 0;padding:10px;border-radius:9px;background:${style.background};border:1px solid ${style.border};`;
       const title = document.createElement("div");
       title.textContent = `${item.home || "?"} ${item.startScore || ""} – ${item.away || "?"}`;
       title.style.cssText = "font-weight:800;margin-bottom:5px;";
       const detail = document.createElement("div");
       detail.textContent = `${item.team || item.side || "Tím"} | ${label} | ${item.startMinute ?? "?"}. min${item.settledScore ? " | výsledok " + item.settledScore : ""}`;
-      detail.style.cssText = "font-size:13px;color:#cbd5e1;";
+      detail.style.cssText = `font-size:13px;color:${style.color};font-weight:800;`;
       line.append(title, detail);
       engine.appendChild(line);
     });
