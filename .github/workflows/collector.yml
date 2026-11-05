@@ -416,30 +416,77 @@ jobs:
                 );
 
               } else if (suspiciousDrop) {
-                archiveSafe = false;
-                feedDataSafe = false;
+                const previousSuspectCount =
+                  Number(feedGuard.suspect_fixture_count);
+                const previousSuspectRuns =
+                  Number(feedGuard.suspect_runs) || 0;
 
-                feedGuard.suspect_fixture_count =
-                  uniqueFixtures.length;
+                // Ak sa nižší počet opakuje aspoň v troch po sebe
+                // idúcich kompletných zberoch s overenými detailmi,
+                // prijmi ho ako novú základňu. Tým sa zabráni tomu,
+                // aby staré historické maximum navždy blokovalo LIVE dáta.
+                const stableLowerFeed =
+                  previousSuspectRuns >= 2 &&
+                  Number.isFinite(previousSuspectCount) &&
+                  uniqueFixtures.length >= Math.max(
+                    MIN_BASELINE,
+                    Math.floor(previousSuspectCount * 0.7)
+                  ) &&
+                  uniqueFixtures.length <= Math.ceil(
+                    previousSuspectCount * 1.3
+                  );
 
-                feedGuard.suspect_runs =
-                  (Number(feedGuard.suspect_runs) || 0) + 1;
+                if (stableLowerFeed) {
+                  archiveSafe = true;
+                  feedDataSafe = true;
+                  baseline = uniqueFixtures.length;
+                  feedGuard.baseline_fixture_count = baseline;
+                  feedGuard.suspect_fixture_count = null;
+                  feedGuard.suspect_runs = 0;
 
-                console.log("================================");
-                console.log(
-                  "VAROVANIE: PODOZRIVÝ POKLES LIVE ZÁPASOV"
-                );
-                console.log("Historická základňa:", baseline);
-                console.log(
-                  "Aktuálny počet:",
-                  uniqueFixtures.length
-                );
-                console.log(
-                  "Podozrivé zbery:",
-                  feedGuard.suspect_runs
-                );
-                console.log("ARCHIVÁCIA POZASTAVENÁ.");
-                console.log("================================");
+                  console.log("================================");
+                  console.log(
+                    "STABILNÝ NIŽŠÍ LIVE FEED POTVRDENÝ"
+                  );
+                  console.log(
+                    "Nová základňa:",
+                    baseline
+                  );
+                  console.log(
+                    "Všetky detaily boli overené:",
+                    detailCoverage
+                  );
+                  console.log(
+                    "Aktualizácia LIVE dát a bezpečná archivácia povolená."
+                  );
+                  console.log("================================");
+
+                } else {
+                  archiveSafe = false;
+                  feedDataSafe = false;
+
+                  feedGuard.suspect_fixture_count =
+                    uniqueFixtures.length;
+
+                  feedGuard.suspect_runs =
+                    previousSuspectRuns + 1;
+
+                  console.log("================================");
+                  console.log(
+                    "VAROVANIE: PODOZRIVÝ POKLES LIVE ZÁPASOV"
+                  );
+                  console.log("Historická základňa:", baseline);
+                  console.log(
+                    "Aktuálny počet:",
+                    uniqueFixtures.length
+                  );
+                  console.log(
+                    "Podozrivé zbery:",
+                    feedGuard.suspect_runs
+                  );
+                  console.log("ARCHIVÁCIA POZASTAVENÁ.");
+                  console.log("================================");
+                }
 
               } else {
                 archiveSafe = true;
