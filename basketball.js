@@ -6,6 +6,25 @@
   const meta = document.getElementById("basketball-meta");
   const archiveList = document.getElementById("basketball-archive");
   const archiveMeta = document.getElementById("basketball-archive-meta");
+  const livePanel = document.getElementById("basketball-live-panel");
+  const archivePanel = document.getElementById("basketball-archive-panel");
+  const liveTab = document.getElementById("basketball-live-tab");
+  const archiveTab = document.getElementById("basketball-archive-tab");
+  function selectBasketballView(view) {
+    const showArchive = view === "archive";
+    if (livePanel) livePanel.style.display = showArchive ? "none" : "block";
+    if (archivePanel) archivePanel.style.display = showArchive ? "block" : "none";
+    if (liveTab) {
+      liveTab.classList.toggle("active", !showArchive);
+      liveTab.setAttribute("aria-pressed", String(!showArchive));
+    }
+    if (archiveTab) {
+      archiveTab.classList.toggle("active", showArchive);
+      archiveTab.setAttribute("aria-pressed", String(showArchive));
+    }
+  }
+  liveTab?.addEventListener("click", () => selectBasketballView("live"));
+  archiveTab?.addEventListener("click", () => selectBasketballView("archive"));
   if (!root || !list || !meta) return;
 
   const textOf = (...values) => {
