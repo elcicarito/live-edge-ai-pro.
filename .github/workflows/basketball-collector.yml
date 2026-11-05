@@ -293,7 +293,7 @@ jobs:
           const complete = (m, q) => qTotal(m, q) !== null;
           const periodOf = m => {
             const s = String(m.status_text || m.period?.name || m.period || m.status || "").toLowerCase();
-            const match = s.match(/(?:^|\\b)([1-4])(?:st|nd|rd|th)?\\s*(?:quarter|period|q)\\b|\\b(?:quarter|period|q)\\s*([1-4])(?:\\b|$)/);
+            const match = s.match(/(?:^|\b)([1-4])(?:st|nd|rd|th)?\s*(?:quarter|period|q)\b|\b(?:quarter|period|q)\s*([1-4])(?:\b|$)/);
             if (match) return Number(match[1] || match[2]);
             if (/half.?time|halftime|break/.test(s)) return 3;
             if (/finished|ended|full.?time/.test(s)) return 5;
@@ -369,7 +369,7 @@ jobs:
             settled_this_run: settled,
             created_this_run: created,
             predictions: trimmed
-          }, null, 2) + "\\n");
+          }, null, 2) + "\n");
           console.log("PREDICTIONS: vytvorené", created, "vyhodnotené", settled, "celkom", trimmed.length);
           NODE
 
