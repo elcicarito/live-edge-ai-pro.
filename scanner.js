@@ -10,7 +10,7 @@
   const MAX_GAP_MINUTES = 15;
 
   const MAX_DATA_AGE_MS = 7 * 60 * 1000;
-  const SCAN_INTERVAL_MS = 10 * 1000;
+  const SCAN_INTERVAL_MS = 120 * 1000;
 
   const matchesEl = document.getElementById("matches");
   const signalEl = document.getElementById("signal");
