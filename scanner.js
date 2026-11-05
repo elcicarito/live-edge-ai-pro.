@@ -452,7 +452,8 @@
       { label: "Strely na bránu", key: "shots on target" },
       { label: "Strely mimo brány", key: "shots off target" },
       { label: "Nebezpečné útoky", key: "dangerous attacks" },
-      { label: "Celkové útoky", key: "attacks" }
+      { label: "Celkové útoky", key: "attacks" },
+      { label: "Rohy", key: "corner" }
     ];
 
     let found = 0;
