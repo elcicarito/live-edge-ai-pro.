@@ -471,6 +471,63 @@
     }
   }
 
+  // Kontrola kvality dát je iba informačná; nemení výpočet tlaku ani signálov.
+  function getDataQuality(match, collectedAt) {
+    const timestamp = Date.parse(collectedAt || "");
+    const age = Date.now() - timestamp;
+
+    if (
+      !Number.isFinite(timestamp) ||
+      age < 0 ||
+      age > MAX_DATA_AGE_MS
+    ) {
+      return {
+        status: "STALE",
+        label: "ZASTARANÉ DÁTA",
+        background: "#7f1d1d",
+        border: "#ef4444",
+        detail: "Meranie je staršie ako povolený limit alebo nemá platný čas."
+      };
+    }
+
+    const stats = match?.stats || [];
+    const missing = [];
+
+    if (!statValue(stats, "possession")) missing.push("držanie lopty");
+    if (!statValue(stats, "shots on target")) missing.push("strely na bránu");
+    if (!statValue(stats, "dangerous attacks")) missing.push("nebezpečné útoky");
+
+    if (!statValue(stats, "shots on target") ||
+        !statValue(stats, "dangerous attacks")) {
+      return {
+        status: "INCOMPLETE",
+        label: "NEÚPLNÉ DÁTA",
+        background: "#78350f",
+        border: "#f59e0b",
+        detail: "Pre Momentum chýbajú: " + missing.join(", ") + "."
+      };
+    }
+
+    if (missing.length) {
+      return {
+        status: "PARTIAL",
+        label: "ČIASTOČNÉ DÁTA",
+        background: "#713f12",
+        border: "#eab308",
+        detail: "Prehľadové štatistiky chýbajú: " + missing.join(", ") +
+          ". Momentum sa dá vypočítať."
+      };
+    }
+
+    return {
+      status: "OK",
+      label: "DÁTA KOMPLETNÉ",
+      background: "#14532d",
+      border: "#39e6a5",
+      detail: "Kľúčové štatistiky sú dostupné a meranie je aktuálne."
+    };
+  }
+
   function historyRecords(historyData, id) {
     const snapshots = [];
 
@@ -988,6 +1045,15 @@
       `${match.competition || "Futbal"} | ${minute === "HT" ? "Prestávka" : minute + ". minúta"}`
     );
 
+    const quality = getDataQuality(match, collectedAt);
+    addBadge(
+      card,
+      quality.label,
+      quality.background,
+      quality.border
+    );
+    addText(card, quality.detail);
+
     renderCurrentStats(card, match.stats || []);
 
     const pressure = calculatePressure(match.stats || []);
@@ -1184,6 +1250,16 @@
       addText(engine, `Bezpečná archivácia: ${current.archive_safe ? "ÁNO" : "POZASTAVENÁ"}`);
       addText(engine, `Vek dát: ${Math.max(0, Math.round(age / 1000))} sekúnd`);
       addText(engine, `LIVE zápasy: ${matches.length}`);
+
+      const qualityCounts = { OK: 0, PARTIAL: 0, INCOMPLETE: 0, STALE: 0 };
+      matches.forEach(item => {
+        const quality = getDataQuality(item.match, item.collectedAt);
+        qualityCounts[quality.status] = (qualityCounts[quality.status] || 0) + 1;
+      });
+      addText(
+        engine,
+        `Kvalita dát: Kompletné ${qualityCounts.OK} | Čiastočné ${qualityCounts.PARTIAL} | Neúplné ${qualityCounts.INCOMPLETE} | Zastarané ${qualityCounts.STALE}`
+      );
       addText(engine, `Obnovovanie: každých ${SCAN_INTERVAL_MS / 1000} sekúnd`);
       addText(engine, `Povolený rozdiel meraní: ${MIN_GAP_MINUTES}–${MAX_GAP_MINUTES} min`);
 
