@@ -75,6 +75,26 @@ jobs:
           async function main() {
             const started = new Date().toISOString();
             console.log("LIVE EDGE BASKETBALL COLLECTOR");
+            // Read-only diagnostic: check whether the legacy fixtures API also serves basketball.
+            try {
+              const probeUrl = "https://sportscore.com/api/v1/fixtures/?sport=basketball&status=live&limit=50&_probe=" + Date.now();
+              const probeResponse = await fetch(probeUrl, {
+                headers: { "Accept": "application/json", "Cache-Control": "no-cache" },
+                cache: "no-store",
+                signal: AbortSignal.timeout(12000)
+              });
+              console.log("LEGACY API basketball HTTP:", probeResponse.status);
+              if (probeResponse.ok) {
+                const probePayload = await probeResponse.json();
+                const probeMatches = Array.isArray(probePayload.matches) ? probePayload.matches : [];
+                const probeStatuses = [...new Set(probeMatches.map(statusOf).filter(Boolean))];
+                console.log("LEGACY API basketball keys:", Object.keys(probePayload).join(", "));
+                console.log("LEGACY API basketball matches:", probeMatches.length);
+                console.log("LEGACY API basketball statuses:", probeStatuses.join(", ") || "none");
+              }
+            } catch (probeError) {
+              console.log("LEGACY API basketball probe error:", probeError.message);
+            }
             const payload = await getJSON(BASE + "/matches/?sport=basketball&limit=50");
             if (!payload || !Array.isArray(payload.matches)) {
               throw new Error("Basketball API nevrátilo platné pole matches; staré dáta zostávajú zachované.");
