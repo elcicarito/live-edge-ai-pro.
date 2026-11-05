@@ -477,30 +477,39 @@
   }
 
   function renderCurrentStats(card, stats) {
-    addText(card, "ŠTATISTIKY ZÁPASU", "15px");
+    addText(card, "KOMPLETNÉ ŠTATISTIKY ZÁPASU", "15px");
 
-    const items = [
-      { label: "Držanie lopty", key: "possession" },
-      { label: "Strely na bránu", key: "shots on target" },
-      { label: "Strely mimo brány", key: "shots off target" },
-      { label: "Nebezpečné útoky", key: "dangerous attacks" },
-      { label: "Celkové útoky", key: "attacks" },
-      { label: "Rohy", key: "corner" }
-    ];
+    const available = Array.isArray(stats)
+      ? stats.filter(item =>
+          item &&
+          String(item.label || "").trim() &&
+          item.home !== null &&
+          item.home !== undefined &&
+          item.away !== null &&
+          item.away !== undefined
+        )
+      : [];
 
-    let found = 0;
-
-    items.forEach(item => {
-      const value = statValue(stats, item.key);
-      if (!value) return;
-
-      addText(card, `${item.label}: ${value.home} : ${value.away}`);
-      found++;
-    });
-
-    if (!found) {
+    if (!available.length) {
       addText(card, "Štatistiky zatiaľ nie sú dostupné.");
+      return;
     }
+
+    available.forEach(item => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 9px;margin:4px 0;background:#101b2b;border-radius:7px;font-size:12px;";
+      const label = document.createElement("span");
+      label.textContent = String(item.label);
+      label.style.cssText = "color:#a8b8cc;flex:1;";
+      const value = document.createElement("strong");
+      const suffix = item.suffix === null || item.suffix === undefined
+        ? ""
+        : String(item.suffix);
+      value.textContent = `${item.home}${suffix}  :  ${item.away}${suffix}`;
+      value.style.cssText = "color:#ffffff;text-align:right;white-space:nowrap;";
+      row.append(label, value);
+      card.appendChild(row);
+    });
   }
 
   // Kontrola kvality dát je iba informačná; nemení výpočet tlaku ani signálov.
