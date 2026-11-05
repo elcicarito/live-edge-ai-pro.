@@ -6,6 +6,8 @@
   const meta = document.getElementById("basketball-meta");
   const archiveList = document.getElementById("basketball-archive");
   const archiveMeta = document.getElementById("basketball-archive-meta");
+  const predictorMeta = document.getElementById("basketball-predictor-meta");
+  const predictorList = document.getElementById("basketball-predictor-list");
   const livePanel = document.getElementById("basketball-live-panel");
   const archivePanel = document.getElementById("basketball-archive-panel");
   const liveTab = document.getElementById("basketball-live-tab");
@@ -298,9 +300,73 @@
       });
     } catch(e) { archiveMeta.textContent="Archív zatiaľ čaká na prvý úspešný zber."; archiveList.textContent="Archív sa nepodarilo načítať: "+e.message; }
   }
+  async function loadPredictions() {
+    if (!predictorMeta || !predictorList) return;
+    try {
+      const response = await fetch("./data/basketball-predictions.json?t=" + Date.now(), { cache: "no-store" });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const data = await response.json();
+      const rows = Array.isArray(data.predictions) ? data.predictions : [];
+      const open = rows.filter(p => p.actual_total === null || p.actual_total === undefined)
+        .sort((a,b) => String(b.observed_at).localeCompare(String(a.observed_at)));
+      const settled = rows.filter(p => Number.isFinite(Number(p.absolute_error)))
+        .sort((a,b) => String(b.settled_at).localeCompare(String(a.settled_at)));
+      const mae = settled.length ? settled.reduce((sum,p) => sum + Number(p.absolute_error),0) / settled.length : null;
+      predictorMeta.textContent = "Model: historický priemer cieľovej štvrtiny + predchádzajúce štvrtiny · Kompletné tréningové zápasy: " + Number(data.complete_training_games || 0) + " · Vyhodnotené predikcie: " + settled.length + (mae === null ? "" : " · Priemerná odchýlka: " + mae.toFixed(1) + " bodu");
+      predictorList.replaceChildren();
+      if (!rows.length) {
+        predictorList.textContent = "Zatiaľ čakáme na vhodné LIVE zápasy a dostatočný počet kompletných historických zápasov.";
+        return;
+      }
+      const heading = document.createElement("div");
+      heading.textContent = "AKTUÁLNE ODHADY";
+      heading.style.cssText = "font-size:12px;font-weight:800;color:#39e6a5;margin:12px 0 7px";
+      predictorList.appendChild(heading);
+      if (!open.length) {
+        const empty = document.createElement("p"); empty.textContent = "Momentálne nie je otvorená žiadna predikcia."; predictorList.appendChild(empty);
+      }
+      open.slice(0,8).forEach(p => {
+        const card = document.createElement("div");
+        card.style.cssText = "background:#0d1929;border:1px solid #354d69;border-radius:9px;padding:11px;margin:8px 0";
+        const name = document.createElement("div");
+        name.textContent = (p.league || "Liga neznáma") + " · " + p.home + " – " + p.away + " · Q" + p.target_quarter;
+        name.style.cssText = "font-size:12px;color:#a9bdd4;line-height:1.4";
+        const value = document.createElement("div");
+        value.textContent = p.predicted_total + " bodov";
+        value.style.cssText = "font-size:23px;font-weight:900;color:#fff;margin:5px 0";
+        const range = document.createElement("div");
+        range.textContent = "Orientačné rozpätie " + p.range_low + "–" + p.range_high + " bodov · vzorka n=" + p.training_sample + (p.training_scope === "league" ? " (liga)" : " (celkový archív)");
+        range.style.cssText = "font-size:11px;color:#9baabe;line-height:1.4";
+        const note = document.createElement("div");
+        note.textContent = "Odhad sa počíta iba z ukončených predchádzajúcich štvrtín. Zber môže meškať približne 5 minút.";
+        note.style.cssText = "font-size:10px;color:#8296ad;margin-top:5px";
+        card.append(name,value,range,note);
+        predictorList.appendChild(card);
+      });
+      if (settled.length) {
+        const resultsTitle = document.createElement("div");
+        resultsTitle.textContent = "POSLEDNÉ VYHODNOTENIA";
+        resultsTitle.style.cssText = "font-size:12px;font-weight:800;color:#39e6a5;margin:15px 0 7px";
+        predictorList.appendChild(resultsTitle);
+        settled.slice(0,8).forEach(p => {
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:8px 2px;border-bottom:1px solid #263b55;font-size:11px";
+          const label = document.createElement("span");
+          label.textContent = p.home + " – " + p.away + " · Q" + p.target_quarter;
+          const result = document.createElement("strong");
+          result.textContent = "Odhad " + p.predicted_total + " / skutočnosť " + p.actual_total + " · ±" + p.absolute_error;
+          result.style.color = p.absolute_error <= 5 ? "#39e6a5" : "#f2c66d";
+          row.append(label,result); predictorList.appendChild(row);
+        });
+      }
+    } catch (error) {
+      predictorMeta.textContent = "Prediktor čaká na prvý úspešný výpočet.";
+      predictorList.textContent = "Výsledky prediktora zatiaľ nie sú dostupné: " + error.message;
+    }
+  }
   async function load() {
     try { const r=await fetch(DATA_URL+"?t="+Date.now(),{cache:"no-store"}); if(!r.ok) throw new Error("HTTP "+r.status); render(await r.json()); }
     catch(e) { meta.textContent="Basketbalové dáta sa nepodarilo načítať."; list.textContent="Chyba načítania: "+e.message; }
   }
-  load(); loadArchive(); setInterval(load,10000); setInterval(loadArchive,60000);
+  load(); loadArchive(); loadPredictions(); setInterval(load,10000); setInterval(loadArchive,60000); setInterval(loadPredictions,30000);
 })();
