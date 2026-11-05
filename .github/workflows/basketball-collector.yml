@@ -118,6 +118,18 @@ jobs:
                   console.log("DETAIL PROBE stats:", JSON.stringify(detailMatch?.stats || null).slice(0,5000));
                   console.log("DETAIL PROBE incidents:", JSON.stringify(detailMatch?.incidents || null).slice(0,5000));
                   console.log("DETAIL PROBE tracker:", JSON.stringify(detailMatch?.tracker || null).slice(0,5000));
+                  // Probe the documented tracker endpoint using IDs exposed by the fixture/detail response.
+                  const trackerIds = [...new Set([detailMatch?.tracker?.id, detailMatch?.id, probe?.id].filter(Boolean).map(String))];
+                  for (const trackerId of trackerIds) {
+                    try {
+                      const trackerPayload = await getJSON("https://sportscore.com/api/widget/tracker/?sport=basketball&id=" + encodeURIComponent(trackerId), 2);
+                      console.log("TRACKER ENDPOINT id:", trackerId);
+                      console.log("TRACKER ENDPOINT keys:", Object.keys(trackerPayload || {}).join(", "));
+                      console.log("TRACKER ENDPOINT data:", JSON.stringify(trackerPayload).slice(0,7000));
+                    } catch (trackerError) {
+                      console.log("TRACKER ENDPOINT failed for", trackerId, trackerError.message);
+                    }
+                  }
                   console.log("DETAIL PROBE quarter fields:", JSON.stringify({
                     homeScore: detailMatch?.homeScore,
                     awayScore: detailMatch?.awayScore,
