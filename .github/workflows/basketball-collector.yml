@@ -115,6 +115,9 @@ jobs:
                   console.log("DETAIL PROBE slug:", slug);
                   console.log("DETAIL PROBE top-level keys:", Object.keys(detailPayload || {}).join(", "));
                   console.log("DETAIL PROBE match keys:", Object.keys(detailMatch || {}).join(", "));
+                  console.log("DETAIL PROBE stats:", JSON.stringify(detailMatch?.stats || null).slice(0,5000));
+                  console.log("DETAIL PROBE incidents:", JSON.stringify(detailMatch?.incidents || null).slice(0,5000));
+                  console.log("DETAIL PROBE tracker:", JSON.stringify(detailMatch?.tracker || null).slice(0,5000));
                   console.log("DETAIL PROBE quarter fields:", JSON.stringify({
                     homeScore: detailMatch?.homeScore,
                     awayScore: detailMatch?.awayScore,
