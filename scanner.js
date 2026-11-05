@@ -1493,7 +1493,7 @@
     return found ? found.flag : "🌍";
   }
 
-  function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false, signalArchive = null) {
+  function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false, signalArchive = null, target = matchesEl) {
     const card = document.createElement("div");
 
     card.style.cssText =
@@ -1781,7 +1781,42 @@
     }
 
     card.appendChild(detail);
-    matchesEl.appendChild(card);
+    target.appendChild(card);
+  }
+
+  function renderMatchesGrouped(items, historyData, allowSignals, staleMode, signalArchive) {
+    const groups = new Map();
+
+    items.forEach(item => {
+      const name = String(item.match?.competition || item.match?.league || "Neznáma súťaž").trim() || "Neznáma súťaž";
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name).push(item);
+    });
+
+    [...groups.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], "sk"))
+      .forEach(([league, leagueItems]) => {
+        const section = document.createElement("section");
+        section.style.cssText = "margin:16px 0 20px;padding:10px;background:#0a1422;border:1px solid #263a52;border-radius:12px;";
+
+        const heading = document.createElement("div");
+        const flag = getCompetitionFlag(leagueItems[0].match);
+        heading.textContent = `${flag} ${league} · ${leagueItems.length} ${leagueItems.length === 1 ? "zápas" : leagueItems.length < 5 ? "zápasy" : "zápasov"}`;
+        heading.style.cssText = "font-size:14px;font-weight:800;color:#e2e8f0;padding:3px 2px 8px;border-bottom:1px solid #31445c;margin-bottom:8px;";
+        section.appendChild(heading);
+
+        leagueItems.forEach(item => renderMatch(
+          item.match,
+          historyData,
+          item.collectedAt,
+          allowSignals,
+          staleMode,
+          signalArchive,
+          section
+        ));
+
+        matchesEl.appendChild(section);
+      });
   }
 
   async function scan() {
@@ -1840,14 +1875,7 @@
         addText(engine, "Zobrazenie je iba archívny náhľad. Žiadne signály, vyhodnocovanie ani aktualizácia skóre sa z neho nevykonáva.");
 
         if (staleMatches.length) {
-          staleMatches.forEach(item => renderMatch(
-            item.match,
-            historyData,
-            item.collectedAt,
-            false,
-            true,
-            signalArchive
-          ));
+          renderMatchesGrouped(staleMatches, historyData, false, true, signalArchive);
         } else {
           addText(matchesEl, "Nie sú dostupné ani posledné uložené LIVE zápasy.");
         }
@@ -1953,16 +1981,7 @@
         );
       }
 
-      matches.forEach(item => {
-        renderMatch(
-          item.match,
-          historyData,
-          item.collectedAt,
-          allowSignals,
-          false,
-          signalArchive
-        );
-      });
+      renderMatchesGrouped(matches, historyData, allowSignals, false, signalArchive);
 
       renderSummary();
       if (signalArchive) renderServerSignalArchive(signalArchive);
