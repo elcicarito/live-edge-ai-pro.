@@ -53,7 +53,7 @@ jobs:
 
                 const response = await fetch(freshUrl, {
                   headers: {
-                    "User-Agent": "LIVE-EDGE-AI-PRO/8.4",
+                    "User-Agent": "LIVE-EDGE-AI-PRO/8.5",
                     "Accept": "application/json",
                     "Cache-Control": "no-cache, no-store, max-age=0",
                     "Pragma": "no-cache"
@@ -136,7 +136,10 @@ jobs:
               "afterpenalties",
               "completed",
               "ended"
-            ].includes(status);
+            ].includes(status) ||
+              status.includes("finished") ||
+              status.includes("fulltime") ||
+              status === "complete";
           }
 
           function getSlug(item) {
@@ -227,7 +230,7 @@ jobs:
             const startedAt = new Date().toISOString();
 
             console.log("================================");
-            console.log("LIVE EDGE FRESH COLLECTOR v8.4");
+            console.log("LIVE EDGE FRESH COLLECTOR v8.5");
             console.log("Začiatok:", startedAt);
             console.log("Načítavam aktuálny LIVE zoznam...");
             console.log("================================");
@@ -529,7 +532,7 @@ jobs:
               collected_at: new Date().toISOString(),
               collection_started_at: startedAt,
               source: "SportScore API v1",
-              collector_version: "8.4",
+              collector_version: "8.5",
               data_status: archiveSafe ? "complete" : "partial",
               collection_complete: complete,
               archive_safe: archiveSafe,
