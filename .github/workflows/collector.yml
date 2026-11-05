@@ -247,6 +247,7 @@ jobs:
 
             const records = [];
             const errors = [];
+            let verifiedDetailCount = 0;
 
             async function collectMatch(item) {
               const name = `${item.home || "?"} - ${item.away || "?"}`;
@@ -267,6 +268,7 @@ jobs:
                 }
 
                 const match = detail.match;
+                verifiedDetailCount++;
 
                 if (!isLive(match)) {
                   console.log(
@@ -355,12 +357,10 @@ jobs:
             let archiveSafe = false;
             let feedDataSafe = false;
             const detailCoverage = uniqueFixtures.length > 0 &&
-              records.length >= Math.max(1, Math.ceil(uniqueFixtures.length * 0.8));
+              verifiedDetailCount === uniqueFixtures.length;
 
-            console.log("Overené LIVE detaily:", records.length, "/", uniqueFixtures.length);
-            console.log("Pokrytie detailmi:", Math.round(
-              (records.length / Math.max(1, uniqueFixtures.length)) * 100
-            ), "%");
+            console.log("Overené detaily:", verifiedDetailCount, "/", uniqueFixtures.length);
+            console.log("Aktuálne LIVE zápasy z overených detailov:", records.length);
 
             if (baseline === null) {
               console.log(
