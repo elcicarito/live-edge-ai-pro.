@@ -193,10 +193,20 @@ jobs:
             const archiveById = new Map(archive.map(m => [String(m.id || m.slug || m.url || ""), m]));
             // Enrich a small batch of finished games missing quarter data on each run.
             // Failed/empty pages are retried after six hours to avoid hammering the provider.
+            const hasCompleteQuarterScores = scores => {
+              if (!scores?.home || !scores?.away) return false;
+              return [0, 1, 2, 3].every(q => {
+                const h = Number(scores.home[q]), a = Number(scores.away[q]);
+                return scores.home[q] !== null && scores.home[q] !== undefined &&
+                  scores.away[q] !== null && scores.away[q] !== undefined &&
+                  Number.isFinite(h) && Number.isFinite(a) && h + a > 0;
+              });
+            };
             const finishedNeedingQuarters = finishedMatches.filter(match => {
               const id = String(match.id || match.slug || match.url || "");
               const existing = archiveById.get(id) || {};
-              if (existing.period_scores?.home || existing.period_scores?.away) return false;
+              // Keep partial records and retry them after six hours until Q1-Q4 are complete.
+              if (hasCompleteQuarterScores(existing.period_scores)) return false;
               const checked = Date.parse(existing.quarter_scores_checked_at || "");
               return !Number.isFinite(checked) || Date.now() - checked > 6 * 60 * 60 * 1000;
             }).slice(0, 8);
@@ -207,15 +217,33 @@ jobs:
               if (!id) continue;
               const existing = archiveById.get(id) || {};
               const enriched = enrichedFinishedById.get(id);
+              let mergedPeriodScores = existing.period_scores || match.period_scores || null;
+              if (enriched?.period_scores) {
+                const oldScores = existing.period_scores || {};
+                const newScores = enriched.period_scores;
+                const home = [], away = [];
+                for (let q = 0; q < 4; q++) {
+                  const oldH = Number(oldScores.home?.[q]), oldA = Number(oldScores.away?.[q]);
+                  const oldValid = oldScores.home?.[q] !== null && oldScores.home?.[q] !== undefined &&
+                    oldScores.away?.[q] !== null && oldScores.away?.[q] !== undefined &&
+                    Number.isFinite(oldH) && Number.isFinite(oldA) && oldH + oldA > 0;
+                  const newH = Number(newScores.home?.[q]), newA = Number(newScores.away?.[q]);
+                  const newValid = newScores.home?.[q] !== null && newScores.home?.[q] !== undefined &&
+                    newScores.away?.[q] !== null && newScores.away?.[q] !== undefined &&
+                    Number.isFinite(newH) && Number.isFinite(newA) && newH + newA > 0;
+                  home[q] = oldValid ? oldH : newValid ? newH : null;
+                  away[q] = oldValid ? oldA : newValid ? newA : null;
+                }
+                mergedPeriodScores = { home, away };
+              }
               archiveById.set(id, {
                 ...existing,
                 ...match,
-                ...(enriched?.period_scores ? {
-                  period_scores: enriched.period_scores,
-                  quarter_scores_source: enriched.quarter_scores_source,
+                ...(mergedPeriodScores ? { period_scores: mergedPeriodScores } : {}),
+                ...(enriched ? {
+                  ...(enriched.period_scores ? { quarter_scores_source: enriched.quarter_scores_source } : {}),
                   quarter_scores_checked_at: enriched.quarter_scores_checked_at
                 } : {}),
-                ...(enriched && !enriched.period_scores ? { quarter_scores_checked_at: enriched.quarter_scores_checked_at } : {}),
                 status: "finished",
                 archived_at: existing.archived_at || now
               });
