@@ -574,6 +574,32 @@ jobs:
 
             const now = new Date().toISOString();
 
+            // Ak zápas zmizne z LIVE zoznamu, vytvor kandidáta na samostatné
+            // sledovanie aj pri aktívnom feed guarde. Pred archiváciou sa vždy
+            // overí jeho vlastný detail – samotná neprítomnosť nestačí.
+            if (
+              complete &&
+              previousLatest &&
+              previousLatest.data_status === "complete" &&
+              Array.isArray(previousLatest.records)
+            ) {
+              for (const record of previousLatest.records) {
+                const id = getMatchId(record);
+                if (!id || currentById.has(id) || pending.has(id) || archived.has(id)) continue;
+
+                pending.set(id, {
+                  id,
+                  first_missing_at: now,
+                  last_missing_at: now,
+                  last_seen_at: record.collected_at || null,
+                  missing_complete_runs: 1,
+                  last_snapshot: makeArchiveSnapshot(record, id)
+                });
+
+                console.log("NOVÝ KANDIDÁT NA SLEDOVANIE DO KONCA:", id);
+              }
+            }
+
             // Pokračuj v kontrole zápasov, ktoré už zmizli z LIVE zoznamu.
             // Konečný archív vytvor až po potvrdenom FINISHED/FT stave a skóre.
             for (const [id, item] of [...pending.entries()]) {
@@ -603,8 +629,18 @@ jobs:
                 item.last_checked_status = finalStatus || "unknown";
 
                 if (isLive(finalMatch)) {
-                  pending.delete(id);
-                  console.log("ZÁPAS JE OPÄŤ LIVE – vyradený z čakania na výsledok:", id);
+                  if (currentById.has(id)) {
+                    pending.delete(id);
+                    console.log("ZÁPAS JE OPÄŤ V LIVE FEED-e:", id);
+                  } else {
+                    item.last_snapshot = makeArchiveSnapshot({
+                      collected_at: now,
+                      match: finalMatch
+                    }, id);
+                    item.last_checked_status = finalStatus || "live";
+                    pending.set(id, item);
+                    console.log("DETAIL POTVRDZUJE, ŽE ZÁPAS EŠTE PREBIEHA – pokračujem v samostatnom sledovaní:", id);
+                  }
                   continue;
                 }
 
