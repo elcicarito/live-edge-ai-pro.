@@ -28,7 +28,7 @@
   };
 
   const isLive = match => {
-    const s = String(statusOf(match)).toLowerCase().replace(/[\\s_-]+/g, "");
+    const s = String(statusOf(match)).toLowerCase().replace(/[\s_-]+/g, "");
     return ["live","inplay","inprogress","playing","q1","q2","q3","q4","ot","overtime","halftime","break","period1","period2","period3","period4"].includes(s) || s.includes("inprogress") || s.includes("live");
   };
 
@@ -96,10 +96,10 @@
       row.style.cssText = "display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;margin:6px 0";
       const names = document.createElement("div");
       names.style.cssText = "font-weight:700;line-height:1.5;white-space:pre-line";
-      names.textContent = teamName(match, "home") + "\\n" + teamName(match, "away");
+      names.textContent = teamName(match, "home") + "\n" + teamName(match, "away");
       const scores = document.createElement("div");
       scores.style.cssText = "font-size:20px;font-weight:800;text-align:right;line-height:1.5;font-variant-numeric:tabular-nums;white-space:pre-line";
-      scores.textContent = scoreOf(match, "home") + "\\n" + scoreOf(match, "away");
+      scores.textContent = scoreOf(match, "home") + "\n" + scoreOf(match, "away");
       row.append(names, scores);
       card.append(header, row);
       list.appendChild(card);
