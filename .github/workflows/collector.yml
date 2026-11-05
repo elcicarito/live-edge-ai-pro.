@@ -664,13 +664,24 @@ jobs:
             // AKTUÁLNE LIVE DÁTA
             // =========================================
 
-            if (feedDataSafe) {
+            // Aktuálny LIVE zoznam oddeľujeme od bezpečnosti archivácie.
+            // Ak API vrátilo platný zoznam a každý vrátený zápas má
+            // úspešne overený detail, zobrazíme čerstvé zápasy aj pri
+            // podozrivom poklese počtu. V takom prípade však označíme
+            // feed ako čiastočný a signály zostanú zablokované.
+            const currentFeedVerified =
+              complete &&
+              (detailCoverage || uniqueFixtures.length === 0);
+
+            if (currentFeedVerified) {
               const currentOutput = {
                 ...output,
-                data_status: "complete",
-                snapshot_type: "current_verified_live",
+                data_status: archiveSafe ? "complete" : "partial",
+                snapshot_type: archiveSafe
+                  ? "current_verified_live"
+                  : "current_verified_live_partial",
                 archive_safe: archiveSafe,
-                feed_guard_warning: false
+                feed_guard_warning: !archiveSafe
               };
 
               fs.writeFileSync(
@@ -679,12 +690,14 @@ jobs:
               );
 
               console.log(
-                "AKTUÁLNE LIVE DÁTA AKTUALIZOVANÉ."
+                archiveSafe
+                  ? "AKTUÁLNE LIVE DÁTA AKTUALIZOVANÉ."
+                  : "ČIASTOČNÝ LIVE FEED AKTUALIZOVANÝ: overené zápasy sa zobrazia, signály a archivácia zostávajú zablokované."
               );
 
             } else {
               console.log(
-                "LIVE CURRENT ZACHOVANÝ: zber obsahuje chyby."
+                "LIVE CURRENT ZACHOVANÝ: zoznam alebo detaily zápasov neboli úplne overené."
               );
             }
 
