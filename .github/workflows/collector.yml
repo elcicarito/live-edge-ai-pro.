@@ -353,6 +353,14 @@ jobs:
               : null;
 
             let archiveSafe = false;
+            let feedDataSafe = false;
+            const detailCoverage = uniqueFixtures.length > 0 &&
+              records.length >= Math.max(1, Math.ceil(uniqueFixtures.length * 0.8));
+
+            console.log("Overené LIVE detaily:", records.length, "/", uniqueFixtures.length);
+            console.log("Pokrytie detailmi:", Math.round(
+              (records.length / Math.max(1, uniqueFixtures.length)) * 100
+            ), "%");
 
             if (baseline === null) {
               console.log(
@@ -361,8 +369,10 @@ jobs:
 
               if (
                 complete &&
+                detailCoverage &&
                 uniqueFixtures.length >= MIN_BASELINE
               ) {
+                feedDataSafe = true;
                 feedGuard.baseline_fixture_count =
                   uniqueFixtures.length;
 
@@ -397,8 +407,9 @@ jobs:
               console.log("Minimálny očakávaný počet:", minimumExpected);
               console.log("================================");
 
-              if (!complete) {
+              if (!complete || !detailCoverage) {
                 archiveSafe = false;
+                feedDataSafe = false;
 
                 console.log(
                   "NEÚPLNÝ ZBER: Archivácia pozastavená."
@@ -406,6 +417,7 @@ jobs:
 
               } else if (suspiciousDrop) {
                 archiveSafe = false;
+                feedDataSafe = false;
 
                 feedGuard.suspect_fixture_count =
                   uniqueFixtures.length;
@@ -431,6 +443,7 @@ jobs:
 
               } else {
                 archiveSafe = true;
+                feedDataSafe = true;
 
                 feedGuard.suspect_fixture_count = null;
                 feedGuard.suspect_runs = 0;
@@ -592,6 +605,8 @@ jobs:
               archived_matches: archive.archived_matches.length,
               pending_matches: archive.pending_matches.length,
               complete_collection: complete,
+              detail_coverage: detailCoverage,
+              feed_data_safe: feedDataSafe,
               archive_safe: archiveSafe,
               baseline_fixture_count: feedGuard.baseline_fixture_count,
               suspect_runs: feedGuard.suspect_runs
@@ -602,13 +617,13 @@ jobs:
             // AKTUÁLNE LIVE DÁTA
             // =========================================
 
-            if (complete) {
+            if (feedDataSafe) {
               const currentOutput = {
                 ...output,
                 data_status: "complete",
                 snapshot_type: "current_verified_live",
                 archive_safe: archiveSafe,
-                feed_guard_warning: !archiveSafe
+                feed_guard_warning: false
               };
 
               fs.writeFileSync(
@@ -842,7 +857,7 @@ jobs:
             const signalNow = new Date().toISOString();
             const liveById = new Map();
 
-            if (complete) {
+            if (archiveSafe) {
               for (const record of records) {
                 if (record?.match) {
                   const id = frontendMatchId(record.match);
@@ -960,7 +975,9 @@ jobs:
               verified_live: output.live_count,
               saved_count: output.saved_count,
               errors: errors.length,
-              current_updated: complete,
+              current_updated: feedDataSafe,
+              detail_coverage: detailCoverage,
+              feed_data_safe: feedDataSafe,
               history_updated: true,
               archive_updated: true,
               latest_updated: archiveSafe,
