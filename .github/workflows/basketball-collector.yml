@@ -279,7 +279,7 @@ jobs:
           const current = read(CURRENT, {});
           const archive = read(ARCHIVE, { matches: [] });
           const history = read(PREDICTIONS, { sport: "basketball", predictions: [] });
-          const predictions = (Array.isArray(history.predictions) ? history.predictions : []).filter(p => p.model_version === 3);
+          const predictions = (Array.isArray(history.predictions) ? history.predictions : []).filter(p => p.model_version === 3 && p.training_scope === "league");
           const keyOf = m => String(m.id || m.slug || m.url || [m.home, m.away, m.time].join("|"));
           const leagueOf = m => String(m.competition?.name || m.league?.name || m.competition || m.league || "Liga neznáma").trim();
           const qValue = (m, side, q) => {
