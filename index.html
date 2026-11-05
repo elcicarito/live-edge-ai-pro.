@@ -43,6 +43,10 @@ small{
   color:#9baabe
 }
 .archive-card summary{  display:flex;  align-items:center;  justify-content:space-between;  gap:12px;  cursor:pointer;  list-style:none;  font-weight:800;  font-size:16px;  color:#ffffff;}.archive-card summary::-webkit-details-marker{display:none}.archive-card summary:after{content:"＋";color:#39e6a5;font-size:20px;margin-left:auto}.archive-card[open] summary:after{content:"−"}.archive-count{  display:inline-flex;  align-items:center;  justify-content:center;  min-width:28px;  height:28px;  padding:0 8px;  border-radius:20px;  background:#203d39;  color:#39e6a5;  font-size:13px;}.archive-card #match-archive{margin-top:14px}
+.stats-card summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;font-weight:800;font-size:16px;color:#fff}
+.stats-card summary::-webkit-details-marker{display:none}
+.stats-card summary:after{content:"＋";color:#39e6a5;font-size:20px;margin-left:auto}
+.stats-card[open] summary:after{content:"−"}
 .archive-filters{
   display:grid;
   grid-template-columns:1fr;
@@ -99,6 +103,11 @@ small{
 <p id="signal">Načítavam signály...</p>
 </div>
 
+<details class="card stats-card" open>
+<summary>📊 ŠTATISTIKY SYSTÉMU</summary>
+<div id="system-stats"><p>Načítavam štatistiky...</p></div>
+</details>
+
 <details class="card archive-card">
 <summary>
   <span>🏁 UKONČENÉ ZÁPASY</span>
@@ -124,7 +133,7 @@ OBNOVIŤ SKENER
 
 <p><small>Experimental version · Powered by SportScore API v1</small></p>
 
-<script src="./scanner.js?v=34"></script>
+<script src="./scanner.js?v=35"></script>
 
 </body>
 </html>
