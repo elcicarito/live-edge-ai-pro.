@@ -14,6 +14,7 @@
 
   const matchesEl = document.getElementById("matches");
   const signalEl = document.getElementById("signal");
+  const systemStatsEl = document.getElementById("system-stats");
   const matchArchiveEl = document.getElementById("match-archive");
   const matchArchiveCountEl = document.getElementById("match-archive-count");
   const matchArchiveLeagueEl = document.getElementById("match-archive-league");
@@ -1143,6 +1144,123 @@
     }
   }
 
+  function renderSystemStats(current, signalArchive, matchArchive) {
+    if (!systemStatsEl) return;
+    systemStatsEl.innerHTML = "";
+
+    const collectedAt = Date.parse(current?.collected_at || "");
+    const dataAge = Number.isFinite(collectedAt) ? Math.max(0, Date.now() - collectedAt) : null;
+    const fresh = dataAge !== null && dataAge <= MAX_DATA_AGE_MS;
+    const complete = current?.collection_complete === true && current?.data_status === "complete";
+    const liveCount = Number.isFinite(Number(current?.live_count))
+      ? Number(current.live_count)
+      : (Array.isArray(current?.records) ? current.records.length : 0);
+
+    const signals = Array.isArray(signalArchive?.signals) ? signalArchive.signals : null;
+    const wins = signals ? signals.filter(item => item?.status === "WIN").length : null;
+    const losses = signals ? signals.filter(item => item?.status === "LOSS").length : null;
+    const open = signals ? signals.filter(item => item?.status === "OPEN").length : null;
+    const unresolved = signals ? signals.filter(item => item?.status === "UNRESOLVED").length : null;
+
+    const pendingMatches = Array.isArray(matchArchive?.pending_matches)
+      ? matchArchive.pending_matches.length
+      : null;
+    const confirmedMatches = Array.isArray(matchArchive?.archived_matches)
+      ? matchArchive.archived_matches.filter(item => item?.status_confirmation === "confirmed_finished").length
+      : null;
+
+    const signalTimes = (signals || [])
+      .map(item => Date.parse(item?.createdAt || ""))
+      .filter(Number.isFinite);
+    const firstSignalAt = signalTimes.length ? Math.min(...signalTimes) : null;
+
+    const fmt = value => Number.isFinite(value)
+      ? new Date(value).toLocaleString("sk-SK")
+      : "Nedostupné";
+    const ageLabel = dataAge === null
+      ? "Nedostupné"
+      : dataAge < 60000
+        ? Math.round(dataAge / 1000) + " s"
+        : Math.floor(dataAge / 60000) + " min";
+    const runStarted = Date.parse(current?.collection_started_at || "");
+    const runDuration = Number.isFinite(runStarted) && Number.isFinite(collectedAt) && collectedAt >= runStarted
+      ? Math.max(1, Math.round((collectedAt - runStarted) / 1000)) + " s"
+      : "Nedostupné";
+    let collectionDuration = "Zatiaľ bez zaznamenaného signálu";
+    if (firstSignalAt !== null) {
+      const elapsedHours = Math.floor(Math.max(0, Date.now() - firstSignalAt) / 3600000);
+      const days = Math.floor(elapsedHours / 24);
+      const hours = elapsedHours % 24;
+      collectionDuration = days + " dní, " + hours + " hod.";
+    }
+
+    const statusLabel = complete && fresh
+      ? "KOMPLETNÝ · AKTUÁLNY"
+      : !fresh
+        ? "ZASTARANÉ / NEDOSTUPNÉ"
+        : "NEÚPLNÝ ZBER";
+
+    const stat = (label, value, color = "#ffffff") => {
+      const card = document.createElement("div");
+      card.style.cssText = "padding:11px;border:1px solid #35465e;border-radius:10px;background:#101b2b;min-width:0;";
+      const name = document.createElement("div");
+      name.textContent = label;
+      name.style.cssText = "font-size:11px;color:#9baabe;margin-bottom:6px;";
+      const number = document.createElement("div");
+      number.textContent = String(value);
+      number.style.cssText = "font-size:19px;font-weight:900;color:" + color + ";overflow-wrap:anywhere;";
+      card.append(name, number);
+      systemStatsEl.appendChild(card);
+    };
+
+    const heading = document.createElement("div");
+    heading.textContent = "STAV ZBERU A VÝSLEDKY";
+    heading.style.cssText = "font-size:14px;font-weight:900;margin:4px 0 10px;";
+    systemStatsEl.appendChild(heading);
+
+    const status = document.createElement("div");
+    status.textContent = "LIVE zber: " + statusLabel;
+    status.style.cssText = "padding:10px;border-radius:9px;background:" +
+      (complete && fresh ? "#123b32" : "#49321c") +
+      ";border:1px solid " + (complete && fresh ? "#239b78" : "#c58a35") +
+      ";font-weight:800;margin-bottom:10px;";
+    systemStatsEl.appendChild(status);
+
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;";
+    systemStatsEl.appendChild(grid);
+
+    const addGridStat = (label, value, color) => {
+      const oldParent = systemStatsEl;
+      const card = document.createElement("div");
+      card.style.cssText = "padding:11px;border:1px solid #35465e;border-radius:10px;background:#101b2b;min-width:0;";
+      const name = document.createElement("div");
+      name.textContent = label;
+      name.style.cssText = "font-size:11px;color:#9baabe;margin-bottom:6px;";
+      const number = document.createElement("div");
+      number.textContent = String(value);
+      number.style.cssText = "font-size:19px;font-weight:900;color:" + (color || "#ffffff") + ";overflow-wrap:anywhere;";
+      card.append(name, number);
+      grid.appendChild(card);
+    };
+
+    addGridStat("LIVE zápasy", liveCount, "#39e6a5");
+    addGridStat("Všetky signály", signals ? signals.length : "Nedostupné");
+    addGridStat("WIN", wins === null ? "Nedostupné" : wins, "#39e6a5");
+    addGridStat("LOSS", losses === null ? "Nedostupné" : losses, "#ff6464");
+    addGridStat("OPEN", open === null ? "Nedostupné" : open, "#60a5fa");
+    addGridStat("UNRESOLVED", unresolved === null ? "Nedostupné" : unresolved, "#aab3c2");
+    addGridStat("Čaká na konečný výsledok", pendingMatches === null ? "Nedostupné" : pendingMatches);
+    addGridStat("Potvrdené ukončené zápasy", confirmedMatches === null ? "Nedostupné" : confirmedMatches);
+
+    addText(systemStatsEl, "Posledný kompletný zber: " +
+      (complete ? fmt(collectedAt) : "aktuálny snapshot nie je potvrdený"));
+    addText(systemStatsEl, "Vek posledných dát: " + ageLabel + " | Dĺžka posledného behu: " + runDuration);
+    addText(systemStatsEl, "Zber signálov: " + collectionDuration +
+      (firstSignalAt !== null ? " (od prvého zaznamenaného signálu)" : ""));
+    addText(systemStatsEl, "Údaje sú počty z trvalého archívu. UNRESOLVED sa nezapočítava medzi prehry; percentá sa tu zámerne nezobrazujú.");
+  }
+
   function renderMatchArchive(data) {
     if (!matchArchiveEl) return;
     matchArchiveData = data;
@@ -1655,6 +1773,7 @@
         renderSummary();
         if (signalArchive) renderServerSignalArchive(signalArchive);
         renderMatchArchive(matchArchive);
+        renderSystemStats(current, signalArchive, matchArchive);
 
         signalEl.textContent =
           `ZASTARANÉ DÁTA – NIE LIVE | Posledný zber: ${current.collected_at || "neznámy čas"} | Signály zablokované`;
@@ -1765,6 +1884,7 @@
       if (signalArchive) renderServerSignalArchive(signalArchive);
       else addText(engine, "Trvalý archív signálov sa nepodarilo načítať.");
       renderMatchArchive(matchArchive);
+      renderSystemStats(current, signalArchive, matchArchive);
 
       signalEl.textContent =
         `Aktualizované: ${new Date().toLocaleTimeString("sk-SK")} | LIVE: ${matches.length}`;
