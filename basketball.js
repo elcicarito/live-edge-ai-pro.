@@ -137,8 +137,8 @@
     const scores=document.createElement("div"); scores.style.cssText="font-size:20px;font-weight:800;text-align:right;line-height:1.5;font-variant-numeric:tabular-nums;white-space:pre-line"; scores.textContent=scoreOf(match,"home")+"\n"+scoreOf(match,"away");
     row.append(names,scores); card.append(header,row); addQuarterTable(card,match); return card;
   }
-  function renderArchiveStats(matches) {
-    const existing = document.getElementById("basketball-quarter-stats");
+  function renderArchiveStats(matches, target = archiveList, titleText = "📊 ŠTATISTIKY ŠTVRTÍ V ARCHÍVE", panelId = "basketball-quarter-stats") {
+    const existing = panelId ? document.getElementById(panelId) : null;
     if (existing) existing.remove();
     const stats = [0,1,2,3].map(q => {
       const totals = matches.map(match => {
@@ -154,10 +154,10 @@
     if (!available.length) return;
     const best = available.reduce((top, item) => item.average > top.average ? item : top);
     const panel = document.createElement("section");
-    panel.id = "basketball-quarter-stats";
+    if (panelId) panel.id = panelId;
     panel.style.cssText = "background:#132238;border:1px solid #354d69;border-radius:12px;padding:14px;margin:12px 0 16px";
     const title = document.createElement("div");
-    title.textContent = "📊 ŠTATISTIKY ŠTVRTÍ V ARCHÍVE";
+    title.textContent = titleText;
     title.style.cssText = "font-weight:800;font-size:13px;margin-bottom:10px;color:#e7f0fb";
     panel.appendChild(title);
     const grid = document.createElement("div");
@@ -186,7 +186,7 @@
     leader.textContent = "Najviac bodov v priemere: Q" + best.quarter + " (" + best.average.toFixed(1) + " bodu; n=" + best.count + ").";
     leader.style.cssText = "font-size:12px;color:#39e6a5;font-weight:700;margin-top:7px";
     panel.appendChild(leader);
-    archiveList.appendChild(panel);
+    target.appendChild(panel);
   }
   function render(data) {
     if (!data || data.sport !== "basketball") { meta.textContent="Basketbalové dáta zatiaľ nie sú dostupné."; list.textContent="Zatiaľ sa nepodarilo načítať prvý zber."; return; }
@@ -236,6 +236,7 @@
         section.appendChild(summary);
         const body = document.createElement("div");
         body.style.cssText = "padding:0 0 8px";
+        renderArchiveStats(leagueMatches, body, "📊 ŠTATISTIKY ŠTVRTÍ – " + league, null);
         leagueMatches.forEach(match => body.appendChild(makeCard(match,true)));
         section.appendChild(body);
         archiveList.appendChild(section);
