@@ -80,12 +80,18 @@ small{
   border-radius:9px;
   font-size:12px;
 }
-</style>
+.sport-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.sport-tab{background:#1b2a3e;color:#d6e2f0;border:1px solid #3a4d67;padding:13px 8px;border-radius:10px;font-weight:800}.sport-tab.active{background:#39e6a5;color:#07120f;border-color:#39e6a5}#basketball-view .card{border:1px solid #263b55}</style>
 </head>
 
 <body>
 
 <h1>LIVE EDGE AI PRO</h1>
+<div class="sport-switch" role="group" aria-label="Výber športu">
+  <button id="football-tab" class="sport-tab active" type="button">⚽ FUTBAL</button>
+  <button id="basketball-tab" class="sport-tab" type="button">🏀 BASKETBAL</button>
+</div>
+
+<div id="football-view">
 <p class="status">● LIVE FOOTBALL SCANNER</p>
 
 <div class="card">
@@ -131,9 +137,42 @@ small{
 OBNOVIŤ SKENER
 </button>
 
-<p><small>Experimental version · Powered by SportScore API v1</small></p>
+</div>
 
+<div id="basketball-view" style="display:none">
+  <p class="status">● LIVE BASKETBALL COLLECTOR · ZBER DÁT, BEZ SIGNÁLOV</p>
+  <div class="card">
+    <h3>🏀 LIVE basketbalové zápasy</h3>
+    <p id="basketball-meta">Čakám na prvý zber...</p>
+    <div id="basketball-matches">Načítavam basketbalové dáta...</div>
+  </div>
+  <div class="card">
+    <h3>ℹ️ Basketbalový zber</h3>
+    <p>Táto časť zatiaľ iba zbiera a zobrazuje zápasy a skóre. Nevytvára signály a nijako neovplyvňuje futbalový systém.</p>
+  </div>
+</div>
+
+<p><small>Experimental version · <a href="https://sportscore.com/" rel="dofollow" style="color:#39e6a5">Powered by SportScore</a></small></p>
+
+<script>
+(() => {
+  const football = document.getElementById("football-view");
+  const basketball = document.getElementById("basketball-view");
+  const footballTab = document.getElementById("football-tab");
+  const basketballTab = document.getElementById("basketball-tab");
+  function selectSport(sport) {
+    const isBasketball = sport === "basketball";
+    football.style.display = isBasketball ? "none" : "block";
+    basketball.style.display = isBasketball ? "block" : "none";
+    footballTab.classList.toggle("active", !isBasketball);
+    basketballTab.classList.toggle("active", isBasketball);
+  }
+  footballTab.addEventListener("click", () => selectSport("football"));
+  basketballTab.addEventListener("click", () => selectSport("basketball"));
+})();
+</script>
 <script src="./scanner.js?v=35"></script>
+<script src="./basketball.js?v=1"></script>
 
 </body>
 </html>
