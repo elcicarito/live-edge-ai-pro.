@@ -237,7 +237,7 @@ jobs:
 
       - name: Commit basketball data
         run: |
-          if git diff --quiet -- data/basketball-current.json data/basketball-history.jsonl; then
+          if git diff --quiet -- data/basketball-current.json data/basketball-history.jsonl data/basketball-archive.json; then
             echo "Basketball data unchanged."
             exit 0
           fi
@@ -245,4 +245,15 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/basketball-current.json data/basketball-history.jsonl data/basketball-archive.json
           git commit -m "Update LIVE basketball data"
-          git push
+          # Football and basketball collectors can commit near-simultaneously.
+          # Rebase our basketball-only commit onto the latest main before pushing.
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push conflict, retry ${attempt}/3"
+            sleep 2
+          done
+          echo "Unable to push basketball data after three retries."
+          exit 1
