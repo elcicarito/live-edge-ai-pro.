@@ -1484,7 +1484,7 @@
     return found ? found.flag : "🌍";
   }
 
-  function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false) {
+  function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false, signalArchive = null) {
     const card = document.createElement("div");
 
     card.style.cssText =
@@ -1533,8 +1533,50 @@
 
     card.appendChild(header);
 
+    const leagueLine = document.createElement("div");
+    leagueLine.textContent = `${getCompetitionFlag(match)} ${match.competition || "Neznáma súťaž"}`;
+    leagueLine.style.cssText = "font-size:12px;color:#a8b8cc;margin:2px 0 9px;";
+    card.appendChild(leagueLine);
+
+    const relatedSignals = Array.isArray(signalArchive?.signals)
+      ? signalArchive.signals.filter(item => String(item.matchId) === matchId(match))
+      : [];
+    const signalSummary = document.createElement("div");
+    signalSummary.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;";
+    const signalCounts = {
+      OPEN: relatedSignals.filter(item => item.status === "OPEN").length,
+      WIN: relatedSignals.filter(item => item.status === "WIN").length,
+      LOSS: relatedSignals.filter(item => item.status === "LOSS").length,
+      UNRESOLVED: relatedSignals.filter(item => item.status === "UNRESOLVED").length
+    };
+    const addMiniTag = (label, value, color) => {
+      if (!value) return;
+      const tag = document.createElement("span");
+      tag.textContent = `${label}: ${value}`;
+      tag.style.cssText = `font-size:11px;font-weight:700;padding:5px 8px;border-radius:20px;background:#172638;color:${color};border:1px solid ${color};`;
+      signalSummary.appendChild(tag);
+    };
+    addMiniTag("OTVORENÉ", signalCounts.OPEN, "#39e6a5");
+    addMiniTag("WIN", signalCounts.WIN, "#4ade80");
+    addMiniTag("LOSS", signalCounts.LOSS, "#f87171");
+    addMiniTag("NEVYRIEŠENÉ", signalCounts.UNRESOLVED, "#fbbf24");
+    if (!relatedSignals.length) {
+      const noSignal = document.createElement("span");
+      noSignal.textContent = "Bez zaznamenaného signálu";
+      noSignal.style.cssText = "font-size:11px;color:#94a3b8;";
+      signalSummary.appendChild(noSignal);
+    }
+    card.appendChild(signalSummary);
+
+    const detail = document.createElement("details");
+    detail.style.cssText = "border-top:1px solid #293b52;padding-top:8px;";
+    const detailSummary = document.createElement("summary");
+    detailSummary.textContent = "📊 Štatistiky, tlak a diagnostika";
+    detailSummary.style.cssText = "cursor:pointer;list-style:none;font-size:13px;font-weight:800;color:#39e6a5;padding:5px 0;";
+    detail.appendChild(detailSummary);
+
     if (staleMode) {
-      addSignalPanel(card, {
+      addSignalPanel(detail, {
         heading: "UPOZORNENIE",
         title: "ZASTARANÉ DÁTA – NIE LIVE",
         detail: "Toto je posledný uložený obraz zápasu. Aktuálny stav sa nepotvrdil; nepoužívaj ho na rozhodovanie ani stávky.",
@@ -1551,12 +1593,12 @@
 
     const quality = getDataQuality(match, collectedAt);
     addBadge(
-      card,
+      detail,
       quality.label,
       quality.background,
       quality.border
     );
-    addText(card, quality.detail);
+    addText(detail, quality.detail);
 
     const reliability = getMatchReliability(
       match,
@@ -1564,7 +1606,7 @@
       collectedAt
     );
 
-    addText(card, "SPOĽAHLIVOSŤ ZBERU – HISTÓRIA", "14px");
+    addText(detail, "SPOĽAHLIVOSŤ ZBERU – HISTÓRIA", "14px");
     if (reliability) {
       addBadge(
         card,
@@ -1581,14 +1623,14 @@
         `Priemerný interval: ${reliability.averageGap === null ? "zatiaľ bez porovnania" : reliability.averageGap.toFixed(1) + " min"} | Najdlhšia medzera: ${reliability.maxGap === null ? "—" : reliability.maxGap.toFixed(1) + " min"} | Medzery nad 7 min: ${reliability.longGaps}`
       );
     } else {
-      addText(card, "Zatiaľ nie je dostupná história meraní tohto zápasu.");
+      addText(detail, "Zatiaľ nie je dostupná história meraní tohto zápasu.");
     }
     addText(
       card,
       "Ukazovateľ vychádza z uložených kompletných zberov (približne posledných 24 hodín); je iba informačný."
     );
 
-    renderCurrentStats(card, match.stats || []);
+    renderCurrentStats(detail, match.stats || []);
 
     const pressure = calculatePressure(match.stats || []);
     const snapshot = getSnapshot(match, historyData, collectedAt);
@@ -1600,7 +1642,7 @@
         `Tlak: Domáci ${pressure.home}/100 | Hostia ${pressure.away}/100`
       );
     } else {
-      addText(card, "Tlak: čakám na štatistiky.");
+      addText(detail, "Tlak: čakám na štatistiky.");
     }
 
     if (snapshot.ready) {
@@ -1629,7 +1671,7 @@
         `Aktivita za 10 min: Domáci ${snapshot.homeActivityRate.toFixed(1)} | Hostia ${snapshot.awayActivityRate.toFixed(1)}`
       );
     } else {
-      addText(card, snapshot.text);
+      addText(detail, snapshot.text);
     }
 
     if (threat) {
@@ -1641,7 +1683,7 @@
     }
 
     if (!allowSignals) {
-      addSignalPanel(card, {
+      addSignalPanel(detail, {
         heading: staleMode ? "LIVE SIGNÁL" : "LIVE SIGNÁL",
         title: staleMode ? "SIGNÁLY VYPNUTÉ – ZASTARANÉ DÁTA" : "ZBER DÁT NIE JE KOMPLETNÝ",
         detail: staleMode ? "Z tohto záznamu sa nevytvára ani nevyhodnocuje žiadny LIVE signál." : "Nové signály sú momentálne zablokované.",
@@ -1658,7 +1700,7 @@
       );
 
       if (signal) {
-        addSignalPanel(card, {
+        addSignalPanel(detail, {
           heading: "⚡ LIVE SIGNÁL – POTVRDENÝ",
           title: signal.team,
           detail:
@@ -1679,7 +1721,7 @@
         const side = threat.home >= threat.away ? "Domáci" : "Hostia";
         const score = Math.max(threat.home, threat.away);
 
-        addSignalPanel(card, {
+        addSignalPanel(detail, {
           heading: "⚠ ZVÝŠENÝ TLAK",
           title: `${side} – ${score}/100`,
           detail: "Zatiaľ nie sú splnené všetky podmienky pre LIVE signál.",
@@ -1689,7 +1731,7 @@
         });
 
       } else {
-        addSignalPanel(card, {
+        addSignalPanel(detail, {
           heading: "LIVE SIGNÁL",
           title: "Zatiaľ bez potvrdeného signálu",
           detail: "Systém naďalej sleduje vývoj zápasu.",
@@ -1700,6 +1742,7 @@
       }
     }
 
+    card.appendChild(detail);
     matchesEl.appendChild(card);
   }
 
@@ -1764,7 +1807,8 @@
             historyData,
             item.collectedAt,
             false,
-            true
+            true,
+            signalArchive
           ));
         } else {
           addText(matchesEl, "Nie sú dostupné ani posledné uložené LIVE zápasy.");
@@ -1876,7 +1920,9 @@
           item.match,
           historyData,
           item.collectedAt,
-          allowSignals
+          allowSignals,
+          false,
+          signalArchive
         );
       });
 
