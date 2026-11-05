@@ -1126,6 +1126,77 @@
     addText(engine, "Výsledky signálov nie sú zárukou zisku.");
   }
 
+  // Vlajka ligy je iba vizuálny údaj; nemení výpočet ani signály.
+  function getCompetitionFlag(match) {
+    const direct = String(
+      match?.competition_country ||
+      match?.country ||
+      match?.competition?.country ||
+      ""
+    ).trim().toLowerCase();
+
+    const countries = [
+      { flag: "🇮🇳", names: ["india", "indian", "bharat"] },
+      { flag: "🇨🇳", names: ["china", "chinese", "hangzhou", "qianchao"] },
+      { flag: "🇬🇧", names: ["england", "english", "premier league", "championship", "fa cup"] },
+      { flag: "🏴", names: ["scotland", "scottish"] },
+      { flag: "🇪🇸", names: ["spain", "spanish", "la liga", "copa del rey"] },
+      { flag: "🇩🇪", names: ["germany", "german", "bundesliga", "dfb-pokal"] },
+      { flag: "🇮🇹", names: ["italy", "italian", "serie a", "coppa italia"] },
+      { flag: "🇫🇷", names: ["france", "french", "ligue 1", "coupe de france"] },
+      { flag: "🇵🇹", names: ["portugal", "portuguese", "liga portugal"] },
+      { flag: "🇳🇱", names: ["netherlands", "dutch", "eredivisie"] },
+      { flag: "🇧🇪", names: ["belgium", "belgian"] },
+      { flag: "🇹🇷", names: ["turkey", "turkish", "super lig"] },
+      { flag: "🇬🇷", names: ["greece", "greek"] },
+      { flag: "🇸🇦", names: ["saudi arabia", "saudi", "pro league"] },
+      { flag: "🇦🇪", names: ["united arab emirates", "uae", "arabian gulf league"] },
+      { flag: "🇯🇵", names: ["japan", "japanese", "j1 league"] },
+      { flag: "🇰🇷", names: ["south korea", "korea republic", "k league"] },
+      { flag: "🇦🇺", names: ["australia", "australian", "a-league"] },
+      { flag: "🇺🇸", names: ["usa", "united states", "mls", "major league soccer"] },
+      { flag: "🇧🇷", names: ["brazil", "brazilian", "serie a brazil"] },
+      { flag: "🇦🇷", names: ["argentina", "argentine"] },
+      { flag: "🇲🇽", names: ["mexico", "mexican", "liga mx"] },
+      { flag: "🇨🇦", names: ["canada", "canadian"] },
+      { flag: "🇸🇰", names: ["slovakia", "slovak", "niké liga", "fortuna liga"] },
+      { flag: "🇨🇿", names: ["czech republic", "czechia", "czech", "chance liga"] },
+      { flag: "🇵🇱", names: ["poland", "polish", "ekstraklasa"] },
+      { flag: "🇭🇺", names: ["hungary", "hungarian"] },
+      { flag: "🇷🇴", names: ["romania", "romanian"] },
+      { flag: "🇭🇷", names: ["croatia", "croatian"] },
+      { flag: "🇷🇸", names: ["serbia", "serbian"] },
+      { flag: "🇺🇦", names: ["ukraine", "ukrainian"] },
+      { flag: "🇷🇺", names: ["russia", "russian"] },
+      { flag: "🇨🇭", names: ["switzerland", "swiss"] },
+      { flag: "🇦🇹", names: ["austria", "austrian"] },
+      { flag: "🇩🇰", names: ["denmark", "danish"] },
+      { flag: "🇸🇪", names: ["sweden", "swedish"] },
+      { flag: "🇳🇴", names: ["norway", "norwegian"] },
+      { flag: "🇫🇮", names: ["finland", "finnish"] },
+      { flag: "🇮🇪", names: ["ireland", "irish"] },
+      { flag: "🇿🇦", names: ["south africa", "south african"] },
+      { flag: "🇪🇬", names: ["egypt", "egyptian"] },
+      { flag: "🇲🇦", names: ["morocco", "moroccan"] },
+      { flag: "🇳🇬", names: ["nigeria", "nigerian"] },
+      { flag: "🇰🇪", names: ["kenya", "kenyan"] },
+      { flag: "🇲🇾", names: ["malaysia", "malaysian"] },
+      { flag: "🇹🇭", names: ["thailand", "thai"] },
+      { flag: "🇮🇩", names: ["indonesia", "indonesian"] },
+      { flag: "🇻🇳", names: ["vietnam", "vietnamese"] },
+      { flag: "🇮🇱", names: ["israel", "israeli"] },
+      { flag: "🇶🇦", names: ["qatar", "qatari"] }
+    ];
+
+    const competition = String(match?.competition || "").toLowerCase();
+    const source = direct || competition;
+    const found = countries.find(country =>
+      country.names.some(name => source.includes(name))
+    );
+
+    return found ? found.flag : "🌍";
+  }
+
   function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false) {
     const card = document.createElement("div");
 
@@ -1188,7 +1259,7 @@
 
     addText(
       card,
-      `${match.competition || "Futbal"} | ${minute === "HT" ? "Prestávka" : minute + ". minúta"} | meranie: ${collectedAt || "neznámy čas"}`
+      `${getCompetitionFlag(match)} ${match.competition || "Neznáma súťaž"} | ${minute === "HT" ? "Prestávka" : minute + ". minúta"} | meranie: ${collectedAt || "neznámy čas"}`
     );
 
     const quality = getDataQuality(match, collectedAt);
