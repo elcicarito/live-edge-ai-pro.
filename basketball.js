@@ -139,19 +139,20 @@
     const scores=document.createElement("div"); scores.style.cssText="font-size:20px;font-weight:800;text-align:right;line-height:1.5;font-variant-numeric:tabular-nums;white-space:pre-line"; scores.textContent=scoreOf(match,"home")+"\n"+scoreOf(match,"away");
     row.append(names,scores); card.append(header,row); addQuarterTable(card,match); return card;
   }
-  function renderArchiveQuality(matches) {
+  function renderArchiveQuality(matches, target, leagueName) {
     const total = matches.length;
     let complete = 0, partial = 0, missing = 0, waiting = 0;
     matches.forEach(match => {
       const home = periodValues(match, "home");
       const away = periodValues(match, "away");
-      const present = [0,1,2,3].filter(q => {
-        const h = home[q], a = away[q];
-        return h !== undefined && a !== undefined && h !== null && a !== null && h !== "–" && a !== "–" &&
-          Number.isFinite(Number(h)) && Number.isFinite(Number(a));
+      const validQuarters = [0,1,2,3].filter(q => {
+        const h = Number(home[q]), a = Number(away[q]);
+        return home[q] !== undefined && home[q] !== null && home[q] !== "–" &&
+          away[q] !== undefined && away[q] !== null && away[q] !== "–" &&
+          Number.isFinite(h) && Number.isFinite(a) && h + a > 0;
       }).length;
-      if (present === 4) complete++;
-      else if (present > 0) partial++;
+      if (validQuarters === 4) complete++;
+      else if (validQuarters > 0) partial++;
       else {
         missing++;
         const checked = Date.parse(match.quarter_scores_checked_at || "");
@@ -159,10 +160,9 @@
       }
     });
     const panel = document.createElement("section");
-    panel.id = "basketball-archive-quality";
-    panel.style.cssText = "background:#132238;border:1px solid #354d69;border-radius:12px;padding:14px;margin:12px 0 16px";
+    panel.style.cssText = "background:#132238;border:1px solid #354d69;border-radius:12px;padding:14px;margin:8px 0 12px";
     const title = document.createElement("div");
-    title.textContent = "🔎 KVALITA A ÚPLNOSŤ ARCHÍVU";
+    title.textContent = "🔎 KVALITA DÁT – " + leagueName;
     title.style.cssText = "font-weight:800;font-size:13px;margin-bottom:10px;color:#e7f0fb";
     panel.appendChild(title);
     const grid = document.createElement("div");
@@ -170,7 +170,7 @@
     const items = [
       ["Kompletné Q1–Q4", complete, "#39e6a5"],
       ["Čiastočné údaje", partial, "#f2c66d"],
-      ["Bez štvrťkových údajov", missing, "#ff9b83"],
+      ["Bez platných štvrťkových údajov", missing, "#ff9b83"],
       ["Čakajú na opätovnú kontrolu", waiting, "#9fb2c9"]
     ];
     items.forEach(([label, value, color]) => {
@@ -188,10 +188,10 @@
     panel.appendChild(grid);
     const pct = total ? (complete / total * 100).toFixed(1) : "0.0";
     const note = document.createElement("div");
-    note.textContent = "Spolu zápasov: " + total + " · Kompletné štvrťky: " + pct + "%. Čakajúce zápasy sú súčasťou kategórie bez údajov; ďalšie preverenie prebehne po uplynutí 6 hodín. Ak SportScore štvrťky na stránke zápasu nemá, zostanú nedostupné.";
+    note.textContent = "Zápasov v lige: " + total + " · Kompletné Q1–Q4: " + pct + "%. Nulové hodnoty v nepokračovaných štvrtinách sa nepovažujú za odohrané body. Čakajúce zápasy sú súčasťou kategórie bez údajov; ďalšie preverenie prebehne po uplynutí 6 hodín.";
     note.style.cssText = "font-size:11px;color:#9baabe;margin-top:9px;line-height:1.45";
     panel.appendChild(note);
-    archiveList.appendChild(panel);
+    (target || archiveList).appendChild(panel);
   }
   function renderArchiveStats(matches, target = archiveList, titleText = "📊 ŠTATISTIKY ŠTVRTÍ V ARCHÍVE", panelId = "basketball-quarter-stats") {
     const existing = panelId ? document.getElementById(panelId) : null;
@@ -265,7 +265,6 @@
       archiveMeta.textContent="Uložené ukončené zápasy: "+matches.length+" · Aktualizácia: "+(data.updated_at?new Date(data.updated_at).toLocaleString("sk-SK"):"čaká sa");
       archiveList.replaceChildren();
       if (!matches.length) { archiveList.textContent="Archív sa naplní po načítaní prvých ukončených zápasov."; return; }
-      renderArchiveQuality(matches);
       const groups = new Map();
       matches.forEach(match => {
         const league = leagueOf(match).trim() || "Liga neznáma";
@@ -292,6 +291,7 @@
         section.appendChild(summary);
         const body = document.createElement("div");
         body.style.cssText = "padding:0 0 8px";
+        renderArchiveQuality(leagueMatches, body, league);
         renderArchiveStats(leagueMatches, body, "📊 ŠTATISTIKY ŠTVRTÍ – " + league, null);
         leagueMatches.forEach(match => body.appendChild(makeCard(match,true)));
         section.appendChild(body);
