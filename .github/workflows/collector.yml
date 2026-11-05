@@ -43,7 +43,7 @@ jobs:
           const DROP_RATIO = 0.5;
           const MIN_BASELINE = 6;
 
-          async function getJSON(url, attempts = 3) {
+          async function getJSON(url, attempts = 5) {
             let lastError;
 
             for (let i = 1; i <= attempts; i++) {
@@ -79,7 +79,7 @@ jobs:
                 console.log(`Pokus ${i}/${attempts}: ${error.message}`);
 
                 if (i < attempts) {
-                  await sleep(i * 2000);
+                  await sleep(i * 2500);
                 }
               }
             }
