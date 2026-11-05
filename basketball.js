@@ -210,7 +210,36 @@
       archiveList.replaceChildren();
       if (!matches.length) { archiveList.textContent="Archív sa naplní po načítaní prvých ukončených zápasov."; return; }
       renderArchiveStats(matches);
-      matches.forEach(m=>archiveList.appendChild(makeCard(m,true)));
+      const groups = new Map();
+      matches.forEach(match => {
+        const league = leagueOf(match).trim() || "Liga neznáma";
+        if (!groups.has(league)) groups.set(league, []);
+        groups.get(league).push(match);
+      });
+      const sortedGroups = [...groups.entries()].sort((a,b) => {
+        if (a[0] === "Liga neznáma") return 1;
+        if (b[0] === "Liga neznáma") return -1;
+        return a[0].localeCompare(b[0], "sk");
+      });
+      sortedGroups.forEach(([league, leagueMatches], index) => {
+        const section = document.createElement("details");
+        section.open = index === 0;
+        section.style.cssText = "background:#132238;border:1px solid #354d69;border-radius:12px;padding:0 12px;margin:12px 0";
+        const summary = document.createElement("summary");
+        summary.style.cssText = "cursor:pointer;list-style:none;padding:14px 2px;font-weight:800;color:#e7f0fb;display:flex;align-items:center;justify-content:space-between;gap:10px";
+        const label = document.createElement("span");
+        label.textContent = flagOf(league) + " " + league;
+        const count = document.createElement("span");
+        count.textContent = leagueMatches.length + (leagueMatches.length === 1 ? " zápas" : leagueMatches.length < 5 ? " zápasy" : " zápasov");
+        count.style.cssText = "font-size:11px;font-weight:600;color:#9fb2c9;white-space:nowrap";
+        summary.append(label, count);
+        section.appendChild(summary);
+        const body = document.createElement("div");
+        body.style.cssText = "padding:0 0 8px";
+        leagueMatches.forEach(match => body.appendChild(makeCard(match,true)));
+        section.appendChild(body);
+        archiveList.appendChild(section);
+      });
     } catch(e) { archiveMeta.textContent="Archív zatiaľ čaká na prvý úspešný zber."; archiveList.textContent="Archív sa nepodarilo načítať: "+e.message; }
   }
   async function load() {
