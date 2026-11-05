@@ -698,6 +698,7 @@
       startGoals: signal.side === "home"
         ? Number(match.home_score || 0)
         : Number(match.away_score || 0),
+      startScore: String(Number(match.home_score || 0)) + ":" + String(Number(match.away_score || 0)),
       startMinute: minute,
       deadlineMinute: Math.min(90, minute + 15),
       createdAt: new Date().toISOString(),
@@ -734,6 +735,8 @@
       if (goals > signal.startGoals) {
         signal.status = "WIN";
         signal.settledAt = new Date().toISOString();
+        signal.settledMinute = Number.isFinite(minute) ? minute : null;
+        signal.settledScore = String(Number(match.home_score || 0)) + ":" + String(Number(match.away_score || 0));
         changed = true;
       } else if (
         (Number.isFinite(minute) && minute >= signal.deadlineMinute) ||
@@ -741,6 +744,8 @@
       ) {
         signal.status = "LOSS";
         signal.settledAt = new Date().toISOString();
+        signal.settledMinute = Number.isFinite(minute) ? minute : null;
+        signal.settledScore = String(Number(match.home_score || 0)) + ":" + String(Number(match.away_score || 0));
         changed = true;
       }
     });
@@ -824,10 +829,13 @@
       };
       line.style.cssText = `margin:8px 0;padding:10px;border-radius:9px;background:${style.background};border:1px solid ${style.border};`;
       const title = document.createElement("div");
-      title.textContent = `${item.home || "?"} ${item.startScore || ""} – ${item.away || "?"}`;
+      title.textContent = (item.home || "?") + (item.startScore ? " (" + item.startScore + ")" : "") + " – " + (item.away || "?");
       title.style.cssText = "font-weight:800;margin-bottom:5px;";
       const detail = document.createElement("div");
-      detail.textContent = `${item.team || item.side || "Tím"} | ${label} | ${item.startMinute ?? "?"}. min${item.settledScore ? " | výsledok " + item.settledScore : ""}`;
+      const settledDetail = item.settledScore
+        ? " | vyhodnotené pri stave " + item.settledScore + (item.settledMinute != null ? " v " + item.settledMinute + ". min" : "")
+        : "";
+      detail.textContent = (item.team || item.side || "Tím") + " | " + label + " | začiatok " + (item.startMinute ?? "?") + ". min" + settledDetail;
       detail.style.cssText = `font-size:13px;color:${style.color};font-weight:800;`;
       line.append(title, detail);
       engine.appendChild(line);
