@@ -42,7 +42,7 @@ button{
 small{
   color:#9baabe
 }
-</style>
+.archive-card summary{  display:flex;  align-items:center;  justify-content:space-between;  gap:12px;  cursor:pointer;  list-style:none;  font-weight:800;  font-size:16px;  color:#ffffff;}.archive-card summary::-webkit-details-marker{display:none}.archive-card summary:after{content:"＋";color:#39e6a5;font-size:20px;margin-left:auto}.archive-card[open] summary:after{content:"−"}.archive-count{  display:inline-flex;  align-items:center;  justify-content:center;  min-width:28px;  height:28px;  padding:0 8px;  border-radius:20px;  background:#203d39;  color:#39e6a5;  font-size:13px;}.archive-card #match-archive{margin-top:14px}</style>
 </head>
 
 <body>
@@ -65,13 +65,23 @@ small{
 <p id="signal">Načítavam signály...</p>
 </div>
 
+<details class="card archive-card">
+<summary>
+  <span>🏁 UKONČENÉ ZÁPASY</span>
+  <span class="archive-count" id="match-archive-count">0</span>
+</summary>
+<div id="match-archive">
+  <p>Načítavam konečné výsledky...</p>
+</div>
+</details>
+
 <button onclick="location.reload()">
 OBNOVIŤ SKENER
 </button>
 
 <p><small>Experimental version · Powered by SportScore API v1</small></p>
 
-<script src="./scanner.js?v=32"></script>
+<script src="./scanner.js?v=33"></script>
 
 </body>
 </html>
