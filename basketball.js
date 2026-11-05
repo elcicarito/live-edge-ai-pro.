@@ -137,6 +137,57 @@
     const scores=document.createElement("div"); scores.style.cssText="font-size:20px;font-weight:800;text-align:right;line-height:1.5;font-variant-numeric:tabular-nums;white-space:pre-line"; scores.textContent=scoreOf(match,"home")+"\n"+scoreOf(match,"away");
     row.append(names,scores); card.append(header,row); addQuarterTable(card,match); return card;
   }
+  function renderArchiveStats(matches) {
+    const existing = document.getElementById("basketball-quarter-stats");
+    if (existing) existing.remove();
+    const stats = [0,1,2,3].map(q => {
+      const totals = matches.map(match => {
+        const home = periodValues(match, "home")[q];
+        const away = periodValues(match, "away")[q];
+        if (home === undefined || away === undefined || home === null || away === null || home === "–" || away === "–") return null;
+        const h = Number(home), a = Number(away);
+        return Number.isFinite(h) && Number.isFinite(a) ? h + a : null;
+      }).filter(value => value !== null);
+      return { quarter: q + 1, count: totals.length, average: totals.length ? totals.reduce((sum, value) => sum + value, 0) / totals.length : null };
+    });
+    const available = stats.filter(item => item.count > 0);
+    if (!available.length) return;
+    const best = available.reduce((top, item) => item.average > top.average ? item : top);
+    const panel = document.createElement("section");
+    panel.id = "basketball-quarter-stats";
+    panel.style.cssText = "background:#132238;border:1px solid #354d69;border-radius:12px;padding:14px;margin:12px 0 16px";
+    const title = document.createElement("div");
+    title.textContent = "📊 ŠTATISTIKY ŠTVRTÍ V ARCHÍVE";
+    title.style.cssText = "font-weight:800;font-size:13px;margin-bottom:10px;color:#e7f0fb";
+    panel.appendChild(title);
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px";
+    stats.forEach(item => {
+      const cell = document.createElement("div");
+      cell.style.cssText = "background:#0d1929;border-radius:8px;padding:9px 5px;text-align:center;min-width:0";
+      const q = document.createElement("div");
+      q.textContent = "Q" + item.quarter;
+      q.style.cssText = "font-size:12px;color:#a9bdd4;font-weight:700";
+      const avg = document.createElement("div");
+      avg.textContent = item.average === null ? "–" : item.average.toFixed(1);
+      avg.style.cssText = "font-size:18px;font-weight:800;margin:4px 0;color:#fff";
+      const n = document.createElement("div");
+      n.textContent = "n=" + item.count;
+      n.style.cssText = "font-size:10px;color:#9baabe";
+      cell.append(q, avg, n);
+      grid.appendChild(cell);
+    });
+    panel.appendChild(grid);
+    const note = document.createElement("div");
+    note.textContent = "Priemer celkového počtu bodov oboch tímov v jednej štvrtine; n = počet zápasov s dostupným skóre danej štvrtiny.";
+    note.style.cssText = "font-size:11px;color:#9baabe;margin-top:9px;line-height:1.4";
+    panel.appendChild(note);
+    const leader = document.createElement("div");
+    leader.textContent = "Najviac bodov v priemere: Q" + best.quarter + " (" + best.average.toFixed(1) + " bodu; n=" + best.count + ").";
+    leader.style.cssText = "font-size:12px;color:#39e6a5;font-weight:700;margin-top:7px";
+    panel.appendChild(leader);
+    archiveList.appendChild(panel);
+  }
   function render(data) {
     if (!data || data.sport !== "basketball") { meta.textContent="Basketbalové dáta zatiaľ nie sú dostupné."; list.textContent="Zatiaľ sa nepodarilo načítať prvý zber."; return; }
     const collected=Date.parse(data.collected_at||"");
@@ -158,6 +209,7 @@
       archiveMeta.textContent="Uložené ukončené zápasy: "+matches.length+" · Aktualizácia: "+(data.updated_at?new Date(data.updated_at).toLocaleString("sk-SK"):"čaká sa");
       archiveList.replaceChildren();
       if (!matches.length) { archiveList.textContent="Archív sa naplní po načítaní prvých ukončených zápasov."; return; }
+      renderArchiveStats(matches);
       matches.forEach(m=>archiveList.appendChild(makeCard(m,true)));
     } catch(e) { archiveMeta.textContent="Archív zatiaľ čaká na prvý úspešný zber."; archiveList.textContent="Archív sa nepodarilo načítať: "+e.message; }
   }
