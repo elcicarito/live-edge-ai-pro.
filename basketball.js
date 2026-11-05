@@ -312,7 +312,7 @@
       const settled = rows.filter(p => Number.isFinite(Number(p.absolute_error)))
         .sort((a,b) => String(b.settled_at).localeCompare(String(a.settled_at)));
       const mae = settled.length ? settled.reduce((sum,p) => sum + Number(p.absolute_error),0) / settled.length : null;
-      predictorMeta.textContent = "Model: historický priemer cieľovej štvrtiny + predchádzajúce štvrtiny · Kompletné tréningové zápasy: " + Number(data.complete_training_games || 0) + " · Vyhodnotené predikcie: " + settled.length + (mae === null ? "" : " · Priemerná odchýlka: " + mae.toFixed(1) + " bodu");
+      predictorMeta.textContent = "Predikcie sú oddelené od ligových štatistík · História iba z rovnakej ligy · Vyhodnotené predikcie: " + settled.length + (mae === null ? "" : " · Priemerná odchýlka: " + mae.toFixed(1) + " bodu");
       predictorList.replaceChildren();
       if (!rows.length) {
         predictorList.textContent = "Zatiaľ čakáme na vhodné LIVE zápasy a dostatočný počet kompletných historických zápasov.";
@@ -335,7 +335,7 @@
         value.textContent = p.predicted_total + " bodov";
         value.style.cssText = "font-size:23px;font-weight:900;color:#fff;margin:5px 0";
         const range = document.createElement("div");
-        range.textContent = "Orientačné rozpätie " + p.range_low + "–" + p.range_high + " bodov · vzorka n=" + p.training_sample + (p.training_scope === "league" ? " (liga)" : " (celkový archív)");
+        range.textContent = "Orientačné rozpätie " + p.range_low + "–" + p.range_high + " bodov · vzorka n=" + p.training_sample + " (iba rovnaká liga)";
         range.style.cssText = "font-size:11px;color:#9baabe;line-height:1.4";
         const note = document.createElement("div");
         note.textContent = "Odhad sa počíta iba z ukončených predchádzajúcich štvrtín. Zber môže meškať približne 5 minút.";
