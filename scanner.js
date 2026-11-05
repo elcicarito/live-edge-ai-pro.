@@ -14,6 +14,8 @@
 
   const matchesEl = document.getElementById("matches");
   const signalEl = document.getElementById("signal");
+  const matchArchiveEl = document.getElementById("match-archive");
+  const matchArchiveCountEl = document.getElementById("match-archive-count");
 
   if (!matchesEl || !signalEl) {
     console.error("Chýbajú HTML elementy matches alebo signal.");
@@ -1114,58 +1116,91 @@
   }
 
   function renderMatchArchive(data) {
-    addText(engine, "SLEDOVANIE ZÁPASOV DO KONCA", "16px");
+    if (!matchArchiveEl) return;
+    matchArchiveEl.innerHTML = "";
 
     if (!data || typeof data !== "object") {
-      addText(engine, "Archív zápasov sa nepodarilo načítať.");
+      if (matchArchiveCountEl) matchArchiveCountEl.textContent = "Nedostupné";
+      addText(matchArchiveEl, "Archív zápasov sa nepodarilo načítať.");
       return;
     }
 
     const pending = Array.isArray(data.pending_matches) ? data.pending_matches : [];
     const archived = Array.isArray(data.archived_matches) ? data.archived_matches : [];
-    const confirmed = archived.filter(item =>
-      item?.status_confirmation === "confirmed_finished"
-    );
+    const confirmed = archived
+      .filter(item => item?.status_confirmation === "confirmed_finished")
+      .sort((a, b) =>
+        Date.parse(b.finished_at || b.archived_at || 0) -
+        Date.parse(a.finished_at || a.archived_at || 0)
+      );
     const olderUnconfirmed = archived.length - confirmed.length;
 
-    addText(engine, `Čaká na konečný výsledok: ${pending.length} | Potvrdené ukončené: ${confirmed.length}`);
+    if (matchArchiveCountEl) {
+      matchArchiveCountEl.textContent = String(confirmed.length);
+    }
+
+    addText(matchArchiveEl, `Potvrdené výsledky: ${confirmed.length} | Ešte sa overuje: ${pending.length}`);
+
+    function addMatchRow(parent, title, detail, color, competition = "") {
+      const row = document.createElement("div");
+      row.style.cssText = "padding:12px;margin:9px 0;border-radius:10px;background:#101b2b;border:1px solid #2b3c52;";
+      const heading = document.createElement("div");
+      heading.textContent = title;
+      heading.style.cssText = "font-size:14px;font-weight:800;line-height:1.45;color:#ffffff;";
+      const score = document.createElement("div");
+      score.textContent = detail;
+      score.style.cssText = `font-size:17px;font-weight:900;color:${color};margin-top:5px;`;
+      row.append(heading, score);
+      if (competition) {
+        const league = document.createElement("div");
+        league.textContent = competition;
+        league.style.cssText = "font-size:12px;color:#9baabe;margin-top:4px;";
+        row.appendChild(league);
+      }
+      parent.appendChild(row);
+    }
 
     if (pending.length) {
-      addText(engine, "ZÁPASY, KTORÉ SA EŠTE SLEDUJÚ", "14px");
+      addText(matchArchiveEl, "ZÁPASY, KTORÉ SA EŠTE SLEDUJÚ", "14px");
       [...pending]
         .sort((a, b) =>
           Date.parse(b.last_final_check_at || b.last_missing_at || 0) -
           Date.parse(a.last_final_check_at || a.last_missing_at || 0)
         )
-        .slice(0, 10)
         .forEach(item => {
           const match = item?.last_snapshot?.match || {};
-          const score = `${match.home_score ?? "?"}:${match.away_score ?? "?"}`;
+          const score = `${match.home_score ?? "?"} : ${match.away_score ?? "?"}`;
           const status = item.last_checked_status || "čaká na prvé overenie";
-          addText(engine, `${match.home || "?"} – ${match.away || "?"} | ${score} | ${status} | kontrol: ${Number(item.final_check_attempts || 0)}`);
+          addMatchRow(
+            matchArchiveEl,
+            `${match.home || "?"} – ${match.away || "?"}`,
+            `${score} | ${status} | kontrol: ${Number(item.final_check_attempts || 0)}`,
+            "#70b7ff",
+            match.competition || match.league || ""
+          );
         });
     }
 
     if (confirmed.length) {
-      addText(engine, "POTVRDENÉ KONEČNÉ VÝSLEDKY", "14px");
-      [...confirmed]
-        .sort((a, b) =>
-          Date.parse(b.finished_at || b.archived_at || 0) -
-          Date.parse(a.finished_at || a.archived_at || 0)
-        )
-        .slice(0, 10)
-        .forEach(item => {
-          const match = item?.final_match || item?.last_snapshot?.match || {};
-          addText(engine, `${match.home || "?"} – ${match.away || "?"} | ${item.final_score || "skóre nepotvrdené"} | ${item.final_status || "FINISHED"} | KONEČNÝ VÝSLEDOK POTVRDENÝ`);
-        });
+      addText(matchArchiveEl, "POTVRDENÉ KONEČNÉ VÝSLEDKY", "14px");
+      confirmed.forEach(item => {
+        const match = item?.final_match || item?.last_snapshot?.match || {};
+        addMatchRow(
+          matchArchiveEl,
+          `${match.home || "?"} – ${match.away || "?"}`,
+          `${item.final_score || "skóre nepotvrdené"}  ·  ${item.final_status || "FINISHED"}`,
+          "#39e6a5",
+          match.competition || match.league || "KONEČNÝ VÝSLEDOK POTVRDENÝ"
+        );
+      });
     }
 
     if (olderUnconfirmed > 0) {
-      addText(engine, `Staršie archívne záznamy bez potvrdeného konečného výsledku: ${olderUnconfirmed}.`);
+      addText(matchArchiveEl, `Staršie archívne záznamy bez potvrdeného konečného výsledku: ${olderUnconfirmed}.`);
     }
 
     if (!pending.length && !confirmed.length && !olderUnconfirmed) {
-      addText(engine, "Zatiaľ nie sú zápasy čakajúce na ukončenie ani potvrdené konečné výsledky.");
+      addText(matchArchiveEl, "Zatiaľ nie sú zápasy čakajúce na ukončenie ani potvrdené konečné výsledky.");
     }
   }
 
