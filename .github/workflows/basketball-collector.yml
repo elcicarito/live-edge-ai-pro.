@@ -327,10 +327,10 @@ jobs:
             if (predictions.some(p => p.match_key === matchKey && p.target_quarter === target)) continue;
             const league = leagueOf(m);
             const leagueRows = training.filter(x => leagueOf(x) === league && complete(x,target));
-            const globalRows = training.filter(x => complete(x,target));
-            const selected = leagueRows.length >= 8 ? leagueRows : globalRows;
+            // Strict league-only training: never mix another league into this forecast.
+            const selected = leagueRows;
             if (selected.length < 10) {
-              console.log("PREDICTION SKIPPED: málo historických zápasov pre Q" + target, league, selected.length);
+              console.log("PREDICTION SKIPPED: liga nemá dosť vlastných historických zápasov pre Q" + target, league, selected.length, "(minimum 10)");
               continue;
             }
             const historicalAverage = selected.reduce((sum,x) => sum + qTotal(x,target),0) / selected.length;
@@ -351,7 +351,7 @@ jobs:
               historical_average: Number(historicalAverage.toFixed(2)),
               previous_quarters_average: Number(previousAverage.toFixed(2)),
               training_sample: selected.length,
-              training_scope: leagueRows.length >= 8 ? "league" : "global",
+              training_scope: "league",
               previous_quarters: previous,
               observed_at: new Date().toISOString(),
               data_delay_note: "Zber môže byť oneskorený približne 5 minút.",
@@ -365,7 +365,7 @@ jobs:
           fs.writeFileSync(PREDICTIONS, JSON.stringify({
             sport: "basketball",
             updated_at: new Date().toISOString(),
-            model: "v3: iba zápasy so skutočnými výsledkami Q1–Q4; spoločné body oboch tímov; 65% priemer predchádzajúcich dokončených štvrtín aktuálneho zápasu + 35% historický priemer cieľovej štvrtiny; bez kurzov",
+            model: "v3: iba zápasy so skutočnými výsledkami Q1–Q4; spoločné body oboch tímov; 65% priemer predchádzajúcich dokončených štvrtín aktuálneho zápasu + 35% historický priemer cieľovej štvrtiny iba z rovnakej ligy; bez kurzov",
             complete_training_games: training.length,
             settled_this_run: settled,
             created_this_run: created,
