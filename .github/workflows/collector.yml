@@ -119,6 +119,26 @@ jobs:
             ].includes(getStatus(match));
           }
 
+          // Za ukončený považuj iba explicitný konečný stav zo zdroja.
+          // Samotné zmiznutie zo LIVE feedu nikdy nestačí.
+          function isFinished(match) {
+            const status = getStatus(match)
+              .replace(/[\\s_-]+/g, "")
+              .toLowerCase();
+
+            return [
+              "finished",
+              "fulltime",
+              "ft",
+              "aet",
+              "afterextratime",
+              "pen",
+              "afterpenalties",
+              "completed",
+              "ended"
+            ].includes(status);
+          }
+
           function getSlug(item) {
             if (item.slug) return item.slug;
             if (!item.url) return null;
@@ -554,6 +574,104 @@ jobs:
 
             const now = new Date().toISOString();
 
+            // Pokračuj v kontrole zápasov, ktoré už zmizli z LIVE zoznamu.
+            // Konečný archív vytvor až po potvrdenom FINISHED/FT stave a skóre.
+            for (const [id, item] of [...pending.entries()]) {
+              const slug = getSlug(item?.last_snapshot?.match || {});
+
+              if (!slug) {
+                item.final_check_error = "Chýba slug zápasu pre kontrolu konečného výsledku.";
+                item.last_final_check_at = now;
+                pending.set(id, item);
+                console.log("ČAKÁ NA KONEČNÝ VÝSLEDOK – chýba slug:", id);
+                continue;
+              }
+
+              try {
+                const detail = await getJSON(
+                  `${BASE}/match/?sport=football&slug=${encodeURIComponent(slug)}`
+                );
+
+                if (!detail.match) {
+                  throw new Error("Detail zápasu neobsahuje match");
+                }
+
+                const finalMatch = detail.match;
+                const finalStatus = getStatus(finalMatch);
+                item.final_check_attempts = (item.final_check_attempts || 0) + 1;
+                item.last_final_check_at = now;
+                item.last_checked_status = finalStatus || "unknown";
+
+                if (isLive(finalMatch)) {
+                  pending.delete(id);
+                  console.log("ZÁPAS JE OPÄŤ LIVE – vyradený z čakania na výsledok:", id);
+                  continue;
+                }
+
+                if (isFinished(finalMatch)) {
+                  const homeRaw = finalMatch.home_score;
+                  const awayRaw = finalMatch.away_score;
+                  const scoresValid =
+                    homeRaw !== null &&
+                    homeRaw !== undefined &&
+                    awayRaw !== null &&
+                    awayRaw !== undefined &&
+                    Number.isFinite(Number(homeRaw)) &&
+                    Number.isFinite(Number(awayRaw));
+
+                  if (!scoresValid) {
+                    item.final_check_error = "Konečný stav potvrdený, ale skóre zatiaľ nie je platné.";
+                    pending.set(id, item);
+                    console.log("ČAKÁ NA POTVRDENÉ KONEČNÉ SKÓRE:", id);
+                    continue;
+                  }
+
+                  archived.set(id, {
+                    id,
+                    archived_at: now,
+                    first_missing_at: item.first_missing_at || null,
+                    last_seen_at: item.last_seen_at || null,
+                    missing_complete_runs: item.missing_complete_runs || 0,
+                    archive_reason: "confirmed_finished_match_detail",
+                    status_confirmation: "confirmed_finished",
+                    final_status: finalStatus,
+                    final_score: `${Number(homeRaw)}:${Number(awayRaw)}`,
+                    finished_at: now,
+                    last_snapshot: item.last_snapshot,
+                    final_match: finalMatch
+                  });
+
+                  pending.delete(id);
+                  console.log(
+                    "KONEČNÝ VÝSLEDOK POTVRDENÝ:",
+                    id,
+                    "|",
+                    finalStatus,
+                    "|",
+                    Number(homeRaw),
+                    ":",
+                    Number(awayRaw)
+                  );
+                  continue;
+                }
+
+                item.final_check_error = null;
+                pending.set(id, item);
+                console.log(
+                  "ZÁPAS ZOSTÁVA V SLEDOVANÍ – konečný stav nepotvrdený:",
+                  id,
+                  "| stav:",
+                  finalStatus || "neznámy"
+                );
+
+              } catch (error) {
+                item.final_check_error = error.message;
+                item.last_final_check_at = now;
+                pending.set(id, item);
+                console.log("KONTROLA KONEČNÉHO VÝSLEDKU ZLYHALA:", id, "|", error.message);
+              }
+            }
+
             if (archiveSafe) {
               for (const id of currentById.keys()) {
                 if (pending.has(id)) {
@@ -570,35 +688,19 @@ jobs:
 
                 item.last_missing_at = now;
 
-                if (item.missing_complete_runs >= REQUIRED_MISSES) {
-                  archived.set(id, {
-                    id,
-                    archived_at: now,
-                    first_missing_at: item.first_missing_at,
-                    last_seen_at: item.last_seen_at,
-                    missing_complete_runs: item.missing_complete_runs,
-                    archive_reason:
-                      "absent_from_live_feed_after_3_complete_collections",
-                    status_confirmation: "not_confirmed_finished",
-                    last_snapshot: item.last_snapshot
-                  });
+                // Tri chýbajúce kompletné zbery potvrdzujú iba neprítomnosť
+                // v LIVE feede. Zápas ostáva pending, kým detail nepotvrdí FT.
+                pending.set(id, item);
 
-                  pending.delete(id);
-
-                  console.log("ARCHIVOVANÝ ZÁPAS:", id);
-
-                } else {
-                  pending.set(id, item);
-
-                  console.log(
-                    "ČAKÁ NA POTVRDENIE:",
-                    id,
-                    "|",
-                    item.missing_complete_runs,
-                    "/",
-                    REQUIRED_MISSES
-                  );
-                }
+                console.log(
+                  item.missing_complete_runs >= REQUIRED_MISSES
+                    ? "ZÁPAS STÁLE SLEDOVANÝ – čaká sa na konečný výsledok:"
+                    : "ČAKÁ NA POTVRDENIE KONEČNÉHO VÝSLEDKU:",
+                  id,
+                  "|",
+                  item.missing_complete_runs,
+                  "kompletných zberov bez LIVE"
+                );
               }
 
               if (
@@ -973,26 +1075,6 @@ jobs:
                 }
               }
 
-              // Ak zápas zmizol z LIVE feedu po bezpečnej archivácii,
-              // označ signál ako NEOVERENÝ – nikdy ho automaticky nepočítaj ako LOSS.
-              const archivedMatchIds = new Set(
-                (archive.archived_matches || []).map(item =>
-                  frontendMatchId(item?.last_snapshot?.match) || String(item?.id || "")
-                )
-              );
-
-              for (const signal of signalArchive.signals) {
-                if (
-                  signal.status === "OPEN" &&
-                  archivedMatchIds.has(String(signal.matchId))
-                ) {
-                  signal.status = "UNRESOLVED";
-                  signal.unresolvedAt = signalNow;
-                  signal.statusReason =
-                    "Match absent from LIVE feed; final score not confirmed.";
-                }
-              }
-
               // Potom vytvor nové signály podľa rovnakých prahov ako scanner.js.
               for (const record of records) {
                 const match = record?.match;
@@ -1028,6 +1110,59 @@ jobs:
                   status: "OPEN",
                   startScore: `${Number(match.home_score || 0)}:${Number(match.away_score || 0)}`
                 });
+              }
+            }
+
+            // Otvorené signály vyhodnoť až po potvrdenom konečnom detaile zápasu.
+            // Ak tím do konca nestrelil ďalší gól, je to LOSS.
+            // Ak skóroval, ale nemáme potvrdený čas gólu voči 15-minútovému limitu,
+            // výsledok zostáva UNRESOLVED – nikdy nehádame čas gólu.
+            const confirmedFinals = new Map(
+              (archive.archived_matches || [])
+                .filter(item => item?.status_confirmation === "confirmed_finished" && item.final_match)
+                .map(item => [
+                  frontendMatchId(item.final_match) || String(item.id || ""),
+                  item
+                ])
+            );
+
+            for (const signal of signalArchive.signals) {
+              if (signal.status !== "OPEN") continue;
+
+              const archivedItem = confirmedFinals.get(String(signal.matchId));
+              if (!archivedItem) continue;
+
+              const finalMatch = archivedItem.final_match;
+              const rawGoals = signal.side === "home"
+                ? finalMatch.home_score
+                : finalMatch.away_score;
+              const goals = Number(rawGoals);
+              const startGoals = Number(signal.startGoals);
+              const homeScore = Number(finalMatch.home_score);
+              const awayScore = Number(finalMatch.away_score);
+
+              if (
+                rawGoals === null ||
+                rawGoals === undefined ||
+                !Number.isFinite(goals) ||
+                !Number.isFinite(startGoals) ||
+                !Number.isFinite(homeScore) ||
+                !Number.isFinite(awayScore)
+              ) continue;
+
+              signal.status = goals > startGoals ? "UNRESOLVED" : "LOSS";
+              signal.settledAt = signalNow;
+              signal.settledMinute = Number.isFinite(Number(finalMatch.live_minute))
+                ? Number(finalMatch.live_minute)
+                : null;
+              signal.settledScore = `${homeScore}:${awayScore}`;
+
+              if (signal.status === "UNRESOLVED") {
+                signal.settlementNote =
+                  "Konečné skóre potvrdilo gól tímu, ale presný čas gólu voči 15-minútovému limitu nie je z konečného detailu overiteľný.";
+              } else {
+                signal.settlementNote =
+                  "Konečný výsledok potvrdený; tím do konca zápasu nepridal gól.";
               }
             }
 
