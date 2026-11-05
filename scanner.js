@@ -3,6 +3,7 @@
   const CURRENT_URL = "./data/live-current.json";
   const HISTORY_URL = "./data/live-history.json";
   const SIGNAL_ARCHIVE_URL = "./data/signal-archive.json";
+  const MATCH_ARCHIVE_URL = "./data/live-archive.json";
   const SIGNAL_KEY = "live_edge_signals_v6";
 
   const MIN_GAP_MINUTES = 3;
@@ -1112,6 +1113,62 @@
     }
   }
 
+  function renderMatchArchive(data) {
+    addText(engine, "SLEDOVANIE ZÁPASOV DO KONCA", "16px");
+
+    if (!data || typeof data !== "object") {
+      addText(engine, "Archív zápasov sa nepodarilo načítať.");
+      return;
+    }
+
+    const pending = Array.isArray(data.pending_matches) ? data.pending_matches : [];
+    const archived = Array.isArray(data.archived_matches) ? data.archived_matches : [];
+    const confirmed = archived.filter(item =>
+      item?.status_confirmation === "confirmed_finished"
+    );
+    const olderUnconfirmed = archived.length - confirmed.length;
+
+    addText(engine, `Čaká na konečný výsledok: ${pending.length} | Potvrdené ukončené: ${confirmed.length}`);
+
+    if (pending.length) {
+      addText(engine, "ZÁPASY, KTORÉ SA EŠTE SLEDUJÚ", "14px");
+      [...pending]
+        .sort((a, b) =>
+          Date.parse(b.last_final_check_at || b.last_missing_at || 0) -
+          Date.parse(a.last_final_check_at || a.last_missing_at || 0)
+        )
+        .slice(0, 10)
+        .forEach(item => {
+          const match = item?.last_snapshot?.match || {};
+          const score = `${match.home_score ?? "?"}:${match.away_score ?? "?"}`;
+          const status = item.last_checked_status || "čaká na prvé overenie";
+          addText(engine, `${match.home || "?"} – ${match.away || "?"} | ${score} | ${status} | kontrol: ${Number(item.final_check_attempts || 0)}`);
+        });
+    }
+
+    if (confirmed.length) {
+      addText(engine, "POTVRDENÉ KONEČNÉ VÝSLEDKY", "14px");
+      [...confirmed]
+        .sort((a, b) =>
+          Date.parse(b.finished_at || b.archived_at || 0) -
+          Date.parse(a.finished_at || a.archived_at || 0)
+        )
+        .slice(0, 10)
+        .forEach(item => {
+          const match = item?.final_match || item?.last_snapshot?.match || {};
+          addText(engine, `${match.home || "?"} – ${match.away || "?"} | ${item.final_score || "skóre nepotvrdené"} | ${item.final_status || "FINISHED"} | KONEČNÝ VÝSLEDOK POTVRDENÝ`);
+        });
+    }
+
+    if (olderUnconfirmed > 0) {
+      addText(engine, `Staršie archívne záznamy bez potvrdeného konečného výsledku: ${olderUnconfirmed}.`);
+    }
+
+    if (!pending.length && !confirmed.length && !olderUnconfirmed) {
+      addText(engine, "Zatiaľ nie sú zápasy čakajúce na ukončenie ani potvrdené konečné výsledky.");
+    }
+  }
+
   function renderSummary() {
     const wins = signalHistory.filter(s => s.status === "WIN").length;
     const losses = signalHistory.filter(s => s.status === "LOSS").length;
@@ -1421,7 +1478,7 @@
     scanning = true;
 
     try {
-      const [current, historyData, signalArchive] = await Promise.all([
+      const [current, historyData, signalArchive, matchArchive] = await Promise.all([
         getJSON(CURRENT_URL),
         getJSON(HISTORY_URL).catch(error => {
           console.warn("História zberu nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
@@ -1429,6 +1486,10 @@
         }),
         getJSON(SIGNAL_ARCHIVE_URL).catch(error => {
           console.warn("Trvalý archív signálov nie je dostupný:", error);
+          return null;
+        }),
+        getJSON(MATCH_ARCHIVE_URL).catch(error => {
+          console.warn("Archív zápasov nie je dostupný:", error);
           return null;
         })
       ]);
@@ -1481,6 +1542,7 @@
 
         renderSummary();
         if (signalArchive) renderServerSignalArchive(signalArchive);
+        renderMatchArchive(matchArchive);
 
         signalEl.textContent =
           `ZASTARANÉ DÁTA – NIE LIVE | Posledný zber: ${current.collected_at || "neznámy čas"} | Signály zablokované`;
@@ -1590,6 +1652,7 @@
       renderSummary();
       if (signalArchive) renderServerSignalArchive(signalArchive);
       else addText(engine, "Trvalý archív signálov sa nepodarilo načítať.");
+      renderMatchArchive(matchArchive);
 
       signalEl.textContent =
         `Aktualizované: ${new Date().toLocaleTimeString("sk-SK")} | LIVE: ${matches.length}`;
