@@ -706,6 +706,9 @@
     saveSignals();
   }
 
+  // Signál vyhodnocuj iba z aktuálne dostupného zápasu.
+  // Ak zápas zmizne z LIVE feedu, ponechaj ho OPEN: samotné zmiznutie
+  // nie je dôkazom výhry ani prehry. Na uzavretie treba potvrdený výsledok.
   function settleSignals(matches) {
     let changed = false;
 
