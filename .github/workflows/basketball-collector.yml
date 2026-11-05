@@ -1,0 +1,135 @@
+name: LIVE EDGE BASKETBALL COLLECTOR
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-edge-basketball-collector
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Collect LIVE basketball data
+        run: |
+          mkdir -p data
+          node <<'NODE'
+          const fs = require("fs");
+          const BASE = "https://sportscore.com/api/widget";
+          const CURRENT = "data/basketball-current.json";
+          const HISTORY = "data/basketball-history.jsonl";
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+          async function getJSON(url, attempts = 5) {
+            let lastError;
+            for (let i = 1; i <= attempts; i++) {
+              try {
+                const response = await fetch(url + (url.includes("?") ? "&" : "?") + "_ts=" + Date.now(), {
+                  headers: {
+                    "User-Agent": "LIVE-EDGE-AI-PRO-BASKETBALL/1.0",
+                    "Accept": "application/json",
+                    "Cache-Control": "no-cache, no-store"
+                  },
+                  cache: "no-store",
+                  signal: AbortSignal.timeout(20000)
+                });
+                if (!response.ok) throw new Error("HTTP " + response.status);
+                return await response.json();
+              } catch (error) {
+                lastError = error;
+                console.log("Pokus " + i + "/" + attempts + ": " + error.message);
+                if (i < attempts) await sleep(i * 2000);
+              }
+            }
+            throw lastError;
+          }
+
+          function statusOf(match) {
+            const s = match?.status;
+            if (typeof s === "string") return s.toLowerCase().trim();
+            if (s && typeof s === "object") {
+              return String(s.type || s.name || s.short || s.description || "").toLowerCase().trim();
+            }
+            return String(match?.status_text || match?.statusText || "").toLowerCase().trim();
+          }
+
+          function isLive(match) {
+            const s = statusOf(match).replace(/[\\s_-]+/g, "");
+            return [
+              "live", "inplay", "inprogress", "playing",
+              "q1", "q2", "q3", "q4", "ot", "overtime",
+              "halftime", "break", "period1", "period2", "period3", "period4"
+            ].includes(s) || s.includes("inprogress") || s.includes("live");
+          }
+
+          async function main() {
+            const started = new Date().toISOString();
+            console.log("LIVE EDGE BASKETBALL COLLECTOR");
+            const payload = await getJSON(BASE + "/matches/?sport=basketball&limit=50");
+            if (!payload || !Array.isArray(payload.matches)) {
+              throw new Error("Basketball API nevrátilo platné pole matches; staré dáta zostávajú zachované.");
+            }
+
+            const matches = payload.matches;
+            const liveMatches = matches.filter(isLive);
+            const now = new Date().toISOString();
+            const output = {
+              schema_version: 1,
+              sport: "basketball",
+              source: "SportScore API widget",
+              collected_at: now,
+              collection_started_at: started,
+              data_status: "complete",
+              collection_complete: true,
+              fixture_count: matches.length,
+              live_count: liveMatches.length,
+              matches,
+              live_matches: liveMatches
+            };
+
+            fs.writeFileSync(CURRENT, JSON.stringify(output, null, 2) + "\n");
+
+            const line = JSON.stringify({
+              collected_at: now,
+              fixture_count: matches.length,
+              live_count: liveMatches.length,
+              match_ids: liveMatches.map(m => String(m.id || m.slug || m.url || "")).filter(Boolean)
+            });
+            fs.appendFileSync(HISTORY, line + "\n");
+
+            const lines = fs.readFileSync(HISTORY, "utf8").trim().split("\n").filter(Boolean);
+            fs.writeFileSync(HISTORY, lines.slice(-2016).join("\n") + "\n");
+
+            console.log("Zápasy v odpovedi API:", matches.length);
+            console.log("Rozpoznané LIVE zápasy:", liveMatches.length);
+            console.log("Kľúče prvého záznamu:", matches[0] ? Object.keys(matches[0]).join(", ") : "žiadne");
+            console.log("Basketbalové dáta uložené:", CURRENT);
+          }
+
+          main().catch(error => {
+            console.error("BASKETBALL COLLECTOR ERROR:", error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Commit basketball data
+        run: |
+          if git diff --quiet -- data/basketball-current.json data/basketball-history.jsonl; then
+            echo "Basketball data unchanged."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/basketball-current.json data/basketball-history.jsonl
+          git commit -m "Update LIVE basketball data"
+          git push
