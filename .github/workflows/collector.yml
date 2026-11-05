@@ -35,6 +35,7 @@ jobs:
           const LATEST_PATH = "data/live-latest.json";
           const HISTORY_PATH = "data/live-history.jsonl";
           const HISTORY_JSON_PATH = "data/live-history.json";
+          const SIGNAL_ARCHIVE_PATH = "data/signal-archive.json";
 
           const REQUIRED_MISSES = 3;
           const DROP_RATIO = 0.5;
@@ -668,6 +669,285 @@ jobs:
               JSON.stringify(history)
             );
 
+            // =========================================
+            // TRVALÝ ARCHÍV LIVE SIGNÁLOV
+            // Rovnaké váhy a prahy ako v scanner.js.
+            // =========================================
+
+            const signalArchive = readJson(SIGNAL_ARCHIVE_PATH, {
+              schema_version: 1,
+              updated_at: null,
+              signals: []
+            });
+
+            if (!Array.isArray(signalArchive.signals)) {
+              throw new Error("Archív signálov nemá platné pole signals.");
+            }
+
+            function frontendMatchId(match) {
+              return String(
+                match?.tracker?.id ||
+                match?.slug ||
+                match?.url ||
+                match?.id ||
+                ""
+              );
+            }
+
+            function frontendStatValue(stats, keyword) {
+              const item = (stats || []).find(s =>
+                String(s.label || "").toLowerCase().includes(keyword)
+              );
+              if (!item) return null;
+              const home = Number(item.home);
+              const away = Number(item.away);
+              if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
+              return { home, away };
+            }
+
+            function frontendPressure(stats) {
+              const measures = [
+                { key: "possession", weight: 0.10 },
+                { key: "shots on target", weight: 0.40 },
+                { key: "dangerous attacks", weight: 0.50 }
+              ];
+              let home = 0;
+              let away = 0;
+              let totalWeight = 0;
+
+              for (const measure of measures) {
+                const value = frontendStatValue(stats, measure.key);
+                if (!value) continue;
+                const total = value.home + value.away;
+                const ratio = total > 0 ? value.home / total : 0.5;
+                home += ratio * measure.weight;
+                away += (1 - ratio) * measure.weight;
+                totalWeight += measure.weight;
+              }
+
+              if (!totalWeight) return null;
+              return {
+                home: Math.round(home / totalWeight * 100),
+                away: Math.round(away / totalWeight * 100)
+              };
+            }
+
+            function makeServerSnapshot(match, currentRecord) {
+              const id = frontendMatchId(match);
+              const currentTime = Date.parse(currentRecord.collected_at || "");
+              const currentShots = frontendStatValue(match.stats || [], "shots on target");
+              const currentAttacks = frontendStatValue(match.stats || [], "dangerous attacks");
+
+              if (!id || !Number.isFinite(currentTime) || !currentShots || !currentAttacks) {
+                return null;
+              }
+
+              const previous = [];
+              for (const batch of history) {
+                const validCollection =
+                  batch.collection_complete === true ||
+                  batch.data_status === "complete";
+                if (!validCollection || !Array.isArray(batch.records)) continue;
+
+                for (const record of batch.records) {
+                  if (!record.match || frontendMatchId(record.match) !== id) continue;
+                  if (!isLive(record.match)) continue;
+                  const time = Date.parse(record.collected_at || batch.collected_at || "");
+                  if (Number.isFinite(time) && time < currentTime - 1000) {
+                    previous.push({ time, match: record.match });
+                  }
+                }
+              }
+
+              previous.sort((a, b) => a.time - b.time);
+              if (!previous.length) return null;
+
+              const old = previous[previous.length - 1];
+              const minutes = (currentTime - old.time) / 60000;
+              if (!Number.isFinite(minutes) || minutes < 3 || minutes > 15) return null;
+
+              const oldShots = frontendStatValue(old.match.stats || [], "shots on target");
+              const oldAttacks = frontendStatValue(old.match.stats || [], "dangerous attacks");
+              if (!oldShots || !oldAttacks) return null;
+
+              if (
+                currentShots.home < oldShots.home ||
+                currentShots.away < oldShots.away ||
+                currentAttacks.home < oldAttacks.home ||
+                currentAttacks.away < oldAttacks.away
+              ) return null;
+
+              const homeShots = currentShots.home - oldShots.home;
+              const awayShots = currentShots.away - oldShots.away;
+              const homeAttacks = currentAttacks.home - oldAttacks.home;
+              const awayAttacks = currentAttacks.away - oldAttacks.away;
+              const homeActivity = homeShots * 3 + homeAttacks;
+              const awayActivity = awayShots * 3 + awayAttacks;
+
+              return {
+                homeActivityRate: homeActivity / minutes * 10,
+                awayActivityRate: awayActivity / minutes * 10
+              };
+            }
+
+            function createServerSignal(match, record) {
+              const minute = Number(match.live_minute);
+              if (!Number.isFinite(minute) || minute < 10 || minute > 90) return null;
+
+              const collectedTime = Date.parse(record.collected_at || "");
+              const age = Date.now() - collectedTime;
+              if (!Number.isFinite(age) || age < 0 || age > 7 * 60 * 1000) return null;
+
+              const pressure = frontendPressure(match.stats || []);
+              const snapshot = makeServerSnapshot(match, record);
+              if (!pressure || !snapshot) return null;
+
+              const threat = {
+                home: Math.min(100, Math.round(
+                  pressure.home * 0.45 +
+                  Math.min(snapshot.homeActivityRate * 3, 40) * 0.55
+                )),
+                away: Math.min(100, Math.round(
+                  pressure.away * 0.45 +
+                  Math.min(snapshot.awayActivityRate * 3, 40) * 0.55
+                ))
+              };
+
+              const candidates = [
+                {
+                  side: "home",
+                  team: match.home,
+                  score: threat.home,
+                  activity: snapshot.homeActivityRate,
+                  difference: threat.home - threat.away
+                },
+                {
+                  side: "away",
+                  team: match.away,
+                  score: threat.away,
+                  activity: snapshot.awayActivityRate,
+                  difference: threat.away - threat.home
+                }
+              ];
+
+              return candidates.find(item =>
+                item.score >= 65 &&
+                item.activity >= 4 &&
+                item.difference >= 3
+              ) || null;
+            }
+
+            const signalNow = new Date().toISOString();
+            const liveById = new Map();
+
+            if (complete) {
+              for (const record of records) {
+                if (record?.match) {
+                  const id = frontendMatchId(record.match);
+                  if (id) liveById.set(id, record);
+                }
+              }
+
+              // Najprv bezpečne vyhodnoť už otvorené signály.
+              for (const signal of signalArchive.signals) {
+                if (signal.status !== "OPEN") continue;
+                const record = liveById.get(String(signal.matchId));
+                if (!record) continue;
+
+                const match = record.match;
+                const goals = signal.side === "home"
+                  ? Number(match.home_score || 0)
+                  : Number(match.away_score || 0);
+                const minute = Number(match.live_minute);
+
+                if (Number.isFinite(goals) && goals > Number(signal.startGoals)) {
+                  signal.status = "WIN";
+                  signal.settledAt = signalNow;
+                  signal.settledMinute = Number.isFinite(minute) ? minute : null;
+                  signal.settledScore = `${Number(match.home_score || 0)}:${Number(match.away_score || 0)}`;
+                } else if (
+                  Number.isFinite(minute) &&
+                  minute >= Number(signal.deadlineMinute)
+                ) {
+                  signal.status = "LOSS";
+                  signal.settledAt = signalNow;
+                  signal.settledMinute = minute;
+                  signal.settledScore = `${Number(match.home_score || 0)}:${Number(match.away_score || 0)}`;
+                }
+              }
+
+              // Ak zápas zmizol z LIVE feedu po bezpečnej archivácii,
+              // označ signál ako NEOVERENÝ – nikdy ho automaticky nepočítaj ako LOSS.
+              const archivedMatchIds = new Set(
+                (archive.archived_matches || []).map(item =>
+                  frontendMatchId(item?.last_snapshot?.match) || String(item?.id || "")
+                )
+              );
+
+              for (const signal of signalArchive.signals) {
+                if (
+                  signal.status === "OPEN" &&
+                  archivedMatchIds.has(String(signal.matchId))
+                ) {
+                  signal.status = "UNRESOLVED";
+                  signal.unresolvedAt = signalNow;
+                  signal.statusReason =
+                    "Match absent from LIVE feed; final score not confirmed.";
+                }
+              }
+
+              // Potom vytvor nové signály podľa rovnakých prahov ako scanner.js.
+              for (const record of records) {
+                const match = record?.match;
+                if (!match || !isLive(match)) continue;
+
+                const candidate = createServerSignal(match, record);
+                if (!candidate) continue;
+
+                const id = frontendMatchId(match);
+                const alreadyOpen = signalArchive.signals.some(item =>
+                  String(item.matchId) === id &&
+                  item.side === candidate.side &&
+                  item.status === "OPEN"
+                );
+                if (alreadyOpen) continue;
+
+                const minute = Number(match.live_minute);
+                signalArchive.signals.push({
+                  signalId: `${id}_${candidate.side}_${record.collected_at}`,
+                  matchId: id,
+                  home: match.home,
+                  away: match.away,
+                  side: candidate.side,
+                  team: candidate.team,
+                  startGoals: candidate.side === "home"
+                    ? Number(match.home_score || 0)
+                    : Number(match.away_score || 0),
+                  startMinute: minute,
+                  deadlineMinute: Math.min(90, minute + 15),
+                  goalThreat: candidate.score,
+                  activityRate: Number(candidate.activity.toFixed(1)),
+                  createdAt: record.collected_at || signalNow,
+                  status: "OPEN",
+                  startScore: `${Number(match.home_score || 0)}:${Number(match.away_score || 0)}`
+                });
+              }
+            }
+
+            signalArchive.updated_at = signalNow;
+            fs.writeFileSync(
+              SIGNAL_ARCHIVE_PATH,
+              JSON.stringify(signalArchive, null, 2)
+            );
+
+            console.log("SIGNAL ARCHIVE:", JSON.stringify({
+              total: signalArchive.signals.length,
+              open: signalArchive.signals.filter(item => item.status === "OPEN").length,
+              wins: signalArchive.signals.filter(item => item.status === "WIN").length,
+              losses: signalArchive.signals.filter(item => item.status === "LOSS").length,
+              updated: complete
+            }));
+
             console.log("================================");
             console.log("COLLECTION RESULT");
             console.log(JSON.stringify({
@@ -704,7 +984,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/live-current.json data/live-latest.json data/live-history.jsonl data/live-history.json data/live-archive.json
+          git add data/live-current.json data/live-latest.json data/live-history.jsonl data/live-history.json data/live-archive.json data/signal-archive.json
 
           if git diff --cached --quiet; then
             echo "Žiadne nové zmeny na uloženie."
