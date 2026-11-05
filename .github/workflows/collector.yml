@@ -574,6 +574,26 @@ jobs:
 
             const now = new Date().toISOString();
 
+            // Migruj staršie archívne záznamy, ktoré boli kedysi uzavreté
+            // iba podľa zmiznutia z feedu, späť do sledovania konečného detailu.
+            for (const [id, item] of [...archived.entries()]) {
+              if (item?.status_confirmation === "confirmed_finished") continue;
+              if (!item?.last_snapshot?.match || pending.has(id)) continue;
+
+              archived.delete(id);
+              pending.set(id, {
+                id,
+                first_missing_at: item.first_missing_at || item.archived_at || now,
+                last_missing_at: now,
+                last_seen_at: item.last_seen_at || item.last_snapshot.collected_at || null,
+                missing_complete_runs: item.missing_complete_runs || REQUIRED_MISSES,
+                last_snapshot: item.last_snapshot,
+                final_check_attempts: item.final_check_attempts || 0
+              });
+
+              console.log("STARŠÍ NEPOTVRDENÝ ARCHÍV VRÁTENÝ NA KONTROLU KONEČNÉHO VÝSLEDKU:", id);
+            }
+
             // Ak zápas zmizne z LIVE zoznamu, vytvor kandidáta na samostatné
             // sledovanie aj pri aktívnom feed guarde. Pred archiváciou sa vždy
             // overí jeho vlastný detail – samotná neprítomnosť nestačí.
