@@ -805,6 +805,61 @@
     addText(engine, "Archív spája záznamy z GitHubu a históriu tohto prehliadača; duplicitné signály sa zobrazia iba raz.");
     addText(engine, "Neoverené znamená, že zápas zmizol z LIVE feedu bez potvrdeného konečného výsledku. Nezapočítava sa ako prehra.");
 
+    // Rozbory úspešnosti počítajú iba potvrdené WIN/LOSS výsledky.
+    // Pri malej vzorke zobraz upozornenie, aby percentá nevyzerali spoľahlivejšie, než sú.
+    const settledSignals = signals.filter(item =>
+      item.status === "WIN" || item.status === "LOSS"
+    );
+
+    function renderBreakdown(title, keyFn) {
+      const groups = new Map();
+      settledSignals.forEach(item => {
+        const key = keyFn(item);
+        if (!key) return;
+        if (!groups.has(key)) groups.set(key, { wins: 0, losses: 0 });
+        const group = groups.get(key);
+        if (item.status === "WIN") group.wins++;
+        else group.losses++;
+      });
+
+      addText(engine, title, "15px");
+      if (!groups.size) {
+        addText(engine, "Zatiaľ málo vyhodnotených dát.");
+        return;
+      }
+
+      [...groups.entries()]
+        .sort((a, b) => {
+          const na = a[1].wins + a[1].losses;
+          const nb = b[1].wins + b[1].losses;
+          return nb - na || String(a[0]).localeCompare(String(b[0]), "sk");
+        })
+        .forEach(([key, value]) => {
+          const count = value.wins + value.losses;
+          const percent = Math.round(value.wins / count * 100);
+          const reliability = count < 10 ? " | malá vzorka" : "";
+          addText(engine, key + ": " + percent + "% (" + value.wins + " výhier / " + value.losses + " prehier, N=" + count + ")" + reliability);
+        });
+    }
+
+    renderBreakdown("ÚSPEŠNOSŤ PODĽA MINÚTY", item => {
+      const minute = Number(item.startMinute);
+      if (!Number.isFinite(minute)) return null;
+      const from = Math.floor(minute / 10) * 10;
+      return from + "–" + (from + 9) + ". min";
+    });
+
+    renderBreakdown("ÚSPEŠNOSŤ PODĽA POČIATOČNÉHO SKÓRE", item => {
+      const score = String(item.startScore || "").trim();
+      return /^\\d+[:\\-]\\d+$/.test(score) ? score.replace("-", ":") : null;
+    });
+
+    renderBreakdown("ÚSPEŠNOSŤ PODĽA STRANY", item => {
+      if (item.side === "home") return "Domáci";
+      if (item.side === "away") return "Hostia";
+      return null;
+    });
+
     const recent = [...signals].sort((a, b) =>
       Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)
     ).slice(0, 100);
