@@ -1575,6 +1575,35 @@
     detailSummary.style.cssText = "cursor:pointer;list-style:none;font-size:13px;font-weight:800;color:#39e6a5;padding:5px 0;";
     detail.appendChild(detailSummary);
 
+    addText(detail, "HISTÓRIA SIGNÁLOV", "13px");
+    if (relatedSignals.length) {
+      relatedSignals
+        .slice()
+        .sort((a, b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0))
+        .slice(0, 8)
+        .forEach(item => {
+          const stamp = item.createdAt
+            ? new Date(item.createdAt).toLocaleString("sk-SK")
+            : "čas nezaznamenaný";
+          const side = item.side === "home" ? "Domáci" : "Hostia";
+          const statusLabel = ({
+            OPEN: "OTVORENÝ",
+            WIN: "WIN",
+            LOSS: "LOSS",
+            UNRESOLVED: "NEVYRIEŠENÝ"
+          })[item.status] || String(item.status || "NEZNÁMY");
+          const signalRow = document.createElement("div");
+          signalRow.textContent = `${stamp} · ${side} – ${item.team || "tím"} · ${item.startMinute ?? "?"}. min · ${item.startScore || "?"} · ${statusLabel}`;
+          signalRow.style.cssText = "font-size:12px;color:#cbd5e1;padding:7px 9px;margin:5px 0;background:#101b2b;border-radius:8px;border-left:3px solid " +
+            (item.status === "WIN" ? "#4ade80" : item.status === "LOSS" ? "#f87171" : item.status === "OPEN" ? "#39e6a5" : "#fbbf24") + ";";
+          detail.appendChild(signalRow);
+        });
+    } else if (Array.isArray(signalArchive?.signals)) {
+      addText(detail, "Pre tento zápas zatiaľ nie sú uložené žiadne signály.");
+    } else {
+      addText(detail, "Archív signálov sa nepodarilo načítať.");
+    }
+
     if (staleMode) {
       addSignalPanel(detail, {
         heading: "UPOZORNENIE",
