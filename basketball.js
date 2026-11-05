@@ -202,7 +202,9 @@
         const away = periodValues(match, "away")[q];
         if (home === undefined || away === undefined || home === null || away === null || home === "–" || away === "–") return null;
         const h = Number(home), a = Number(away);
-        return Number.isFinite(h) && Number.isFinite(a) ? h + a : null;
+        const total = h + a;
+        // SportScore can return 0/0 placeholders for quarters that have not actually been played.
+        return Number.isFinite(h) && Number.isFinite(a) && total > 0 ? total : null;
       }).filter(value => value !== null);
       return { quarter: q + 1, count: totals.length, average: totals.length ? totals.reduce((sum, value) => sum + value, 0) / totals.length : null };
     });
@@ -235,7 +237,7 @@
     });
     panel.appendChild(grid);
     const note = document.createElement("div");
-    note.textContent = "Priemer celkového počtu bodov oboch tímov v jednej štvrtine; n = počet zápasov s dostupným skóre danej štvrtiny.";
+    note.textContent = "Priemer celkového počtu bodov oboch tímov v jednej štvrtine; n = počet zápasov s platným skóre danej štvrtiny. Nulové 0–0 zástupné hodnoty sa nezapočítavajú.";
     note.style.cssText = "font-size:11px;color:#9baabe;margin-top:9px;line-height:1.4";
     panel.appendChild(note);
     const leader = document.createElement("div");
