@@ -1520,6 +1520,12 @@
 
       addText(engine, `Stav zberu: ${allowSignals ? "KOMPLETNÝ" : "NEÚPLNÝ"}`);
       addText(engine, `Bezpečná archivácia: ${current.archive_safe ? "ÁNO" : "POZASTAVENÁ"}`);
+      if (current.feed_guard_warning === true) {
+        addText(
+          engine,
+          "UPOZORNENIE: Počet zápasov vo feede je nižší než historická základňa. Zobrazené sú iba zápasy s overenými detailmi; nové signály a archivácia sú do potvrdenia feedu zablokované."
+        );
+      }
       addText(engine, `Vek dát: ${Math.max(0, Math.round(age / 1000))} sekúnd`);
       addText(engine, `LIVE zápasy: ${matches.length}`);
 
