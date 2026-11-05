@@ -266,7 +266,6 @@
       archiveList.replaceChildren();
       if (!matches.length) { archiveList.textContent="Archív sa naplní po načítaní prvých ukončených zápasov."; return; }
       renderArchiveQuality(matches);
-      renderArchiveStats(matches);
       const groups = new Map();
       matches.forEach(match => {
         const league = leagueOf(match).trim() || "Liga neznáma";
