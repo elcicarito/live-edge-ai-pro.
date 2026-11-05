@@ -560,6 +560,90 @@
     return snapshots.sort((a, b) => a.time - b.time);
   }
 
+  // Historická kontinuita dát pre konkrétny zápas.
+  // Ide iba o diagnostiku; nemení tlak, Momentum ani generovanie signálov.
+  function getMatchReliability(match, historyData, collectedAt) {
+    const id = matchId(match);
+    if (!id) return null;
+
+    const snapshots = historyRecords(historyData, id);
+    const currentTime = Date.parse(collectedAt || "");
+
+    if (
+      Number.isFinite(currentTime) &&
+      !snapshots.some(item => Math.abs(item.time - currentTime) < 1000)
+    ) {
+      snapshots.push({ time: currentTime, match });
+    }
+
+    snapshots.sort((a, b) => a.time - b.time);
+
+    const unique = snapshots.filter((item, index) =>
+      index === 0 || item.time !== snapshots[index - 1].time
+    );
+
+    if (!unique.length) return null;
+
+    let momentumReady = 0;
+    let allStatsReady = 0;
+
+    unique.forEach(item => {
+      const stats = item.match?.stats || [];
+      const hasShots = !!statValue(stats, "shots on target");
+      const hasAttacks = !!statValue(stats, "dangerous attacks");
+      const hasPossession = !!statValue(stats, "possession");
+
+      if (hasShots && hasAttacks) momentumReady++;
+      if (hasShots && hasAttacks && hasPossession) allStatsReady++;
+    });
+
+    const gaps = [];
+    for (let i = 1; i < unique.length; i++) {
+      const minutes = (unique[i].time - unique[i - 1].time) / 60000;
+      if (Number.isFinite(minutes) && minutes > 0) gaps.push(minutes);
+    }
+
+    const averageGap = gaps.length
+      ? gaps.reduce((sum, value) => sum + value, 0) / gaps.length
+      : null;
+    const maxGap = gaps.length ? Math.max(...gaps) : null;
+    const longGaps = gaps.filter(value => value > 7).length;
+    const momentumCoverage = Math.round(momentumReady / unique.length * 100);
+    const fullCoverage = Math.round(allStatsReady / unique.length * 100);
+
+    let label = "ZBIERAM VZORKU";
+    let background = "#374151";
+    let border = "#9ca3af";
+
+    if (unique.length >= 3) {
+      if (momentumCoverage >= 90 && maxGap <= 7) {
+        label = "DOBRÁ KONTINUITA";
+        background = "#14532d";
+        border = "#39e6a5";
+      } else if (momentumCoverage >= 70 && maxGap <= 10) {
+        label = "STREDNÁ KONTINUITA";
+        background = "#713f12";
+        border = "#eab308";
+      } else {
+        label = "SLABÁ KONTINUITA";
+        background = "#7f1d1d";
+        border = "#ef4444";
+      }
+    }
+
+    return {
+      count: unique.length,
+      momentumCoverage,
+      fullCoverage,
+      averageGap,
+      maxGap,
+      longGaps,
+      label,
+      background,
+      border
+    };
+  }
+
   function getSnapshot(match, historyData, collectedAt) {
     const id = matchId(match);
     const currentStats = match.stats || [];
@@ -1053,6 +1137,36 @@
       quality.border
     );
     addText(card, quality.detail);
+
+    const reliability = getMatchReliability(
+      match,
+      historyData,
+      collectedAt
+    );
+
+    addText(card, "SPOĽAHLIVOSŤ ZBERU – HISTÓRIA", "14px");
+    if (reliability) {
+      addBadge(
+        card,
+        reliability.label,
+        reliability.background,
+        reliability.border
+      );
+      addText(
+        card,
+        `Vzorka: ${reliability.count} meraní | Momentum dostupné: ${reliability.momentumCoverage}% | Všetky kľúčové štatistiky: ${reliability.fullCoverage}%`
+      );
+      addText(
+        card,
+        `Priemerný interval: ${reliability.averageGap === null ? "zatiaľ bez porovnania" : reliability.averageGap.toFixed(1) + " min"} | Najdlhšia medzera: ${reliability.maxGap === null ? "—" : reliability.maxGap.toFixed(1) + " min"} | Medzery nad 7 min: ${reliability.longGaps}`
+      );
+    } else {
+      addText(card, "Zatiaľ nie je dostupná história meraní tohto zápasu.");
+    }
+    addText(
+      card,
+      "Ukazovateľ vychádza z uložených kompletných zberov (približne posledných 24 hodín); je iba informačný."
+    );
 
     renderCurrentStats(card, match.stats || []);
 
