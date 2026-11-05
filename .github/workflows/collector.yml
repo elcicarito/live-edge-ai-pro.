@@ -31,6 +31,7 @@ jobs:
           const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
           const ARCHIVE_PATH = "data/live-archive.json";
+          const CURRENT_PATH = "data/live-current.json";
           const LATEST_PATH = "data/live-latest.json";
           const HISTORY_PATH = "data/live-history.jsonl";
           const HISTORY_JSON_PATH = "data/live-history.json";
@@ -49,7 +50,7 @@ jobs:
 
                 const response = await fetch(freshUrl, {
                   headers: {
-                    "User-Agent": "LIVE-EDGE-AI-PRO/8.3",
+                    "User-Agent": "LIVE-EDGE-AI-PRO/8.4",
                     "Accept": "application/json",
                     "Cache-Control": "no-cache, no-store, max-age=0",
                     "Pragma": "no-cache"
@@ -203,7 +204,7 @@ jobs:
             const startedAt = new Date().toISOString();
 
             console.log("================================");
-            console.log("LIVE EDGE FRESH COLLECTOR v8.3");
+            console.log("LIVE EDGE FRESH COLLECTOR v8.4");
             console.log("Začiatok:", startedAt);
             console.log("Načítavam aktuálny LIVE zoznam...");
             console.log("================================");
@@ -312,7 +313,7 @@ jobs:
             const complete = errors.length === 0;
 
             // =========================================
-            // OCHRANA PRED NEÚPLNÝM LIVE ZOZNAMOM v8.3
+            // OCHRANA PRED NEÚPLNÝM LIVE ZOZNAMOM
             // =========================================
 
             const historyCounts = readHistoryCounts();
@@ -387,7 +388,7 @@ jobs:
                 uniqueFixtures.length < minimumExpected;
 
               console.log("================================");
-              console.log("FEED GUARD v8.3");
+              console.log("FEED GUARD v8.4");
               console.log("Historická základňa:", baseline);
               console.log("Aktuálny počet:", uniqueFixtures.length);
               console.log("Minimálny očakávaný počet:", minimumExpected);
@@ -445,7 +446,7 @@ jobs:
               collected_at: new Date().toISOString(),
               collection_started_at: startedAt,
               source: "SportScore API v1",
-              collector_version: "8.3",
+              collector_version: "8.4",
               data_status: archiveSafe ? "complete" : "partial",
               collection_complete: complete,
               archive_safe: archiveSafe,
@@ -595,7 +596,35 @@ jobs:
             console.log("================================");
 
             // =========================================
-            // UKLADANIE LIVE DÁT A HISTÓRIE
+            // AKTUÁLNE LIVE DÁTA
+            // =========================================
+
+            if (complete) {
+              const currentOutput = {
+                ...output,
+                data_status: "complete",
+                snapshot_type: "current_verified_live",
+                archive_safe: archiveSafe,
+                feed_guard_warning: !archiveSafe
+              };
+
+              fs.writeFileSync(
+                CURRENT_PATH,
+                JSON.stringify(currentOutput, null, 2)
+              );
+
+              console.log(
+                "AKTUÁLNE LIVE DÁTA AKTUALIZOVANÉ."
+              );
+
+            } else {
+              console.log(
+                "LIVE CURRENT ZACHOVANÝ: zber obsahuje chyby."
+              );
+            }
+
+            // =========================================
+            // PÔVODNÝ DÔVERYHODNÝ SNAPSHOT
             // =========================================
 
             if (archiveSafe) {
@@ -605,11 +634,16 @@ jobs:
               );
 
               console.log("LIVE SNAPSHOT AKTUALIZOVANÝ.");
+
             } else {
               console.log(
                 "LIVE SNAPSHOT ZACHOVANÝ: posledné dôveryhodné dáta zostávajú uložené."
               );
             }
+
+            // =========================================
+            // HISTÓRIA
+            // =========================================
 
             fs.appendFileSync(
               HISTORY_PATH,
@@ -644,6 +678,7 @@ jobs:
               verified_live: output.live_count,
               saved_count: output.saved_count,
               errors: errors.length,
+              current_updated: complete,
               history_updated: true,
               archive_updated: true,
               latest_updated: archiveSafe,
@@ -653,7 +688,7 @@ jobs:
 
             if (!complete || !archiveSafe) {
               console.log(
-                "UPOZORNENIE: Zber nie je bezpečný na aktualizáciu LIVE snapshotu a počítanie neprítomnosti."
+                "UPOZORNENIE: Zber nie je bezpečný na aktualizáciu dôveryhodného snapshotu a počítanie neprítomnosti."
               );
             }
           }
@@ -669,7 +704,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/live-latest.json data/live-history.jsonl data/live-history.json data/live-archive.json
+          git add data/live-current.json data/live-latest.json data/live-history.jsonl data/live-history.json data/live-archive.json
 
           if git diff --cached --quiet; then
             echo "Žiadne nové zmeny na uloženie."
