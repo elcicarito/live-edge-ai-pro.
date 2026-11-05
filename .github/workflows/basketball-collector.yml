@@ -110,6 +110,24 @@ jobs:
               const slug = rawUrl.split("/").filter(Boolean).pop();
               if (slug) {
                 try {
+                  // Diagnostic: inspect rendered SportScore match page for quarter scores omitted by the JSON widget API.
+                  const pageUrl = rawUrl.startsWith("http") ? rawUrl : "https://sportscore.com" + rawUrl;
+                  const pageResponse = await fetch(pageUrl, {
+                    headers: { "User-Agent": "Mozilla/5.0 LIVE-EDGE-AI-PRO", "Accept": "text/html" },
+                    signal: AbortSignal.timeout(20000)
+                  });
+                  const pageHtml = await pageResponse.text();
+                  console.log("MATCH PAGE PROBE status:", pageResponse.status, "bytes:", pageHtml.length);
+                  for (const marker of ["Q1 Points", "Q2 Points", "Q3 Points", "Q4 Points", "quarter_scores", "period_scores"]) {
+                    const at = pageHtml.toLowerCase().indexOf(marker.toLowerCase());
+                    if (at >= 0) console.log("MATCH PAGE PROBE " + marker + ":", pageHtml.slice(Math.max(0, at - 900), Math.min(pageHtml.length, at + 1800)).replace(/\s+/g, " ").slice(0, 2700));
+                  }
+                  const jsonScripts = [...pageHtml.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)].map(x => x[1]);
+                  console.log("MATCH PAGE PROBE JSON-LD:", JSON.stringify(jsonScripts).slice(0, 4000));
+                } catch (pageError) {
+                  console.log("MATCH PAGE PROBE failed:", pageError.message);
+                }
+                try {
                   const detailPayload = await getJSON("https://sportscore.com/api/widget/match/?sport=basketball&slug=" + encodeURIComponent(slug), 2);
                   const detailMatch = detailPayload.match || detailPayload.data || detailPayload;
                   console.log("DETAIL PROBE slug:", slug);
