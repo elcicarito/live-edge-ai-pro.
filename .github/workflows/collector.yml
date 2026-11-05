@@ -1009,5 +1009,7 @@ jobs:
             echo "Žiadne nové zmeny na uloženie."
           else
             git commit -m "Update LIVE football data"
+            # Rebase onto main in case a code edit landed while this collection ran.
+            git pull --rebase origin main
             git push
           fi
