@@ -1337,7 +1337,10 @@
     try {
       const [current, historyData, signalArchive] = await Promise.all([
         getJSON(CURRENT_URL),
-        getJSON(HISTORY_URL),
+        getJSON(HISTORY_URL).catch(error => {
+          console.warn("História zberu nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
+          return [];
+        }),
         getJSON(SIGNAL_ARCHIVE_URL).catch(error => {
           console.warn("Trvalý archív signálov nie je dostupný:", error);
           return null;
