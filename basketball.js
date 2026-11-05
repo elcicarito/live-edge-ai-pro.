@@ -9,12 +9,11 @@
     for (const value of values) {
       if (value === undefined || value === null || value === "") continue;
       if (typeof value === "object") {
-        if (value.name) return String(value.name);
-        if (value.title) return String(value.title);
-        if (value.short_name) return String(value.short_name);
-      } else {
-        return String(value);
+        const nested = value.name || value.title || value.short_name;
+        if (nested) return String(nested);
+        continue;
       }
+      return String(value);
     }
     return "";
   };
@@ -30,7 +29,7 @@
 
   const teamName = (match, side) => {
     const team = match?.teams?.[side] || match?.[side + "_team"] || match?.[side + "Team"];
-    return textOf(team?.name, team?.short_name, team, match?.[side], match?.[side + "_name"]) || (side === "home" ? "Domáci" : "Hostia");
+    return textOf(team?.name, team?.short_name, typeof team === "string" ? team : null, match?.[side], match?.[side + "_name"]) || (side === "home" ? "Domáci" : "Hostia");
   };
 
   const scoreOf = (match, side) => {
@@ -45,7 +44,7 @@
   };
 
   const isLive = match => {
-    const s = String(statusOf(match)).toLowerCase().replace(/[\\s_-]+/g, "");
+    const s = String(statusOf(match)).toLowerCase().replace(/[\s_-]+/g, "");
     return ["live","inplay","inprogress","playing","q1","q2","q3","q4","ot","overtime","halftime","break","period1","period2","period3","period4"].includes(s) || s.includes("inprogress") || s.includes("live");
   };
 
@@ -79,7 +78,7 @@
     live.forEach(match => {
       const card = document.createElement("div");
       card.style.cssText = "background:#101b2b;border:1px solid #2d435c;border-radius:12px;padding:14px;margin:10px 0";
-      const league = textOf(match?.competition?.name, match?.league?.name, match?.tournament?.name, match?.competition, match?.league);
+      const league = textOf(match?.competition?.name, match?.league?.name, match?.tournament?.name, typeof match?.competition === "string" ? match.competition : null, typeof match?.league === "string" ? match.league : null);
       const status = textOf(statusOf(match)) || "LIVE";
       const period = textOf(match?.period?.name, match?.period, match?.quarter, match?.period_name, match?.status_text);
       const clock = textOf(match?.clock, match?.time_remaining, match?.remaining_time, match?.timer);
