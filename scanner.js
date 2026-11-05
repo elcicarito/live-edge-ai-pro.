@@ -749,7 +749,44 @@
   }
 
   function renderServerSignalArchive(data) {
-    const signals = Array.isArray(data?.signals) ? data.signals : [];
+    const serverSignals = Array.isArray(data?.signals) ? data.signals : [];
+    const localSignals = Array.isArray(signalHistory) ? signalHistory : [];
+
+    // Spoj trvalý archív zo servera s históriou v tomto prehliadači.
+    // Kľúč bráni duplicitám toho istého signálu v oboch zdrojoch.
+    const merged = new Map();
+    const signalKey = item => [
+      String(item.matchId || ""),
+      String(item.side || ""),
+      String(item.startMinute ?? ""),
+      String(item.startGoals ?? "")
+    ].join("|");
+
+    localSignals.forEach(item => {
+      if (!item || !item.matchId) return;
+      merged.set(signalKey(item), { ...item, archiveSource: "browser" });
+    });
+
+    serverSignals.forEach(item => {
+      if (!item || !item.matchId) return;
+      const key = signalKey(item);
+      const previous = merged.get(key);
+      const previousSettled = previous && ["WIN", "LOSS"].includes(previous.status);
+      const serverSettled = ["WIN", "LOSS"].includes(item.status);
+
+      // Serverové údaje doplnia miestny záznam; už vyhodnotený výsledok
+      // sa nestratí, ak druhý zdroj ešte stále uvádza OPEN.
+      const combined = { ...(previous || {}), ...item, archiveSource: previous ? "both" : "server" };
+      if (previousSettled && !serverSettled) {
+        combined.status = previous.status;
+        combined.settledAt = previous.settledAt;
+        combined.settledScore = previous.settledScore || combined.settledScore;
+        combined.settledMinute = previous.settledMinute ?? combined.settledMinute;
+      }
+      merged.set(key, combined);
+    });
+
+    const signals = [...merged.values()];
     const wins = signals.filter(item => item.status === "WIN").length;
     const losses = signals.filter(item => item.status === "LOSS").length;
     const unresolved = signals.filter(item => item.status === "UNRESOLVED").length;
@@ -760,11 +797,12 @@
     addText(engine, "TRVALÝ ARCHÍV SIGNÁLOV", "16px");
     addText(engine, `Spolu: ${signals.length} | Výhry: ${wins} | Prehry: ${losses} | Otvorené: ${open} | Neoverené: ${unresolved}`);
     addText(engine, `Úspešnosť vyhodnotených: ${rate}%`);
+    addText(engine, "Archív spája záznamy z GitHubu a históriu tohto prehliadača; duplicitné signály sa zobrazia iba raz.");
     addText(engine, "Neoverené znamená, že zápas zmizol z LIVE feedu bez potvrdeného konečného výsledku. Nezapočítava sa ako prehra.");
 
     const recent = [...signals].sort((a, b) =>
       Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)
-    ).slice(0, 20);
+    ).slice(0, 100);
 
     recent.forEach(item => {
       const statusLabels = {
@@ -795,6 +833,9 @@
       engine.appendChild(line);
     });
 
+    if (signals.length > recent.length) {
+      addText(engine, `Zobrazených posledných ${recent.length} záznamov z ${signals.length}.`);
+    }
     if (!recent.length) {
       addText(engine, "Zatiaľ nie sú uložené žiadne signály.");
     }
