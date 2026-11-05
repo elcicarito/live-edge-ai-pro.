@@ -528,7 +528,54 @@
     };
   }
 
-  function historyRecords(historyData, id) {
+  function getCollectorHealth(historyData, now = Date.now()) {
+    if (!Array.isArray(historyData)) return null;
+
+    const windowStart = now - 24 * 60 * 60 * 1000;
+    const batches = historyData
+      .map(batch => ({
+        batch,
+        time: Date.parse(batch.collected_at || "")
+      }))
+      .filter(item =>
+        Number.isFinite(item.time) &&
+        item.time >= windowStart &&
+        item.time <= now
+      )
+      .sort((a, b) => a.time - b.time);
+
+    if (!batches.length) return null;
+
+    const complete = batches.filter(item =>
+      item.batch.collection_complete === true &&
+      item.batch.data_status === "complete"
+    ).length;
+
+    const errors = batches.reduce((sum, item) =>
+      sum + (Array.isArray(item.batch.errors) ? item.batch.errors.length : 0), 0
+    );
+
+    const gaps = [];
+    for (let i = 1; i < batches.length; i++) {
+      const gap = (batches[i].time - batches[i - 1].time) / 60000;
+      if (Number.isFinite(gap) && gap > 0) gaps.push(gap);
+    }
+
+    return {
+      total: batches.length,
+      complete,
+      partial: batches.length - complete,
+      successRate: Math.round(complete / batches.length * 100),
+      errors,
+      averageGap: gaps.length
+        ? gaps.reduce((sum, value) => sum + value, 0) / gaps.length
+        : null,
+      maxGap: gaps.length ? Math.max(...gaps) : null
+    };
+  }
+
+  // Súhrnná diagnostika pravidelnosti zberača; nemení signály.
+    function historyRecords(historyData, id) {
     const snapshots = [];
 
     if (!Array.isArray(historyData) || !id) return snapshots;
@@ -1374,6 +1421,22 @@
         engine,
         `Kvalita dát: Kompletné ${qualityCounts.OK} | Čiastočné ${qualityCounts.PARTIAL} | Neúplné ${qualityCounts.INCOMPLETE} | Zastarané ${qualityCounts.STALE}`
       );
+
+      const collectorHealth = getCollectorHealth(historyData);
+      addText(engine, "ZDRAVIE ZBERAČA – POSLEDNÝCH 24 HODÍN", "15px");
+      if (collectorHealth) {
+        addText(
+          engine,
+          `Zbery: ${collectorHealth.total} | Kompletné: ${collectorHealth.complete} | Neúplné: ${collectorHealth.partial} | Úspešnosť: ${collectorHealth.successRate}%`
+        );
+        addText(
+          engine,
+          `Priemerný interval: ${collectorHealth.averageGap === null ? "bez porovnania" : collectorHealth.averageGap.toFixed(1) + " min"} | Najdlhšia medzera: ${collectorHealth.maxGap === null ? "—" : collectorHealth.maxGap.toFixed(1) + " min"} | Chyby API: ${collectorHealth.errors}`
+        );
+      } else {
+        addText(engine, "Za posledných 24 hodín zatiaľ nie je dostupná história zberov.");
+      }
+
       addText(engine, `Obnovovanie: každých ${SCAN_INTERVAL_MS / 1000} sekúnd`);
       addText(engine, `Povolený rozdiel meraní: ${MIN_GAP_MINUTES}–${MAX_GAP_MINUTES} min`);
 
