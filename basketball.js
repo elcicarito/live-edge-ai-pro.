@@ -27,7 +27,7 @@
     return match?.status_text || match?.statusText || "";
   };
   const isLive = match => {
-    const s = String(statusOf(match)).toLowerCase().replace(/[\\s_-]+/g, "");
+    const s = String(statusOf(match)).toLowerCase().replace(/[\s_-]+/g, "");
     return ["live","inplay","inprogress","playing","q1","q2","q3","q4","ot","overtime","halftime","break","period1","period2","period3","period4"].includes(s) || s.includes("inprogress") || s.includes("live");
   };
   const teamName = (match, side) => {
