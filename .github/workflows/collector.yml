@@ -36,7 +36,6 @@ jobs:
           const HISTORY_JSON_PATH = "data/live-history.json";
 
           const REQUIRED_MISSES = 3;
-          const GUARD_CONFIRM_RUNS = 2;
           const DROP_RATIO = 0.5;
           const MIN_BASELINE = 6;
 
@@ -50,7 +49,7 @@ jobs:
 
                 const response = await fetch(freshUrl, {
                   headers: {
-                    "User-Agent": "LIVE-EDGE-AI-PRO/8.2",
+                    "User-Agent": "LIVE-EDGE-AI-PRO/8.3",
                     "Accept": "application/json",
                     "Cache-Control": "no-cache, no-store, max-age=0",
                     "Pragma": "no-cache"
@@ -196,14 +195,15 @@ jobs:
                 item.data_status === "complete" &&
                 Number.isFinite(Number(item.fixture_count))
               )
-              .map(item => Number(item.fixture_count));
+              .map(item => Number(item.fixture_count))
+              .filter(count => count >= MIN_BASELINE);
           }
 
           async function main() {
             const startedAt = new Date().toISOString();
 
             console.log("================================");
-            console.log("LIVE EDGE FRESH COLLECTOR v8.2");
+            console.log("LIVE EDGE FRESH COLLECTOR v8.3");
             console.log("Začiatok:", startedAt);
             console.log("Načítavam aktuálny LIVE zoznam...");
             console.log("================================");
@@ -312,7 +312,7 @@ jobs:
             const complete = errors.length === 0;
 
             // =========================================
-            // OCHRANA PRED NEÚPLNÝM LIVE ZOZNAMOM
+            // OCHRANA PRED NEÚPLNÝM LIVE ZOZNAMOM v8.3
             // =========================================
 
             const historyCounts = readHistoryCounts();
@@ -323,102 +323,120 @@ jobs:
               suspect_runs: 0
             };
 
-            let baseline = Number(feedGuard.baseline_fixture_count);
+            const baselineCandidates = [
+              feedGuard.baseline_fixture_count,
+              ...historyCounts
+            ]
+              .map(Number)
+              .filter(value =>
+                Number.isFinite(value) &&
+                value >= MIN_BASELINE
+              );
 
-            if (!Number.isFinite(baseline) || baseline < 0) {
-              const candidates = [...historyCounts];
-
-              if (
-                previousLatest &&
-                previousLatest.data_status === "complete" &&
-                Number.isFinite(Number(previousLatest.fixture_count))
-              ) {
-                candidates.push(Number(previousLatest.fixture_count));
-              }
-
-              baseline = candidates.length
-                ? Math.max(...candidates)
-                : 0;
+            if (
+              previousLatest &&
+              previousLatest.data_status === "complete" &&
+              Number.isFinite(Number(previousLatest.fixture_count)) &&
+              Number(previousLatest.fixture_count) >= MIN_BASELINE
+            ) {
+              baselineCandidates.push(
+                Number(previousLatest.fixture_count)
+              );
             }
 
-            let archiveSafe = complete;
+            let baseline = baselineCandidates.length
+              ? Math.max(...baselineCandidates)
+              : null;
 
-            const suspiciousDrop =
-              baseline >= MIN_BASELINE &&
-              uniqueFixtures.length < Math.max(
+            let archiveSafe = false;
+
+            if (baseline === null) {
+              console.log(
+                "VAROVANIE: Chýba dôveryhodná historická základňa."
+              );
+
+              if (
+                complete &&
+                uniqueFixtures.length >= MIN_BASELINE
+              ) {
+                feedGuard.baseline_fixture_count =
+                  uniqueFixtures.length;
+
+                console.log(
+                  "PRVÁ ZÁKLADŇA NASTAVENÁ:",
+                  uniqueFixtures.length
+                );
+
+                console.log(
+                  "Archivácia zostáva pozastavená do ďalšieho zberu."
+                );
+              }
+
+              feedGuard.suspect_fixture_count = null;
+              feedGuard.suspect_runs = 0;
+
+            } else {
+              feedGuard.baseline_fixture_count = baseline;
+
+              const minimumExpected = Math.max(
                 2,
                 Math.ceil(baseline * DROP_RATIO)
               );
 
-            if (suspiciousDrop) {
+              const suspiciousDrop =
+                uniqueFixtures.length < minimumExpected;
+
               console.log("================================");
-              console.log("VAROVANIE: PODOZRIVÝ POKLES LIVE ZÁPASOV");
-              console.log("Predchádzajúca základňa:", baseline);
+              console.log("FEED GUARD v8.3");
+              console.log("Historická základňa:", baseline);
               console.log("Aktuálny počet:", uniqueFixtures.length);
+              console.log("Minimálny očakávaný počet:", minimumExpected);
+              console.log("================================");
 
-              if (complete) {
-                const previousSuspect =
-                  Number(feedGuard.suspect_fixture_count);
-
-                const tolerance = Math.max(
-                  1,
-                  Math.ceil(uniqueFixtures.length * 0.2)
-                );
-
-                if (
-                  Number.isFinite(previousSuspect) &&
-                  Math.abs(previousSuspect - uniqueFixtures.length) <= tolerance
-                ) {
-                  feedGuard.suspect_runs =
-                    (Number(feedGuard.suspect_runs) || 0) + 1;
-                } else {
-                  feedGuard.suspect_runs = 1;
-                }
-
-                feedGuard.suspect_fixture_count = uniqueFixtures.length;
-
-              } else {
-                console.log(
-                  "Čiastočný zber. Potvrdenie poklesu sa nezapočítava."
-                );
-              }
-
-              if (
-                complete &&
-                uniqueFixtures.length > 0 &&
-                feedGuard.suspect_runs >= GUARD_CONFIRM_RUNS
-              ) {
-                archiveSafe = true;
-                baseline = uniqueFixtures.length;
-
-                feedGuard.baseline_fixture_count = baseline;
-                feedGuard.suspect_fixture_count = null;
-                feedGuard.suspect_runs = 0;
-
-                console.log(
-                  "POKLES POTVRDENÝ V OPAKOVANÝCH ZBEROCH."
-                );
-
-              } else {
+              if (!complete) {
                 archiveSafe = false;
 
                 console.log(
-                  "ARCHIVÁCIA POZASTAVENÁ. Čakám na ďalšie potvrdenie."
+                  "NEÚPLNÝ ZBER: Archivácia pozastavená."
                 );
+
+              } else if (suspiciousDrop) {
+                archiveSafe = false;
+
+                feedGuard.suspect_fixture_count =
+                  uniqueFixtures.length;
+
+                feedGuard.suspect_runs =
+                  (Number(feedGuard.suspect_runs) || 0) + 1;
+
+                console.log("================================");
+                console.log(
+                  "VAROVANIE: PODOZRIVÝ POKLES LIVE ZÁPASOV"
+                );
+                console.log("Historická základňa:", baseline);
+                console.log(
+                  "Aktuálny počet:",
+                  uniqueFixtures.length
+                );
+                console.log(
+                  "Podozrivé zbery:",
+                  feedGuard.suspect_runs
+                );
+                console.log("ARCHIVÁCIA POZASTAVENÁ.");
+                console.log("================================");
+
+              } else {
+                archiveSafe = true;
+
+                feedGuard.suspect_fixture_count = null;
+                feedGuard.suspect_runs = 0;
+
+                // Základňu možno zvýšiť, nikdy automaticky znížiť.
+                if (uniqueFixtures.length > baseline) {
+                  baseline = uniqueFixtures.length;
+                  feedGuard.baseline_fixture_count = baseline;
+                }
               }
-
-              console.log("================================");
-
-            } else if (complete) {
-              archiveSafe = true;
-
-              baseline = uniqueFixtures.length;
-
-              feedGuard.baseline_fixture_count = baseline;
-              feedGuard.suspect_fixture_count = null;
-              feedGuard.suspect_runs = 0;
-            } else {
-              archiveSafe = false;
             }
 
             archive.feed_guard = feedGuard;
@@ -427,7 +445,7 @@ jobs:
               collected_at: new Date().toISOString(),
               collection_started_at: startedAt,
               source: "SportScore API v1",
-              collector_version: "8.2",
+              collector_version: "8.3",
               data_status: archiveSafe ? "complete" : "partial",
               collection_complete: complete,
               archive_safe: archiveSafe,
@@ -473,7 +491,6 @@ jobs:
             const now = new Date().toISOString();
 
             if (archiveSafe) {
-
               for (const id of currentById.keys()) {
                 if (pending.has(id)) {
                   pending.delete(id);
@@ -581,9 +598,6 @@ jobs:
             // UKLADANIE LIVE DÁT A HISTÓRIE
             // =========================================
 
-            // Posledný dôveryhodný LIVE snapshot
-            // neprepíšeme podozrivým alebo čiastočným zberom.
-
             if (archiveSafe) {
               fs.writeFileSync(
                 LATEST_PATH,
@@ -597,7 +611,6 @@ jobs:
               );
             }
 
-            // Každý pokus uchováme v histórii.
             fs.appendFileSync(
               HISTORY_PATH,
               JSON.stringify(output) + "\n"
@@ -651,14 +664,16 @@ jobs:
           });
           NODE
 
-      - name: Save collected LIVE data and archive
+      - name: Save collected data
         run: |
-          git config user.name "LIVE EDGE AUTO COLLECTOR"
-          git config user.email "actions@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/live-history.jsonl data/live-latest.json data/live-history.json data/live-archive.json
+          git add data/live-latest.json data/live-history.jsonl data/live-history.json data/live-archive.json
 
-          git diff --cached --quiet || (
-            git commit -m "Update LIVE football history and archive"
+          if git diff --cached --quiet; then
+            echo "Žiadne nové zmeny na uloženie."
+          else
+            git commit -m "Update LIVE football data"
             git push
-          )
+          fi
