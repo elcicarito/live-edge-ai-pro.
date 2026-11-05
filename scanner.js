@@ -1126,13 +1126,15 @@
     addText(engine, "Výsledky signálov nie sú zárukou zisku.");
   }
 
-  function renderMatch(match, historyData, collectedAt, allowSignals) {
+  function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false) {
     const card = document.createElement("div");
 
     card.style.cssText =
       "background:#0d1929;padding:12px;margin:12px 0;border-radius:12px;border:1px solid #31445c;";
 
-    const minute = getDisplayedMinute(match, collectedAt);
+    const minute = staleMode
+      ? String(match.live_minute ?? "?").trim() || "?"
+      : getDisplayedMinute(match, collectedAt);
 
     // Hlavička zápasu a farebný stavový štítok.
     const header = document.createElement("div");
@@ -1160,7 +1162,9 @@
 
     header.appendChild(teams);
 
-    const statusBadge = getStatusBadge(match, minute);
+    const statusBadge = staleMode
+      ? { label: "ZASTARANÉ DÁTA – NIE LIVE", background: "#7f1d1d", border: "#ef4444" }
+      : getStatusBadge(match, minute);
 
     addBadge(
       header,
@@ -1171,9 +1175,20 @@
 
     card.appendChild(header);
 
+    if (staleMode) {
+      addSignalPanel(card, {
+        heading: "UPOZORNENIE",
+        title: "ZASTARANÉ DÁTA – NIE LIVE",
+        detail: "Toto je posledný uložený obraz zápasu. Aktuálny stav sa nepotvrdil; nepoužívaj ho na rozhodovanie ani stávky.",
+        background: "#450a0a",
+        border: "#ef4444",
+        titleColor: "#fca5a5"
+      });
+    }
+
     addText(
       card,
-      `${match.competition || "Futbal"} | ${minute === "HT" ? "Prestávka" : minute + ". minúta"}`
+      `${match.competition || "Futbal"} | ${minute === "HT" ? "Prestávka" : minute + ". minúta"} | meranie: ${collectedAt || "neznámy čas"}`
     );
 
     const quality = getDataQuality(match, collectedAt);
@@ -1269,9 +1284,9 @@
 
     if (!allowSignals) {
       addSignalPanel(card, {
-        heading: "LIVE SIGNÁL",
-        title: "ZBER DÁT NIE JE KOMPLETNÝ",
-        detail: "Nové signály sú momentálne zablokované.",
+        heading: staleMode ? "LIVE SIGNÁL" : "LIVE SIGNÁL",
+        title: staleMode ? "SIGNÁLY VYPNUTÉ – ZASTARANÉ DÁTA" : "ZBER DÁT NIE JE KOMPLETNÝ",
+        detail: staleMode ? "Z tohto záznamu sa nevytvára ani nevyhodnocuje žiadny LIVE signál." : "Nové signály sú momentálne zablokované.",
         background: "#292524",
         border: "#78716c",
         titleColor: "#d6d3d1"
@@ -1369,13 +1384,35 @@
           "Posledný zber je starší ako 7 minút. LIVE signály sú zablokované."
         );
 
-        addText(engine, "LIVE zápasy: 0");
-        renderSummary();
+        const staleRecords = Array.isArray(current.records) ? current.records : [];
+        const staleMatches = staleRecords
+          .map(record => ({
+            match: record.match,
+            collectedAt: record.collected_at || current.collected_at
+          }))
+          .filter(item => item.match && isLive(item.match));
 
-        addText(matchesEl, "Čakám na nový aktuálny zber LIVE zápasov.");
+        addText(engine, "LIVE zápasy: 0 – aktuálny feed nie je potvrdený");
+        addText(engine, `Posledné uložené zápasy: ${staleMatches.length}`);
+        addText(engine, "Zobrazenie je iba archívny náhľad. Žiadne signály, vyhodnocovanie ani aktualizácia skóre sa z neho nevykonáva.");
+
+        if (staleMatches.length) {
+          staleMatches.forEach(item => renderMatch(
+            item.match,
+            historyData,
+            item.collectedAt,
+            false,
+            true
+          ));
+        } else {
+          addText(matchesEl, "Nie sú dostupné ani posledné uložené LIVE zápasy.");
+        }
+
+        renderSummary();
+        if (signalArchive) renderServerSignalArchive(signalArchive);
 
         signalEl.textContent =
-          "NEAKTUÁLNE DÁTA – LIVE signály zablokované.";
+          `ZASTARANÉ DÁTA – NIE LIVE | Posledný zber: ${current.collected_at || "neznámy čas"} | Signály zablokované`;
 
         return;
       }
