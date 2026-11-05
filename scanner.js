@@ -16,6 +16,34 @@
   const signalEl = document.getElementById("signal");
   const matchArchiveEl = document.getElementById("match-archive");
   const matchArchiveCountEl = document.getElementById("match-archive-count");
+  const matchArchiveLeagueEl = document.getElementById("match-archive-league");
+  const matchArchiveDateEl = document.getElementById("match-archive-date");
+  const matchArchiveResetEl = document.getElementById("match-archive-reset");
+  let matchArchiveData = null;
+  let archiveLeagueFilter = "";
+  let archiveDateFilter = "";
+
+  if (matchArchiveLeagueEl) {
+    matchArchiveLeagueEl.addEventListener("change", () => {
+      archiveLeagueFilter = matchArchiveLeagueEl.value;
+      renderMatchArchive(matchArchiveData);
+    });
+  }
+  if (matchArchiveDateEl) {
+    matchArchiveDateEl.addEventListener("change", () => {
+      archiveDateFilter = matchArchiveDateEl.value;
+      renderMatchArchive(matchArchiveData);
+    });
+  }
+  if (matchArchiveResetEl) {
+    matchArchiveResetEl.addEventListener("click", () => {
+      archiveLeagueFilter = "";
+      archiveDateFilter = "";
+      if (matchArchiveLeagueEl) matchArchiveLeagueEl.value = "";
+      if (matchArchiveDateEl) matchArchiveDateEl.value = "";
+      renderMatchArchive(matchArchiveData);
+    });
+  }
 
   if (!matchesEl || !signalEl) {
     console.error("Chýbajú HTML elementy matches alebo signal.");
@@ -1117,6 +1145,7 @@
 
   function renderMatchArchive(data) {
     if (!matchArchiveEl) return;
+    matchArchiveData = data;
     matchArchiveEl.innerHTML = "";
 
     if (!data || typeof data !== "object") {
@@ -1140,6 +1169,52 @@
     }
 
     addText(matchArchiveEl, `Potvrdené výsledky: ${confirmed.length} | Ešte sa overuje: ${pending.length}`);
+
+    const leagues = [...new Set(confirmed
+      .map(item => {
+        const match = item?.final_match || item?.last_snapshot?.match || {};
+        return String(match.competition || match.league || "").trim();
+      })
+      .filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, "sk"));
+
+    if (matchArchiveLeagueEl) {
+      const existing = [...matchArchiveLeagueEl.options].map(option => option.value);
+      const desired = ["", ...leagues];
+      if (existing.length !== desired.length || existing.some((value, index) => value !== desired[index])) {
+        matchArchiveLeagueEl.innerHTML = "";
+        desired.forEach((league, index) => {
+          const option = document.createElement("option");
+          option.value = league;
+          option.textContent = index === 0 ? "Všetky ligy" : league;
+          matchArchiveLeagueEl.appendChild(option);
+        });
+      }
+      if (leagues.includes(archiveLeagueFilter)) {
+        matchArchiveLeagueEl.value = archiveLeagueFilter;
+      } else {
+        archiveLeagueFilter = "";
+        matchArchiveLeagueEl.value = "";
+      }
+    }
+
+    if (matchArchiveDateEl && matchArchiveDateEl.value !== archiveDateFilter) {
+      matchArchiveDateEl.value = archiveDateFilter;
+    }
+
+    const filtered = confirmed.filter(item => {
+      const match = item?.final_match || item?.last_snapshot?.match || {};
+      const league = String(match.competition || match.league || "").trim();
+      const stamp = item.finished_at || item.archived_at;
+      const date = stamp ? new Date(stamp) : null;
+      const localDate = date && !Number.isNaN(date.getTime())
+        ? [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-")
+        : "";
+      return (!archiveLeagueFilter || league === archiveLeagueFilter) &&
+        (!archiveDateFilter || localDate === archiveDateFilter);
+    });
+
+    addText(matchArchiveEl, `Zobrazené výsledky: ${filtered.length} z ${confirmed.length}`);
 
     function addMatchRow(parent, title, detail, color, competition = "") {
       const row = document.createElement("div");
@@ -1181,9 +1256,9 @@
         });
     }
 
-    if (confirmed.length) {
+    if (filtered.length) {
       addText(matchArchiveEl, "POTVRDENÉ KONEČNÉ VÝSLEDKY", "14px");
-      confirmed.forEach(item => {
+      filtered.forEach(item => {
         const match = item?.final_match || item?.last_snapshot?.match || {};
         addMatchRow(
           matchArchiveEl,
@@ -1193,6 +1268,8 @@
           match.competition || match.league || "KONEČNÝ VÝSLEDOK POTVRDENÝ"
         );
       });
+    } else if (confirmed.length) {
+      addText(matchArchiveEl, "Pre zvolenú ligu a dátum sa nenašli žiadne zápasy.");
     }
 
     if (olderUnconfirmed > 0) {
