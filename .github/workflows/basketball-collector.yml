@@ -122,8 +122,8 @@ jobs:
                 const at = html.indexOf(marker);
                 if (at < 0) continue;
                 const block = html.slice(at, at + 1400);
-                const homeMatch = block.match(/class=["']home-val["'][^>]*>\\s*(\\d+)/i);
-                const awayMatch = block.match(/class=["']away-val["'][^>]*>\\s*(\\d+)/i);
+                const homeMatch = block.match(/class=["']home-val["'][^>]*>\s*(\d+)/i);
+                const awayMatch = block.match(/class=["']away-val["'][^>]*>\s*(\d+)/i);
                 if (homeMatch && awayMatch) {
                   home[q - 1] = Number(homeMatch[1]);
                   away[q - 1] = Number(awayMatch[1]);
