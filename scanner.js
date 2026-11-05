@@ -1,15 +1,13 @@
+
 (() => {
-  const LATEST_URL = "./data/live-latest.json";
+  const CURRENT_URL = "./data/live-current.json";
   const HISTORY_URL = "./data/live-history.json";
   const SIGNAL_KEY = "live_edge_signals_v6";
 
   const MIN_GAP_MINUTES = 3;
   const MAX_GAP_MINUTES = 15;
 
-  // Collector pracuje každých 5 minút.
-  // Tolerancia umožňuje oneskorenie GitHub Actions.
   const MAX_DATA_AGE_MS = 7 * 60 * 1000;
-
   const SCAN_INTERVAL_MS = 10 * 1000;
 
   const matchesEl = document.getElementById("matches");
@@ -256,8 +254,13 @@
     if (!Array.isArray(historyData) || !id) return snapshots;
 
     historyData.forEach(batch => {
-      // Čiastočné zbery sa nepoužívajú na výpočet aktivity.
-      if (batch.data_status !== "complete") return;
+      // Použijeme aj kompletné zbery, pri ktorých bola
+      // archivácia pozastavená feed guardom.
+      const validCollection =
+        batch.collection_complete === true ||
+        batch.data_status === "complete";
+
+      if (!validCollection) return;
       if (!Array.isArray(batch.records)) return;
 
       batch.records.forEach(record => {
@@ -642,20 +645,20 @@
     scanning = true;
 
     try {
-      const [latest, historyData] = await Promise.all([
-        getJSON(LATEST_URL),
+      const [current, historyData] = await Promise.all([
+        getJSON(CURRENT_URL),
         getJSON(HISTORY_URL)
       ]);
 
-      const collectedTime = Date.parse(latest.collected_at || "");
+      const collectedTime = Date.parse(current.collected_at || "");
       const age = Date.now() - collectedTime;
 
       matchesEl.innerHTML = "";
       engine.innerHTML = "";
 
-      addText(engine, "SMART SIGNAL ENGINE v11", "18px");
-      addText(engine, `Zdroj: ${latest.source || "neznámy"}`);
-      addText(engine, `Dáta: ${latest.collected_at || "neznámy čas"}`);
+      addText(engine, "SMART SIGNAL ENGINE v14", "18px");
+      addText(engine, `Zdroj: ${current.source || "neznámy"}`);
+      addText(engine, `Dáta: ${current.collected_at || "neznámy čas"}`);
       addText(engine, `Posledná kontrola: ${new Date().toLocaleTimeString("sk-SK")}`);
 
       if (
@@ -680,16 +683,18 @@
         return;
       }
 
-      const dataStatus = latest.data_status || "complete";
-      const allowSignals = dataStatus === "complete";
+      const allowSignals =
+        current.collection_complete === true &&
+        current.data_status === "complete";
 
-      const records = Array.isArray(latest.records)
-        ? latest.records
+      const records = Array.isArray(current.records)
+        ? current.records
         : [];
 
       const matches = records
         .filter(record => {
           const recordTime = Date.parse(record.collected_at || "");
+
           return (
             Number.isFinite(recordTime) &&
             Date.now() - recordTime <= MAX_DATA_AGE_MS &&
@@ -698,7 +703,7 @@
         })
         .map(record => ({
           match: record.match,
-          collectedAt: record.collected_at || latest.collected_at
+          collectedAt: record.collected_at || current.collected_at
         }))
         .filter(item => isLive(item.match));
 
@@ -708,16 +713,24 @@
         settleSignals(actualMatches);
       }
 
-      addText(engine, `Stav zberu: ${dataStatus.toUpperCase()}`);
+      addText(engine, `Stav zberu: ${allowSignals ? "KOMPLETNÝ" : "NEÚPLNÝ"}`);
+      addText(engine, `Bezpečná archivácia: ${current.archive_safe ? "ÁNO" : "POZASTAVENÁ"}`);
       addText(engine, `Vek dát: ${Math.max(0, Math.round(age / 1000))} sekúnd`);
       addText(engine, `LIVE zápasy: ${matches.length}`);
-      addText(engine, `Obnovovanie stránky: každých ${SCAN_INTERVAL_MS / 1000} sekúnd`);
+      addText(engine, `Obnovovanie: každých ${SCAN_INTERVAL_MS / 1000} sekúnd`);
       addText(engine, `Povolený rozdiel meraní: ${MIN_GAP_MINUTES}–${MAX_GAP_MINUTES} min`);
 
       if (!allowSignals) {
         addText(
           engine,
-          "UPOZORNENIE: Čiastočný zber. Nové signály sú zablokované."
+          "UPOZORNENIE: Zber nie je kompletný. Nové signály sú zablokované."
+        );
+      }
+
+      if (current.feed_guard_warning) {
+        addText(
+          engine,
+          "FEED GUARD: Podozrivý pokles počtu zápasov. Archivácia je pozastavená."
         );
       }
 
@@ -748,7 +761,7 @@
       matchesEl.innerHTML = "";
       engine.innerHTML = "";
 
-      addText(engine, "SMART SIGNAL ENGINE v11");
+      addText(engine, "SMART SIGNAL ENGINE v14");
       addText(engine, "Nepodarilo sa načítať aktuálne LIVE dáta.");
       addText(engine, error.message);
 
