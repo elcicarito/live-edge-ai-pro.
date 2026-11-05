@@ -61,6 +61,82 @@
     return p;
   }
 
+  function addBadge(parent, label, background, border, color = "#ffffff") {
+    const badge = document.createElement("span");
+
+    badge.textContent = label;
+    badge.style.cssText = `
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:7px 11px;
+      margin:5px 0;
+      border-radius:8px;
+      background:${background};
+      border:1px solid ${border};
+      color:${color};
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:0.4px;
+      line-height:1.3;
+      box-shadow:0 2px 8px ${background}55;
+    `;
+
+    parent.appendChild(badge);
+    return badge;
+  }
+
+  function addSignalPanel(parent, options) {
+    const panel = document.createElement("div");
+
+    panel.style.cssText = `
+      margin-top:13px;
+      padding:14px;
+      border-radius:12px;
+      background:${options.background};
+      border:2px solid ${options.border};
+      color:#ffffff;
+      box-shadow:0 0 12px ${options.border}35;
+    `;
+
+    const heading = document.createElement("div");
+    heading.textContent = options.heading;
+    heading.style.cssText = `
+      font-size:16px;
+      font-weight:900;
+      margin-bottom:9px;
+      letter-spacing:0.3px;
+    `;
+
+    panel.appendChild(heading);
+
+    if (options.title) {
+      const title = document.createElement("div");
+      title.textContent = options.title;
+      title.style.cssText = `
+        font-size:19px;
+        font-weight:900;
+        color:${options.titleColor || "#ffffff"};
+        margin:7px 0;
+      `;
+      panel.appendChild(title);
+    }
+
+    if (options.detail) {
+      const detail = document.createElement("div");
+      detail.textContent = options.detail;
+      detail.style.cssText = `
+        font-size:14px;
+        line-height:1.5;
+        margin-top:5px;
+      `;
+      panel.appendChild(detail);
+    }
+
+    parent.appendChild(panel);
+    return panel;
+  }
+
   async function getJSON(url) {
     const response = await fetch(
       url + "?t=" + Date.now(),
@@ -129,6 +205,151 @@
       statusText.includes("extra time") ||
       statusText.includes("penalties")
     );
+  }
+
+  // Vizuálne označenie stavu zápasu.
+  // Nemení vyhodnocovanie ani generovanie signálov.
+  function getStatusBadge(match, minute) {
+    const status = getStatus(match);
+    const statusText = String(
+      match?.status_text || ""
+    ).toLowerCase().trim();
+
+    const combined = `${status} ${statusText}`
+      .replace(/[_-]/g, " ")
+      .toLowerCase();
+
+    const rawMinute = String(
+      match?.live_minute ?? ""
+    ).toLowerCase().trim();
+
+    const minuteLabel =
+      minute && minute !== "?" && minute !== "HT"
+        ? `${minute}′`
+        : "";
+
+    if (
+      combined.includes("penalt") ||
+      combined.includes("shootout")
+    ) {
+      return {
+        label: "● PENALTY",
+        background: "#991b1b",
+        border: "#ef4444"
+      };
+    }
+
+    if (
+      combined.includes("extra time") ||
+      combined.includes("extratime")
+    ) {
+      return {
+        label: minuteLabel
+          ? `PREDĹŽENIE · ${minuteLabel}`
+          : "PREDĹŽENIE",
+        background: "#6d28d9",
+        border: "#a78bfa"
+      };
+    }
+
+    if (
+      combined.includes("half time") ||
+      combined.includes("halftime") ||
+      combined.includes("break") ||
+      statusText === "ht" ||
+      status === "ht" ||
+      rawMinute === "ht"
+    ) {
+      return {
+        label: "● PRESTÁVKA · HT",
+        background: "#92400e",
+        border: "#f59e0b"
+      };
+    }
+
+    if (
+      combined.includes("1st half") ||
+      combined.includes("first half") ||
+      statusText === "1h" ||
+      status === "1h"
+    ) {
+      return {
+        label: minuteLabel
+          ? `● 1. POLČAS · ${minuteLabel}`
+          : "● 1. POLČAS",
+        background: "#065f46",
+        border: "#34d399"
+      };
+    }
+
+    if (
+      combined.includes("2nd half") ||
+      combined.includes("second half") ||
+      statusText === "2h" ||
+      status === "2h"
+    ) {
+      return {
+        label: minuteLabel
+          ? `● 2. POLČAS · ${minuteLabel}`
+          : "● 2. POLČAS",
+        background: "#065f46",
+        border: "#34d399"
+      };
+    }
+
+    if (
+      combined.includes("suspend") ||
+      combined.includes("interrupt")
+    ) {
+      return {
+        label: "● PRERUŠENÉ",
+        background: "#991b1b",
+        border: "#ef4444"
+      };
+    }
+
+    if (
+      combined.includes("postpon") ||
+      combined.includes("delay")
+    ) {
+      return {
+        label: "● ODLOŽENÉ",
+        background: "#92400e",
+        border: "#f59e0b"
+      };
+    }
+
+    if (
+      combined.includes("cancel")
+    ) {
+      return {
+        label: "● ZRUŠENÉ",
+        background: "#991b1b",
+        border: "#ef4444"
+      };
+    }
+
+    if (
+      combined.includes("finished") ||
+      combined.includes("ended") ||
+      combined.includes("full time") ||
+      statusText === "ft" ||
+      status === "ft"
+    ) {
+      return {
+        label: "FT · UKONČENÉ",
+        background: "#374151",
+        border: "#9ca3af"
+      };
+    }
+
+    return {
+      label: minuteLabel
+        ? `● LIVE · ${minuteLabel}`
+        : "● LIVE",
+      background: "#047857",
+      border: "#34d399"
+    };
   }
 
   function getDisplayedMinute(match, collectedAt) {
@@ -254,8 +475,6 @@
     if (!Array.isArray(historyData) || !id) return snapshots;
 
     historyData.forEach(batch => {
-      // Použijeme aj kompletné zbery, pri ktorých bola
-      // archivácia pozastavená feed guardom.
       const validCollection =
         batch.collection_complete === true ||
         batch.data_status === "complete";
@@ -543,19 +762,50 @@
     const card = document.createElement("div");
 
     card.style.cssText =
-      "background:#0d1929;padding:12px;margin:12px 0;border-radius:10px;border:1px solid #31445c;";
+      "background:#0d1929;padding:12px;margin:12px 0;border-radius:12px;border:1px solid #31445c;";
 
     const minute = getDisplayedMinute(match, collectedAt);
 
-    addText(
-      card,
-      `${match.home} ${Number(match.home_score || 0)} : ${Number(match.away_score || 0)} ${match.away}`,
-      "16px"
+    // Hlavička zápasu a farebný stavový štítok.
+    const header = document.createElement("div");
+
+    header.style.cssText = `
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+      gap:7px;
+      margin-bottom:9px;
+    `;
+
+    const teams = document.createElement("div");
+
+    teams.textContent =
+      `${match.home} ${Number(match.home_score || 0)} : ${Number(match.away_score || 0)} ${match.away}`;
+
+    teams.style.cssText = `
+      font-size:16px;
+      font-weight:800;
+      line-height:1.5;
+      flex:1 1 180px;
+    `;
+
+    header.appendChild(teams);
+
+    const statusBadge = getStatusBadge(match, minute);
+
+    addBadge(
+      header,
+      statusBadge.label,
+      statusBadge.background,
+      statusBadge.border
     );
+
+    card.appendChild(header);
 
     addText(
       card,
-      `${match.competition || "Futbal"} | ${minute}. minúta`
+      `${match.competition || "Futbal"} | ${minute === "HT" ? "Prestávka" : minute + ". minúta"}`
     );
 
     renderCurrentStats(card, match.stats || []);
@@ -611,11 +861,14 @@
     }
 
     if (!allowSignals) {
-      addText(
-        card,
-        "LIVE SIGNÁL: Zablokovaný – zber dát nie je kompletný.",
-        "15px"
-      );
+      addSignalPanel(card, {
+        heading: "LIVE SIGNÁL",
+        title: "ZBER DÁT NIE JE KOMPLETNÝ",
+        detail: "Nové signály sú momentálne zablokované.",
+        background: "#292524",
+        border: "#78716c",
+        titleColor: "#d6d3d1"
+      });
     } else {
       const signal = makeSignal(
         match,
@@ -625,15 +878,45 @@
       );
 
       if (signal) {
-        addText(
-          card,
-          `LIVE SIGNÁL: ${signal.team} – tlak ${signal.score}/100`,
-          "16px"
-        );
+        addSignalPanel(card, {
+          heading: "⚡ LIVE SIGNÁL – POTVRDENÝ",
+          title: signal.team,
+          detail:
+            `Strana: ${signal.side === "home" ? "Domáci" : "Hostia"} | ` +
+            `GOAL THREAT: ${signal.score}/100 | ` +
+            `Aktivita: ${signal.activity.toFixed(1)} za 10 min`,
+          background: "#123b2d",
+          border: "#39e6a5",
+          titleColor: "#39e6a5"
+        });
 
         recordSignal(match, signal);
+
+      } else if (
+        threat &&
+        Math.max(threat.home, threat.away) >= 55
+      ) {
+        const side = threat.home >= threat.away ? "Domáci" : "Hostia";
+        const score = Math.max(threat.home, threat.away);
+
+        addSignalPanel(card, {
+          heading: "⚠ ZVÝŠENÝ TLAK",
+          title: `${side} – ${score}/100`,
+          detail: "Zatiaľ nie sú splnené všetky podmienky pre LIVE signál.",
+          background: "#422b12",
+          border: "#f59e0b",
+          titleColor: "#fbbf24"
+        });
+
       } else {
-        addText(card, "LIVE SIGNÁL: Zatiaľ bez potvrdeného signálu.");
+        addSignalPanel(card, {
+          heading: "LIVE SIGNÁL",
+          title: "Zatiaľ bez potvrdeného signálu",
+          detail: "Systém naďalej sleduje vývoj zápasu.",
+          background: "#202b3b",
+          border: "#64748b",
+          titleColor: "#cbd5e1"
+        });
       }
     }
 
