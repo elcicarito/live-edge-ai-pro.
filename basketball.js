@@ -323,7 +323,7 @@
       heading.style.cssText = "font-size:12px;font-weight:800;color:#39e6a5;margin:12px 0 7px";
       predictorList.appendChild(heading);
       if (!open.length) {
-        const empty = document.createElement("p"); empty.textContent = "Momentálne nie je otvorená žiadna predikcia."; predictorList.appendChild(empty);
+        const empty = document.createElement("p"); empty.textContent = "Zatiaľ nie je dostupná predikcia. Vytvorí sa až pri LIVE zápase od Q2 do Q4, keď má daná liga aspoň 10 vlastných dokončených historických zápasov. Dáta z iných líg sa nepoužívajú."; predictorList.appendChild(empty);
       }
       open.slice(0,8).forEach(p => {
         const card = document.createElement("div");
