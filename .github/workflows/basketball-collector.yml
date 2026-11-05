@@ -279,7 +279,7 @@ jobs:
           const current = read(CURRENT, {});
           const archive = read(ARCHIVE, { matches: [] });
           const history = read(PREDICTIONS, { sport: "basketball", predictions: [] });
-          const predictions = Array.isArray(history.predictions) ? history.predictions : [];
+          const predictions = (Array.isArray(history.predictions) ? history.predictions : []).filter(p => p.model_version === 2);
           const keyOf = m => String(m.id || m.slug || m.url || [m.home, m.away, m.time].join("|"));
           const leagueOf = m => String(m.competition?.name || m.league?.name || m.competition || m.league || "Liga neznáma").trim();
           const qValue = (m, side, q) => {
@@ -290,7 +290,7 @@ jobs:
             const h = qValue(m, "home", q), a = qValue(m, "away", q);
             return h === null || a === null ? null : h + a;
           };
-          const complete = (m, q) => qTotal(m, q) !== null;
+          const complete = (m, q) => { const total = qTotal(m, q); return total !== null && total > 0; };
           const periodOf = m => {
             const s = String(m.status_text || m.period?.name || m.period || m.status || "").toLowerCase();
             const match = s.match(/(?:^|\b)([1-4])(?:st|nd|rd|th)?\s*(?:quarter|period|q)\b|\b(?:quarter|period|q)\s*([1-4])(?:\b|$)/);
@@ -339,6 +339,7 @@ jobs:
             const predicted = Math.round(historicalAverage * 0.65 + previousAverage * 0.35);
             predictions.push({
               id: matchKey + "::Q" + target,
+            model_version: 2,
               match_key: matchKey,
               home: m.home || m.home_name || "Domáci",
               away: m.away || m.away_name || "Hostia",
@@ -364,7 +365,7 @@ jobs:
           fs.writeFileSync(PREDICTIONS, JSON.stringify({
             sport: "basketball",
             updated_at: new Date().toISOString(),
-            model: "65% historický priemer cieľovej štvrtiny + 35% priemer predchádzajúcich štvrtín; bez kurzov",
+            model: "v2: iba zápasy so skutočnými výsledkami Q1–Q4; spoločné body oboch tímov; 65% historický priemer cieľovej štvrtiny + 35% priemer predchádzajúcich dokončených štvrtín; bez kurzov",
             complete_training_games: training.length,
             settled_this_run: settled,
             created_this_run: created,
