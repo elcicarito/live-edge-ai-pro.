@@ -2,6 +2,7 @@
 (() => {
   const CURRENT_URL = "./data/live-current.json";
   const HISTORY_URL = "./data/live-history.json";
+  const SIGNAL_ARCHIVE_URL = "./data/signal-archive.json";
   const SIGNAL_KEY = "live_edge_signals_v6";
 
   const MIN_GAP_MINUTES = 3;
@@ -747,6 +748,49 @@
     if (changed) saveSignals();
   }
 
+  function renderServerSignalArchive(data) {
+    const signals = Array.isArray(data?.signals) ? data.signals : [];
+    const wins = signals.filter(item => item.status === "WIN").length;
+    const losses = signals.filter(item => item.status === "LOSS").length;
+    const unresolved = signals.filter(item => item.status === "UNRESOLVED").length;
+    const open = signals.filter(item => item.status === "OPEN").length;
+    const evaluated = wins + losses;
+    const rate = evaluated ? Math.round(wins / evaluated * 100) : 0;
+
+    addText(engine, "TRVALÝ ARCHÍV SIGNÁLOV", "16px");
+    addText(engine, `Spolu: ${signals.length} | Výhry: ${wins} | Prehry: ${losses} | Otvorené: ${open} | Neoverené: ${unresolved}`);
+    addText(engine, `Úspešnosť vyhodnotených: ${rate}%`);
+    addText(engine, "Neoverené znamená, že zápas zmizol z LIVE feedu bez potvrdeného konečného výsledku. Nezapočítava sa ako prehra.");
+
+    const recent = [...signals].sort((a, b) =>
+      Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)
+    ).slice(0, 20);
+
+    recent.forEach(item => {
+      const statusLabels = {
+        WIN: "VÝHRA",
+        LOSS: "PREHRA",
+        OPEN: "OTVORENÝ",
+        UNRESOLVED: "NEOVERENÝ"
+      };
+      const label = statusLabels[item.status] || String(item.status || "NEZNÁMY");
+      const line = document.createElement("div");
+      line.style.cssText = "margin:8px 0;padding:10px;border-radius:9px;background:#0d1929;border:1px solid #31445c;";
+      const title = document.createElement("div");
+      title.textContent = `${item.home || "?"} ${item.startScore || ""} – ${item.away || "?"}`;
+      title.style.cssText = "font-weight:800;margin-bottom:5px;";
+      const detail = document.createElement("div");
+      detail.textContent = `${item.team || item.side || "Tím"} | ${label} | ${item.startMinute ?? "?"}. min${item.settledScore ? " | výsledok " + item.settledScore : ""}`;
+      detail.style.cssText = "font-size:13px;color:#cbd5e1;";
+      line.append(title, detail);
+      engine.appendChild(line);
+    });
+
+    if (!recent.length) {
+      addText(engine, "Zatiaľ nie sú uložené žiadne signály.");
+    }
+  }
+
   function renderSummary() {
     const wins = signalHistory.filter(s => s.status === "WIN").length;
     const losses = signalHistory.filter(s => s.status === "LOSS").length;
@@ -931,9 +975,13 @@
     scanning = true;
 
     try {
-      const [current, historyData] = await Promise.all([
+      const [current, historyData, signalArchive] = await Promise.all([
         getJSON(CURRENT_URL),
-        getJSON(HISTORY_URL)
+        getJSON(HISTORY_URL),
+        getJSON(SIGNAL_ARCHIVE_URL).catch(error => {
+          console.warn("Trvalý archív signálov nie je dostupný:", error);
+          return null;
+        })
       ]);
 
       const collectedTime = Date.parse(current.collected_at || "");
@@ -1037,6 +1085,8 @@
       });
 
       renderSummary();
+      if (signalArchive) renderServerSignalArchive(signalArchive);
+      else addText(engine, "Trvalý archív signálov sa nepodarilo načítať.");
 
       signalEl.textContent =
         `Aktualizované: ${new Date().toLocaleTimeString("sk-SK")} | LIVE: ${matches.length}`;
