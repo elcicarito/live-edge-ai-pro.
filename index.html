@@ -80,7 +80,7 @@ small{
   border-radius:9px;
   font-size:12px;
 }
-.sport-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.sport-tab{background:#1b2a3e;color:#d6e2f0;border:1px solid #3a4d67;padding:13px 8px;border-radius:10px;font-weight:800}.sport-tab.active{background:#39e6a5;color:#07120f;border-color:#39e6a5}#basketball-view .card{border:1px solid #263b55}</style>
+.sport-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.sport-tab{background:#1b2a3e;color:#d6e2f0;border:1px solid #3a4d67;padding:13px 8px;border-radius:10px;font-weight:800}.sport-tab.active{background:#39e6a5;color:#07120f;border-color:#39e6a5}.basketball-view-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.basketball-view-tab{background:#1b2a3e;color:#d6e2f0;border:1px solid #3a4d67;padding:12px 8px;border-radius:10px;font-weight:800}.basketball-view-tab.active{background:#39e6a5;color:#07120f;border-color:#39e6a5}#basketball-view .card{border:1px solid #263b55}</style>
 </head>
 
 <body>
@@ -141,16 +141,24 @@ OBNOVIŤ SKENER
 
 <div id="basketball-view" style="display:none">
   <p class="status">● LIVE BASKETBALL COLLECTOR · ZBER DÁT, BEZ SIGNÁLOV</p>
+  <div class="basketball-view-switch" role="group" aria-label="Zobrazenie basketbalu">
+    <button id="basketball-live-tab" class="basketball-view-tab active" type="button" aria-pressed="true">🏀 LIVE ZÁPASY</button>
+    <button id="basketball-archive-tab" class="basketball-view-tab" type="button" aria-pressed="false">🏁 ARCHÍV</button>
+  </div>
+  <section id="basketball-live-panel">
   <div class="card">
     <h3>🏀 LIVE basketbalové zápasy</h3>
     <p id="basketball-meta">Čakám na prvý zber basketbalových dát...</p>
     <div id="basketball-matches"><p>Ak momentálne neprebieha žiadny zápas, zobrazí sa tu informácia o poslednom zbere.</p></div>
   </div>
+  </section>
+  <section id="basketball-archive-panel" style="display:none">
   <div class="card">
     <h3>🏁 ARCHÍV BASKETBALU</h3>
     <p id="basketball-archive-meta">Archív sa pripravuje...</p>
     <div id="basketball-archive"><p>Po prvom zbere ukončených zápasov sa tu zobrazia výsledky.</p></div>
   </div>
+  </section>
   <div class="card">
     <h3>ℹ️ Basketbalový zber</h3>
     <p>Táto časť zatiaľ iba zbiera a zobrazuje zápasy a skóre. Nevytvára signály a nijako neovplyvňuje futbalový systém.</p>
