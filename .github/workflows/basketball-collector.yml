@@ -75,25 +75,33 @@ jobs:
           async function main() {
             const started = new Date().toISOString();
             console.log("LIVE EDGE BASKETBALL COLLECTOR");
-            // Read-only diagnostic: check whether the legacy fixtures API also serves basketball.
-            try {
-              const probeUrl = "https://sportscore.com/api/v1/fixtures/?sport=basketball&status=live&limit=50&_probe=" + Date.now();
-              const probeResponse = await fetch(probeUrl, {
-                headers: { "Accept": "application/json", "Cache-Control": "no-cache" },
-                cache: "no-store",
-                signal: AbortSignal.timeout(12000)
-              });
-              console.log("LEGACY API basketball HTTP:", probeResponse.status);
-              if (probeResponse.ok) {
-                const probePayload = await probeResponse.json();
-                const probeMatches = Array.isArray(probePayload.matches) ? probePayload.matches : [];
-                const probeStatuses = [...new Set(probeMatches.map(statusOf).filter(Boolean))];
-                console.log("LEGACY API basketball keys:", Object.keys(probePayload).join(", "));
-                console.log("LEGACY API basketball matches:", probeMatches.length);
-                console.log("LEGACY API basketball statuses:", probeStatuses.join(", ") || "none");
+            // Read-only diagnostics: fixtures endpoint is documented as date-scoped;
+            // probe today's LIVE basketball and the REST matches alias without changing saved data.
+            const todayUTC = new Date().toISOString().slice(0, 10);
+            const probes = [
+              ["fixtures-live-today", "https://sportscore.com/api/v1/fixtures/?sport=basketball&date=" + todayUTC + "&status=live&limit=50"],
+              ["matches-alias", "https://sportscore.com/api/v1/matches/?sport=basketball&limit=50"]
+            ];
+            for (const [label, baseUrl] of probes) {
+              try {
+                const probeUrl = baseUrl + (baseUrl.includes("?") ? "&" : "?") + "_probe=" + Date.now();
+                const probeResponse = await fetch(probeUrl, {
+                  headers: { "Accept": "application/json", "Cache-Control": "no-cache" },
+                  cache: "no-store",
+                  signal: AbortSignal.timeout(12000)
+                });
+                console.log("LEGACY API " + label + " HTTP:", probeResponse.status);
+                if (probeResponse.ok) {
+                  const probePayload = await probeResponse.json();
+                  const probeMatches = Array.isArray(probePayload.matches) ? probePayload.matches : [];
+                  const probeStatuses = [...new Set(probeMatches.map(statusOf).filter(Boolean))];
+                  console.log("LEGACY API " + label + " keys:", Object.keys(probePayload).join(", "));
+                  console.log("LEGACY API " + label + " matches:", probeMatches.length);
+                  console.log("LEGACY API " + label + " statuses:", probeStatuses.join(", ") || "none");
+                }
+              } catch (probeError) {
+                console.log("LEGACY API " + label + " error:", probeError.message);
               }
-            } catch (probeError) {
-              console.log("LEGACY API basketball probe error:", probeError.message);
             }
             const payload = await getJSON(BASE + "/matches/?sport=basketball&limit=50");
             if (!payload || !Array.isArray(payload.matches)) {
