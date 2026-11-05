@@ -723,29 +723,48 @@
 
       if (!match) return;
 
-      const goals = signal.side === "home"
-        ? Number(match.home_score || 0)
-        : Number(match.away_score || 0);
-
+      const rawGoals = signal.side === "home"
+        ? match.home_score
+        : match.away_score;
+      const goals = Number(rawGoals);
+      const startGoals = Number(signal.startGoals);
       const minute = Number(match.live_minute);
+      const homeScore = Number(match.home_score);
+      const awayScore = Number(match.away_score);
       const status = (
         getStatus(match) + " " + String(match.status_text || "")
       ).toLowerCase();
 
-      if (goals > signal.startGoals) {
-        signal.status = "WIN";
+      if (
+        rawGoals === null ||
+        rawGoals === undefined ||
+        !Number.isFinite(goals) ||
+        !Number.isFinite(startGoals) ||
+        !Number.isFinite(homeScore) ||
+        !Number.isFinite(awayScore)
+      ) {
+        return;
+      }
+
+      if (goals > startGoals) {
+        signal.status = Number.isFinite(minute) && minute <= Number(signal.deadlineMinute)
+          ? "WIN"
+          : "UNRESOLVED";
         signal.settledAt = new Date().toISOString();
         signal.settledMinute = Number.isFinite(minute) ? minute : null;
-        signal.settledScore = String(Number(match.home_score || 0)) + ":" + String(Number(match.away_score || 0));
+        signal.settledScore = String(homeScore) + ":" + String(awayScore);
+        if (signal.status === "UNRESOLVED") {
+          signal.settlementNote = "Gól bol prvýkrát zaznamenaný po limite; presný čas gólu nie je potvrdený.";
+        }
         changed = true;
       } else if (
-        (Number.isFinite(minute) && minute >= signal.deadlineMinute) ||
+        (Number.isFinite(minute) && minute >= Number(signal.deadlineMinute)) ||
         status.includes("finished")
       ) {
         signal.status = "LOSS";
         signal.settledAt = new Date().toISOString();
         signal.settledMinute = Number.isFinite(minute) ? minute : null;
-        signal.settledScore = String(Number(match.home_score || 0)) + ":" + String(Number(match.away_score || 0));
+        signal.settledScore = String(homeScore) + ":" + String(awayScore);
         changed = true;
       }
     });
@@ -776,8 +795,8 @@
       if (!item || !item.matchId) return;
       const key = signalKey(item);
       const previous = merged.get(key);
-      const previousSettled = previous && ["WIN", "LOSS"].includes(previous.status);
-      const serverSettled = ["WIN", "LOSS"].includes(item.status);
+      const previousSettled = previous && ["WIN", "LOSS", "UNRESOLVED"].includes(previous.status);
+      const serverSettled = ["WIN", "LOSS", "UNRESOLVED"].includes(item.status);
 
       // Serverové údaje doplnia miestny záznam; už vyhodnotený výsledok
       // sa nestratí, ak druhý zdroj ešte stále uvádza OPEN.
