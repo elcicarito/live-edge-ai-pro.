@@ -1069,11 +1069,26 @@ jobs:
                 }
               ];
 
-              return candidates.find(item =>
+              const selected = candidates.find(item =>
                 item.score >= 65 &&
                 item.activity >= 4 &&
                 item.difference >= 3
-              ) || null;
+              );
+              if (!selected) return null;
+
+              const momentumDiff = Math.abs(threat.home - threat.away);
+              return {
+                ...selected,
+                pressureHome: pressure.home,
+                pressureAway: pressure.away,
+                activityHome: Number(snapshot.homeActivityRate.toFixed(1)),
+                activityAway: Number(snapshot.awayActivityRate.toFixed(1)),
+                threatHome: threat.home,
+                threatAway: threat.away,
+                momentumSide: threat.home >= threat.away ? "home" : "away",
+                momentumDiff,
+                momentumStrength: momentumDiff >= 20 ? "strong" : momentumDiff >= 10 ? "medium" : "slight"
+              };
             }
 
             const signalNow = new Date().toISOString();
@@ -1166,6 +1181,17 @@ jobs:
                   deadlineMinute: Math.min(90, minute + 15),
                   goalThreat: candidate.score,
                   activityRate: Number(candidate.activity.toFixed(1)),
+                  // Momentum snapshots are stored for later statistical analysis only;
+                  // they do not change the green signal trigger conditions.
+                  pressureHome: candidate.pressureHome,
+                  pressureAway: candidate.pressureAway,
+                  activityHome: candidate.activityHome,
+                  activityAway: candidate.activityAway,
+                  threatHome: candidate.threatHome,
+                  threatAway: candidate.threatAway,
+                  momentumSide: candidate.momentumSide,
+                  momentumDiff: candidate.momentumDiff,
+                  momentumStrength: candidate.momentumStrength,
                   createdAt: record.collected_at || signalNow,
                   status: "OPEN",
                   startScore: `${Number(match.home_score || 0)}:${Number(match.away_score || 0)}`
