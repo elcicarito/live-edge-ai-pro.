@@ -892,7 +892,9 @@ jobs:
             // Frontendový pracovný buffer ostáva na 288 záznamoch (približne 24 h),
             // aby sa zbytočne nezväčšovalo každé načítanie skenera.
             const historyCutoff = Date.now() - HISTORY_RETENTION_MS;
-            const history = fs.readFileSync(HISTORY_PATH, "utf8")
+            const history = (fs.existsSync(HISTORY_PATH)
+              ? fs.readFileSync(HISTORY_PATH, "utf8")
+              : "")
               .split("\n")
               .filter(Boolean)
               .map(line => {
