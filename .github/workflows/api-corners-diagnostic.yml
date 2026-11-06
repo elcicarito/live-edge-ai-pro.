@@ -54,7 +54,7 @@ jobs:
                     const scriptResponse = await fetch(scriptUrl);
                     const scriptBody = await scriptResponse.text();
                     const hits = [...scriptBody.matchAll(/.{0,160}(?:corner|corners|corner.?kick).{0,240}/gi)].slice(0, 25).map(m => m[0]);
-                    const apiRefs = [...new Set([...scriptBody.matchAll(/(?:https?:\\/\\/[^"'\\s]+|\\/api\\/[^"'\\s]+)/gi)].map(m => m[0]))].slice(0, 30);
+                              const apiRefs = [...new Set(scriptBody.match(/https?:\/\/[^"'\s]+|\/api\/[^"'\s]+/gi) || [])].slice(0, 30);
                     report.tracker_scripts.push({ url: scriptUrl, status: scriptResponse.status, bytes: scriptBody.length, corner_hits: hits, api_refs: apiRefs });
                   } catch (error) {
                     report.tracker_scripts.push({ url: scriptUrl, error: String(error) });
