@@ -72,7 +72,7 @@ for (const line of raw.split(/\r?\n/)) {
 }
 
 const minuteTypes = new Map(), eventTimeTypes = new Map(), reasonCounts = new Map();
-const minuteValues = [], eventMinuteValues = [], goalEventsSamples = [], matchRows = [];
+const minuteValues = [], eventMinuteValues = [], goalEventsSamples = [], matchRows = [], allLabeled = [];
 const labelCounts = { positive: 0, negative: 0, ambiguous: 0, no_event_list: 0, invalid_final_score: 0 };
 let totalSnapshots = 0, parsedSnapshotMinutes = 0, parsedGoalTimes = 0, totalGoals = 0;
 let matchesWithEvents = 0, matchesWithCompleteGoalTimeline = 0, matchesWithScoreTimelineAgreement = 0;
@@ -98,7 +98,7 @@ for (const [id, x] of matches) {
       raw_time: g.raw, parsed_minute: g.minute, time_field: g.field
     });
   }
-  const allGoalTimesValid = goals.length > 0 && goalRecords.every(g => g.minute !== null);
+  const allGoalTimesValid = goalRecords.every(g => g.minute !== null);
   const goalCountAgrees = finalOK && goals.length === finalGoalTotal;
   const timelineComplete = events.length > 0 && finalOK && allGoalTimesValid && goalCountAgrees;
   if (timelineComplete) matchesWithCompleteGoalTimeline++;
