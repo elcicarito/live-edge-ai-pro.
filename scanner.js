@@ -1766,6 +1766,15 @@
       const scoreline = document.createElement("div");
       scoreline.textContent = "Pri signále " + (item.startScore || "?") + "  ·  " + (item.startMinute ?? "?") + ". min  ·  " + (item.team || (item.side === "home" ? "Domáci" : "Hostia"));
       scoreline.style.cssText = "font-size:11px;color:#cbd5e1;margin-top:6px;";
+      const quality = document.createElement("div");
+      const hasQuality = item.qualityScoreVersion === "ai-quality-v1" &&
+        Number.isFinite(Number(item.qualityScore));
+      quality.textContent = hasQuality
+        ? "AI QUALITY SCORE: " + Number(item.qualityScore) + "/100"
+        : "AI QUALITY SCORE: pri vzniku nebolo uložené";
+      quality.style.cssText = "font-size:10px;font-weight:800;color:" +
+        (hasQuality ? (Number(item.qualityScore) >= 80 ? "#4ade80" : Number(item.qualityScore) >= 65 ? "#fbbf24" : "#cbd5e1") : "#94a3b8") +
+        ";margin-top:5px;";
       const outcome = document.createElement("div");
       outcome.textContent = item.settledScore
         ? "Konečné vyhodnotenie: " + item.settledScore + (item.settledMinute != null ? " · " + item.settledMinute + ". min" : "")
@@ -1784,7 +1793,7 @@
       const extra = document.createElement("div");
       extra.textContent = momentumDetail;
       extra.style.cssText = "font-size:10px;color:#94a3b8;margin-top:6px;line-height:1.4;";
-      card.append(top, scoreline, outcome, extra);
+      card.append(top, scoreline, quality, outcome, extra);
       history.appendChild(card);
     });
 
