@@ -1718,13 +1718,13 @@
     const categoryMap = new Map();
     let observedMatches = 0;
     let totalCategoryMatches = 0;
-    for (const labels of matches.values()) {
+    for (const [matchId, labels] of matches.entries()) {
       if (!labels.size) continue;
       observedMatches++;
       totalCategoryMatches += labels.size;
       for (const label of labels) {
         if (!categoryMap.has(label)) categoryMap.set(label, new Set());
-        categoryMap.get(label).add([...matches.entries()].find(([, set]) => set === labels)?.[0]);
+        categoryMap.get(label).add(matchId);
       }
     }
     const categories = [...categoryMap.entries()]
@@ -2875,6 +2875,7 @@
 
       renderMatchArchive(matchArchive);
       renderSystemStats(current, signalArchive, matchArchive);
+      renderApiDataQuality(current, matchArchive, matchHistoryData);
 
       signalEl.textContent =
         `Aktualizované: ${new Date().toLocaleTimeString("sk-SK")} | LIVE: ${matches.length}`;
