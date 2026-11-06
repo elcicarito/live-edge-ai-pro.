@@ -1953,7 +1953,7 @@
             const home = stat?.home ?? "—";
             const away = stat?.away ?? "—";
             const extras = Object.entries(stat || {})
-              .filter(([key]) => !["label", "name", "home", "away", "suffix"].includes(key))
+              .filter(([key]) => !["label", "name", "home", "away", "suffix", "home_pct", "away_pct"].includes(key))
               .map(([key, value]) => key + ": " + (typeof value === "object" ? JSON.stringify(value) : String(value)));
             line.textContent = `${label}: ${home}${unit} – ${away}${unit}${extras.length ? " | " + extras.join(" | ") : ""}`;
             line.style.cssText = "padding:5px 0;border-bottom:1px solid #1d2b3d;font-size:11px;color:#d1dbea;overflow-wrap:anywhere;";
