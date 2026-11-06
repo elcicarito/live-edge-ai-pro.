@@ -3121,6 +3121,76 @@
           ? archivedDetail.final_match.stats
           : Array.isArray(match.stats) ? match.stats : [];
 
+        // Súhrn celého zápasu sa tvorí z uložených časových snímok a finálnych API štatistík.
+        // Neznáme/nezaznamenané hodnoty ostávajú nedostupné, nikdy sa nedopĺňajú nulou.
+        const matchSummary = document.createElement("details");
+        matchSummary.style.cssText = "margin:0 0 9px 0;padding:10px 12px;background:#101f30;border:1px solid #36506b;border-radius:10px;";
+        const matchSummaryTitle = document.createElement("summary");
+        matchSummaryTitle.textContent = "📈 CELKOVÉ ZHRNUTIE ZÁPASU";
+        matchSummaryTitle.style.cssText = "cursor:pointer;color:#a5d8ff;font-size:12px;font-weight:900;";
+        matchSummary.appendChild(matchSummaryTitle);
+        const summaryBody = document.createElement("div");
+        summaryBody.style.cssText = "font-size:11px;color:#d1dbea;line-height:1.65;margin-top:8px;";
+        const summaryLine = (label, value) => {
+          const line = document.createElement("div");
+          line.textContent = label + ": " + value;
+          summaryBody.appendChild(line);
+        };
+        const orderedSnapshots = snapshots.slice().filter(snapshot =>
+          snapshot && (snapshot.raw_stats || snapshot.raw_match?.stats || snapshot.stats)
+        ).sort((a,b) => Date.parse(a.collected_at || 0) - Date.parse(b.collected_at || 0));
+        const readPair = (stats, aliases) => {
+          if (!Array.isArray(stats)) return null;
+          const wanted = aliases.map(x => x.toLowerCase());
+          const item = stats.find(stat => wanted.includes(String(stat?.label || stat?.name || "").trim().toLowerCase()));
+          if (!item || item.home == null || item.away == null) return null;
+          const home = Number(String(item.home).replace("%","").replace(",",".")); 
+          const away = Number(String(item.away).replace("%","").replace(",",".")); 
+          return Number.isFinite(home) && Number.isFinite(away) ? {home,away} : null;
+        };
+        const pressureSamples = orderedSnapshots.map(snapshot => {
+          const stats = snapshot.raw_stats || snapshot.raw_match?.stats || snapshot.stats || [];
+          const sot = readPair(stats, ["shots on target"]);
+          const attacks = readPair(stats, ["dangerous attacks"]);
+          const possession = readPair(stats, ["possession","ball possession"]);
+          const parts = [];
+          if (sot && sot.home + sot.away > 0) parts.push({pair:sot,weight:0.4});
+          if (attacks && attacks.home + attacks.away > 0) parts.push({pair:attacks,weight:0.5});
+          if (possession && possession.home + possession.away > 0) parts.push({pair:possession,weight:0.1});
+          if (!parts.length) return null;
+          const weight = parts.reduce((sum,part)=>sum+part.weight,0);
+          const home = parts.reduce((sum,part)=>sum+(part.pair.home/(part.pair.home+part.pair.away||1))*part.weight,0)/weight*100;
+          return {home,away:100-home,minute:Number(snapshot.minute),sot,attacks};
+        }).filter(Boolean);
+        const validPressure = pressureSamples.filter(x => Number.isFinite(x.home) && Number.isFinite(x.away));
+        if (validPressure.length >= 3) {
+          const avgHome = validPressure.reduce((sum,x)=>sum+x.home,0)/validPressure.length;
+          const avgAway = 100-avgHome;
+          const first = validPressure[0], last = validPressure[validPressure.length-1];
+          const leader = Math.abs(avgHome-avgAway) < 8 ? "bez jasnej prevahy" : avgHome > avgAway ? (match.home || "Domáci") : (match.away || "Hostia");
+          summaryLine("Priemerná prevaha za zachytené merania", (match.home || "Domáci") + " " + Math.round(avgHome) + "/100 · " + (match.away || "Hostia") + " " + Math.round(avgAway) + "/100");
+          summaryLine("Celkový obraz", leader);
+          summaryLine("Zmena tlaku od prvého po posledné meranie", (first.home-first.away >= 0 ? "+" : "") + Math.round((last.home-last.away)-(first.home-first.away)) + " bodov v prospech domácich");
+          summaryLine("Rozsah sledovania", (validPressure[0].minute ?? "?") + ".–" + (validPressure[validPressure.length-1].minute ?? "?") + ". min · " + validPressure.length + " platných meraní");
+        } else {
+          summaryLine("Vývoj prevahy", "Nedostatok platných meraní na spoľahlivé zhrnutie momenta.");
+        }
+        const finalSot = readPair(rawFinalStats, ["shots on target"]);
+        const finalShots = readPair(rawFinalStats, ["shots off target"]);
+        const finalPossession = readPair(rawFinalStats, ["possession","ball possession"]);
+        const finalCorners = readPair(rawFinalStats, ["corners","corner kicks"]);
+        if (finalPossession) summaryLine("Držanie lopty", finalPossession.home + "% – " + finalPossession.away + "%");
+        if (finalSot) summaryLine("Strely na bránu", finalSot.home + " – " + finalSot.away);
+        if (finalShots) summaryLine("Strely mimo bránu", finalShots.home + " – " + finalShots.away);
+        if (finalCorners) summaryLine("Rohy", finalCorners.home + " – " + finalCorners.away);
+        summaryLine("Konečný výsledok", item.final_score || "nepotvrdený");
+        const summaryNote = document.createElement("div");
+        summaryNote.textContent = "Zhrnutie vychádza iba z dostupných LIVE snímok a finálnych štatistík API. Nezaznamenané úseky zápasu nemožno spätne rekonštruovať; pri starších zápasoch môže byť analýza čiastočná.";
+        summaryNote.style.cssText = "font-size:9px;color:#94a3b8;margin-top:7px;";
+        summaryBody.appendChild(summaryNote);
+        matchSummary.appendChild(summaryBody);
+        matchArchiveEl.appendChild(matchSummary);
+
         const details = document.createElement("details");
         details.style.cssText = "margin:0 0 12px 0;padding:10px 12px;background:#0c1726;border:1px solid #2b3c52;border-radius:10px;";
         const summary = document.createElement("summary");
