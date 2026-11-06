@@ -2511,6 +2511,66 @@
     qualityNote.style.cssText = "font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.45;";
     systemStatsEl.appendChild(qualityNote);
 
+    // AI FILTER ENGINE v2: porovnáva vopred určené profily iba z
+    // uložených signálových polí. Každý zápas sa započíta raz na profil.
+    const filterHeading = document.createElement("div");
+    filterHeading.textContent = "AI FILTER ENGINE v2 · TEST PROFILOV";
+    filterHeading.style.cssText = "font-size:13px;font-weight:900;margin:18px 0 8px;color:#dbeafe;";
+    systemStatsEl.appendChild(filterHeading);
+    const filterProfiles = [
+      { label: "Základ · Quality ≥65", test: item => Number(item.qualityScore) >= 65 },
+      { label: "Vysoká kvalita · Quality ≥80", test: item => Number(item.qualityScore) >= 80 },
+      { label: "Kvalita + aktivita ≥6", test: item => Number(item.qualityScore) >= 65 && Number(item.activityRate) >= 6 },
+      { label: "Kvalita + GOAL THREAT ≥75", test: item => Number(item.qualityScore) >= 65 && Number(item.goalThreat) >= 75 },
+      { label: "Kvalita + aktivita ≥6 + THREAT ≥75", test: item =>
+        Number(item.qualityScore) >= 65 && Number(item.activityRate) >= 6 && Number(item.goalThreat) >= 75 }
+    ];
+    const filterGrid = document.createElement("div");
+    filterGrid.style.cssText = "display:grid;grid-template-columns:1fr;gap:7px;";
+    systemStatsEl.appendChild(filterGrid);
+    filterProfiles.forEach(profile => {
+      const eligible = qualitySignals.filter(item =>
+        Number.isFinite(Number(item.activityRate)) &&
+        Number.isFinite(Number(item.goalThreat)) &&
+        profile.test(item)
+      );
+      const byMatch = new Map();
+      eligible.forEach((item, index) => {
+        const rawId = item?.matchId;
+        const key = rawId !== null && rawId !== undefined && String(rawId).trim()
+          ? String(rawId)
+          : "__missing_profile_match_id__" + index;
+        const prior = byMatch.get(key);
+        const time = Date.parse(item?.createdAt || "");
+        const priorTime = Date.parse(prior?.createdAt || "");
+        if (!prior || (Number.isFinite(time) && (!Number.isFinite(priorTime) || time < priorTime))) {
+          byMatch.set(key, item);
+        }
+      });
+      const cohort = [...byMatch.values()];
+      const w = cohort.filter(item => item.status === "WIN").length;
+      const l = cohort.filter(item => item.status === "LOSS").length;
+      const o = cohort.filter(item => item.status === "OPEN").length;
+      const u = cohort.filter(item => item.status === "UNRESOLVED").length;
+      const settled = w + l;
+      const rate = settled ? Math.round(w / settled * 100) + "%" : "Zatiaľ bez výsledkov";
+      const row = document.createElement("div");
+      row.style.cssText = "padding:10px;border:1px solid #35465e;border-radius:9px;background:#101b2b;";
+      const title = document.createElement("div");
+      title.textContent = profile.label;
+      title.style.cssText = "font-size:12px;font-weight:900;color:#fff;";
+      const detail = document.createElement("div");
+      detail.textContent = cohort.length + " unikátnych zápasov · WIN " + w + " / LOSS " + l +
+        " · úspešnosť " + rate + " · OPEN " + o + " · UNRESOLVED " + u;
+      detail.style.cssText = "font-size:11px;color:#b7c5d6;margin-top:5px;line-height:1.45;";
+      row.append(title, detail);
+      filterGrid.appendChild(row);
+    });
+    const filterNote = document.createElement("div");
+    filterNote.textContent = "Testovacie profily nie sú aktívne stávkové filtre. Porovnanie používa iba signály s uloženým Quality Score, aktivitou a GOAL THREAT; v každom profile sa počíta najviac jeden najskorší signál na zápas. Malá vzorka a úspešnosť bez kurzov nepreukazujú kladné ROI.";
+    filterNote.style.cssText = "font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.45;";
+    systemStatsEl.appendChild(filterNote);
+
     addText(systemStatsEl, "Posledný kompletný zber: " +
       (complete ? fmt(collectedAt) : "aktuálny snapshot nie je potvrdený"));
     addText(systemStatsEl, "Vek posledných dát: " + ageLabel + " | Dĺžka posledného behu: " + runDuration);
