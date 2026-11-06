@@ -38,8 +38,18 @@ jobs:
             };
             let mainBody='';
             for(const url of assets){const body=await scan(url);if(url.includes('/assets/index.'))mainBody=body;}
-            const chunks=[...new Set([...mainBody.matchAll(/import\\(["']([^"']+\\.js)["']\\)/g)].map(m=>m[1]))];
-            for(const chunk of chunks){const url=new URL(chunk,base+'/assets/').href;await scan(url,'chunk-'+chunk.split('/').pop());}
+            const seen=new Set(assets);
+            const queue=[...new Set([...mainBody.matchAll(/import\\(["']([^"']+)["']\\)/g)].map(m=>m[1]))];
+            let depth=0;
+            while(queue.length&&depth<4){
+              const batch=queue.splice(0,queue.length);depth++;
+              for(const chunk of batch){
+                if(!chunk||chunk.startsWith('data:')||chunk.endsWith('.css'))continue;
+                const url=new URL(chunk,base+'/assets/').href;if(seen.has(url))continue;seen.add(url);
+                const body=await scan(url,'chunk-'+chunk.split('/').pop());
+                for(const m of body.matchAll(/import\\(["']([^"']+)["']\\)/g))if(!seen.has(new URL(m[1],url).href))queue.push(new URL(m[1],url).href);
+              }
+            }
             const result={fixture:{home:fx.home,away:fx.away,slug,id,profile},page_status:page.status,assets,bundles};
             fs.writeFileSync('diagnostic/tracker-runtime.json',JSON.stringify(result,null,2));
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,['# Tracker runtime source trace','Fixture: '+fx.home+' - '+fx.away,'Tracker page HTTP: '+page.status,'JS assets: '+assets.length,...bundles.map(x=>x.url+' '+x.status+' '+x.bytes+' bytes'),'Search contexts saved in artifact.'].join('\n')+'\n');
