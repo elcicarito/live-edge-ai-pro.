@@ -60,6 +60,11 @@ jobs:
           fs.writeFileSync(path.join(O,"live-edge-archive-audit.md"),md);
           console.log("LIVE EDGE ARCHIVE AUDIT",JSON.stringify({matches:ids.size,snapshots:report.snapshots,final_results:report.final_results,stat_categories:categories},null,2));
           NODE
+      - name: Read-only temporal audit for next-10-minute goal labels
+        shell: bash
+        run: |
+          node scripts/archive-temporal-audit.js
+
       - name: Upload audit report
         uses: actions/upload-artifact@v4
         with:
@@ -67,10 +72,5 @@ jobs:
           path: audit-output/
           if-no-files-found: error
           retention-days: 14
-
-      - name: Read-only temporal audit for next-10-minute goal labels
-        shell: bash
-        run: |
-          node scripts/archive-temporal-audit.js
 
 # Re-run after temporal audit parser correction.
