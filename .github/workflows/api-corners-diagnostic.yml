@@ -39,6 +39,36 @@ jobs:
               }
             }
             fs.writeFileSync('diagnostic/endpoints.json', JSON.stringify(report, null, 2));
+            const matches = [];
+            function scan(value, path, depth = 0) {
+              if (depth > 12 || value == null) return;
+              if (Array.isArray(value)) {
+                value.forEach((item, i) => scan(item, path + '[' + i + ']', depth + 1));
+                return;
+              }
+              if (typeof value === 'object') {
+                for (const [key, item] of Object.entries(value)) {
+                  const next = path ? path + '.' + key : key;
+                  if (/corner|corners|corner.?kick/i.test(key)) {
+                    matches.push(next + ': ' + JSON.stringify(item).slice(0, 500));
+                  }
+                  scan(item, next, depth + 1);
+                }
+              }
+            }
+            for (const [name, result] of Object.entries(report)) scan(result.body, name);
+            const summary = [
+              '# SportScore API – diagnostika rohov',
+              '',
+              ...Object.entries(report).map(([name, result]) => '- **' + name + '**: HTTP ' + (result.status ?? 'ERROR') + (result.error ? ' – ' + result.error : '')),
+              '',
+              '## Nájdené polia súvisiace s rohmi',
+              ...(matches.length ? matches.map(x => '- `' + x + '`') : ['- Nenašli sa žiadne polia s názvom obsahujúcim corner/corners/corner kick.']),
+              '',
+              'Kompletné odpovede sú uložené aj v artefakte `sportscore-api-diagnostic`.'
+            ].join('\\n');
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + '\\n');
+            console.log(summary);
             for (const [name, result] of Object.entries(report)) {
               console.log(name, 'status=', result.status ?? 'ERROR');
               const text = JSON.stringify(result.body ?? result.error ?? '');
