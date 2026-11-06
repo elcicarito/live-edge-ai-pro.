@@ -52,7 +52,8 @@ jobs:
             page.on('response',async r=>{
               const u=r.url();
               if(!/thesports01|leisu|live-widgets/i.test(u))return;
-              const row={status:r.status(),url:redactUrl(u),type:r.headers()['content-type']||''};
+              const headers=r.headers();
+              const row={status:r.status(),url:redactUrl(u),type:headers['content-type']||'',contentLength:headers['content-length']||null,contentEncoding:headers['content-encoding']||null,server:headers['server']||null};
               if(/json/i.test(row.type)){
                 try{
                   const body=await r.json();
@@ -70,6 +71,14 @@ jobs:
                   walk(body);if(cornerPaths.length)row.cornerPaths=cornerPaths.slice(0,30);
                   row.preview=clean(text);
                 }catch{}
+              }
+              if(/api\\.thesports01\\.com\\/api\\/(p\\/uc|v3\\/f\\/g)/i.test(u)){
+                try{
+                  const bytes=await r.body();
+                  row.bodyBytes=bytes.length;
+                  row.bodyHexPrefix=bytes.subarray(0,256).toString('hex');
+                  row.bodyTextPreview=clean(bytes.subarray(0,512).toString('utf8'));
+                }catch(e){row.bodyReadError=clean(String(e))}
               }
               out.responses.push(row);
             });
@@ -89,7 +98,7 @@ jobs:
               ['# Tracker browser network trace','Fixture: '+fx.home+' - '+fx.away,
               'HTTP requests: '+out.requests.length,'Responses: '+out.responses.length,
               'WebSockets: '+out.websockets.length,
-              'Corner-bearing JSON responses: '+out.responses.filter(x=>x.cornerPaths?.length).length,
+              'Corner-bearing JSON responses: '+out.responses.filter(x=>x.cornerPaths?.length).length,\n              'Opaque API bodies captured: '+out.responses.filter(x=>x.bodyBytes!==undefined).length,
               'See artifact for redacted request paths and relevant frames.'].join('\n')+'\n');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
