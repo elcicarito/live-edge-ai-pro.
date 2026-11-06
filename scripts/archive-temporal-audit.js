@@ -161,11 +161,11 @@ for (const [id, x] of matches) {
   for (const g of goalRecords) {
     const before = [...snaps].reverse().find(s => {
       const m = parseMinute(s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute);
-      return m !== null && g.minute !== null && m <= g.minute;
+      return m !== null && g.minute !== null && m < g.minute;
     });
     const after = snaps.find(s => {
       const m = parseMinute(s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute);
-      return m !== null && g.minute !== null && m >= g.minute;
+      return m !== null && g.minute !== null && m > g.minute;
     });
     const snapFields = s => {
       if (!s) return {};
