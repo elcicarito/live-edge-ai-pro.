@@ -300,11 +300,31 @@ for (const [id, x] of matches) {
     }
     const futureGoal = goalRecords.some(g => g.minute > minute && g.minute <= minute + 10);
     const features = extractFeatures(s);
+    const previousSnapshot = snapshotIndex > 0 ? snaps[snapshotIndex - 1] : null;
+    const currentCollectedAt = ts(s?.collected_at);
+    const previousCollectedAt = ts(previousSnapshot?.collected_at);
+    const intervalSeconds = currentCollectedAt !== null && previousCollectedAt !== null
+      ? (currentCollectedAt - previousCollectedAt) / 1000 : null;
+    const intervalQuality = intervalSeconds === null || intervalSeconds <= 0 ? "invalid_or_missing"
+      : intervalSeconds <= 180 ? "normal" : intervalSeconds <= 420 ? "delayed" : "long_gap";
+    const previousFeatures = previousSnapshot ? extractFeatures(previousSnapshot) : {};
+    const deltaKeys = ["shots_home","shots_away","shots_on_target_home","shots_on_target_away",
+      "shots_off_target_home","shots_off_target_away","dangerous_attacks_home","dangerous_attacks_away",
+      "attacks_home","attacks_away"];
+    const intervalFeatures = { interval_seconds: intervalSeconds, interval_quality: intervalQuality };
+    for (const key of deltaKeys) {
+      const current = features[key], previous = previousFeatures[key];
+      const validInterval = intervalSeconds !== null && intervalSeconds > 0 && intervalSeconds <= 420;
+      const delta = validInterval && finite(current) && finite(previous) && current >= previous
+        ? current - previous : null;
+      intervalFeatures["delta_" + key] = delta;
+      intervalFeatures["rate_" + key + "_per_min"] = delta === null ? null : Number((delta * 60 / intervalSeconds).toFixed(4));
+    }
     allLabeled.push({
       match_id: id, archived_at: x.archived_at || "", collected_at: s.collected_at || "",
       home: x.home || fm.home || "", away: x.away || fm.away || "",
       competition: x.competition || "", minute, home_score: score[0], away_score: score[1],
-      goal_next_10m: futureGoal ? 1 : 0, ...features
+      goal_next_10m: futureGoal ? 1 : 0, ...features, ...intervalFeatures
     });
     eligible++;
     if (futureGoal) { positives++; labelCounts.positive++; }
@@ -431,8 +451,16 @@ const featureKeys = ["shots_home","shots_away","shots_on_target_home","shots_on_
   "attacks_home","attacks_away","possession_home","possession_away","xg_home","xg_away",
   "corners_home","corners_away"];
 const featureCoverage = Object.fromEntries(featureKeys.map(k => [k, allLabeled.filter(r => finite(r[k])).length]));
+const deltaFeatureKeys = ["shots_home","shots_away","shots_on_target_home","shots_on_target_away",
+  "shots_off_target_home","shots_off_target_away","dangerous_attacks_home","dangerous_attacks_away",
+  "attacks_home","attacks_away"];
+const intervalFeatureCols = ["interval_seconds","interval_quality",
+  ...deltaFeatureKeys.flatMap(k => ["delta_" + k, "rate_" + k + "_per_min"])];
+const intervalFeatureCoverage = Object.fromEntries(intervalFeatureCols.map(k => [k, allLabeled.filter(r => r[k] !== null && r[k] !== undefined && r[k] !== "").length]));
+const intervalQualityCounts = Object.fromEntries(["normal","delayed","long_gap","invalid_or_missing"].map(k => [k, allLabeled.filter(r => r.interval_quality === k).length]));
 const featureCols = ["match_id","archived_at","collected_at","home","away","competition","minute",
-  "home_score","away_score","goal_next_10m", ...featureKeys,
+  "home_score","away_score","goal_next_10m", "interval_seconds","interval_quality", ...featureKeys,
+  ...intervalFeatureCols.filter(k => k !== "interval_seconds" && k !== "interval_quality"),
   "shots_label","shots_on_target_label","shots_off_target_label","dangerous_attacks_label",
   "attacks_label","possession_label","xg_label","corners_label","raw_stats_json"];
 const featureCsv = [featureCols.join(","), ...allLabeled.map(r =>
@@ -442,7 +470,9 @@ fs.writeFileSync(path.join(OUT, "live-edge-goal-10m-feature-dataset.csv"), featu
 fs.writeFileSync(path.join(OUT, "live-edge-goal-10m-feature-coverage.json"), JSON.stringify({
   generated_at_utc: report.generated_at_utc, read_only: true,
   rows: allLabeled.length, feature_coverage: featureCoverage,
-  note: "Sample-level candidate labels; raw stats retained for manual schema review. Not a trained model."
+  interval_quality_counts: intervalQualityCounts, interval_feature_coverage: intervalFeatureCoverage,
+  delta_rules: "Counter deltas and per-minute rates are only calculated from the immediately previous archived snapshot when collected_at gap is positive and <= 420 seconds and both counters are present and non-decreasing. Negative corrections, missing values, and longer gaps become null; no gap is treated as zero activity.",
+  note: "Sample-level candidate labels; interval-aware delta features are for offline testing only. Not a trained model."
 }, null, 2) + "\n");
 
 const summary = [
@@ -462,6 +492,8 @@ const summary = [
   "- Nejednoznačné/vylúčené: **" + labelCounts.ambiguous + "**",
   "- Použiteľné kandidátske príklady: **" + allLabeled.length + "**",
   "- Podiel pozitívnych: **" + (report.ten_minute_labels.positive_rate_percent ?? "N/A") + " %**", "",
+  "## Kvalita intervalu pre zmeny štatistík", "",
+  ...Object.entries(intervalQualityCounts).map(([k,v]) => "- " + k + ": **" + v + "**"), "",
   "## Pokrytie štatistík v označených LIVE snímkach", "",
   ...Object.entries(featureCoverage).map(([k,v]) => "- " + k + ": **" + v + " / " + allLabeled.length + "**"), "",
   "## Časové rozdelenie po zápasoch", "",
