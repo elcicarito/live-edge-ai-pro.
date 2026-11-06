@@ -1014,7 +1014,12 @@ jobs:
                   status: getStatus(match),
                   collection_status: batch.data_status || "unknown",
                   stats_count: stats.length,
-                  stats
+                  stats,
+                  // Úplné dáta z detailu SportScore API bez straty polí.
+                  // raw_match obsahuje aj všetky pôvodné štatistiky a ich metadáta.
+                  raw_stats: Array.isArray(match.stats) ? match.stats : [],
+                  raw_match: match,
+                  stats_available: Array.isArray(match.stats) && match.stats.length > 0
                 };
 
                 const existingIndex = item.snapshots.findIndex(existing =>
@@ -1031,7 +1036,7 @@ jobs:
             }
 
             const matchTimeline = {
-              schema_version: 1,
+              schema_version: 2,
               retention_days: 7,
               interval_minutes: 5,
               updated_at: output.collected_at,
@@ -1096,6 +1101,7 @@ jobs:
                 final_score: item.final_score || null,
                 final_status: item.final_status || getStatus(item.final_match),
                 final_match: item.final_match,
+                // Trvalý archív preberá kompletné surové API snímky z LIVE časovej osi.
                 snapshots: Array.isArray(timelineItem?.snapshots)
                   ? timelineItem.snapshots
                   : []
@@ -1405,7 +1411,16 @@ jobs:
                   momentumStrength: candidate.momentumStrength,
                   createdAt: record.collected_at || signalNow,
                   status: "OPEN",
-                  startScore: `${Number(match.home_score || 0)}:${Number(match.away_score || 0)}`
+                  startScore: `${Number(match.home_score || 0)}:${Number(match.away_score || 0)}`,
+                  // Presný stav zápasu a všetky API štatistiky v okamihu signálu.
+                  sourceSnapshot: {
+                    collected_at: record.collected_at || signalNow,
+                    minute: Number.isFinite(minute) ? minute : null,
+                    home_score: match.home_score ?? null,
+                    away_score: match.away_score ?? null,
+                    raw_stats: Array.isArray(match.stats) ? match.stats : [],
+                    raw_match: match
+                  }
                 });
               }
             }
@@ -1564,7 +1579,16 @@ jobs:
                     tier: candidate.tier,
                     tierKey: candidate.tierKey,
                     createdAt: record.collected_at,
-                    status: "OPEN"
+                    status: "OPEN",
+                    // Presný stav zápasu a všetky API štatistiky v okamihu signálu.
+                    sourceSnapshot: {
+                      collected_at: record.collected_at || signalNow,
+                      minute,
+                      home_score: match.home_score ?? null,
+                      away_score: match.away_score ?? null,
+                      raw_stats: Array.isArray(match.stats) ? match.stats : [],
+                      raw_match: match
+                    }
                   });
                 }
               }
