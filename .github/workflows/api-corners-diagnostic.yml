@@ -10,46 +10,37 @@ jobs:
   diagnostic:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe Tracker match widget with real URL slug
+      - name: Trace tracker page API calls and corner fields
         run: |
           mkdir -p diagnostic
           node <<'NODE'
           const fs=require('fs');
+          const base='https://widgets-v2.thesports01.com';
           const repoData='https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./main/data/live-current.json';
-          const hosts=['https://sportscore.com','https://widgets-v2.thesports01.com','https://live-widgets-api.leisu.com','https://api.live-widgets.com','https://api.thesports01.com'];
-          const report={checked_at:new Date().toISOString(),fixtures:[],results:[]};
-          const get=async(url)=>{try{const r=await fetch(url,{headers:{accept:'application/json,text/html,*/*','user-agent':'Mozilla/5.0','referer':'https://sportscore.com/'}});
-            const t=await r.text();let j;try{j=JSON.parse(t)}catch{}return {url,status:r.status,type:r.headers.get('content-type'),body:j??t.slice(0,16000)}}
-            catch(e){return {url,error:String(e)}}};
+          const get=async(url)=>{try{const r=await fetch(url,{headers:{'user-agent':'Mozilla/5.0','accept':'*/*','referer':base+'/'}});
+            return {status:r.status,type:r.headers.get('content-type'),text:await r.text()};}catch(e){return {error:String(e),text:''}}};
           (async()=>{
-            const raw=await get(repoData);const records=raw.body?.records||[];
-            report.fixtures=records.filter(x=>x.match?.status==='live').slice(0,10).map(x=>{
-              const url=x.match.url||'';const parts=url.split('/').filter(Boolean);
-              return {home:x.match.home,away:x.match.away,minute:x.match.live_minute,id:x.match.tracker?.id,slug:parts.length>=3?parts[2]:null,url};
-            }).filter(x=>x.id&&x.slug);
-            const paths=[
-              (fx)=>'/api/widget/match/?sport=football&slug='+encodeURIComponent(fx.slug),
-              (fx)=>'/api/widget/match/?slug='+encodeURIComponent(fx.slug),
-              (fx)=>'/api/v1/match/?sport=football&slug='+encodeURIComponent(fx.slug),
-              (fx)=>'/api/v1/match/?slug='+encodeURIComponent(fx.slug),
-              (fx)=>'/api/widget/tracker/?sport=football&id='+encodeURIComponent(fx.id),
-              (fx)=>'/api/widget/match/?sport=football&slug='+encodeURIComponent(fx.slug)+'&id='+encodeURIComponent(fx.id)
-            ];
-            for(const fx of report.fixtures) for(const host of hosts) for(const path of paths){
-              const x=await get(host+path(fx));
-              report.results.push({fixture:fx,host,path:path(fx),status:x.status,type:x.type,body:x.body});
+            const live=await get(repoData);let j={};try{j=JSON.parse(live.text)}catch{}
+            const fx=(j.records||[]).find(x=>x.match?.tracker?.id)?.match;
+            if(!fx)throw new Error('No live fixture with tracker id');
+            const slug=(fx.url||'').split('/').filter(Boolean)[2],id=fx.tracker.id,profile=fx.tracker.profile;
+            const page=await get(base+'/en/pro/football?profile='+encodeURIComponent(profile)+'&uuid='+encodeURIComponent(id));
+            fs.writeFileSync('diagnostic/tracker-page.html',page.text);
+            const assets=[...new Set([...page.text.matchAll(/(?:src|href)=["']([^"']+\.js(?:\?[^"']*)?)["']/g)].map(m=>new URL(m[1],base).href))];
+            const bundles=[];
+            for(const url of assets){const x=await get(url);const name=url.split('/').pop();fs.writeFileSync('diagnostic/'+name,x.text);
+              const s=x.text;const terms=['mqtt','subscribe','homeScores','corner','matchDetailData','api/widget','api/v1','/match/','tracker','profile','uuid','WebSocket'];
+              const contexts={};for(const t of terms){let p=0,a=[];while((p=s.toLowerCase().indexOf(t.toLowerCase(),p))>=0&&a.length<15){a.push(s.slice(Math.max(0,p-450),Math.min(s.length,p+1100)));p+=t.length;}contexts[t]=a;}
+              bundles.push({url,status:x.status,bytes:s.length,contexts});
             }
-            fs.writeFileSync('diagnostic/corner-real-slug-probes.json',JSON.stringify(report,null,2));
-            const successful=report.results.filter(x=>x.status===200);
-            const summary=['# Tracker real-slug probe','LIVE fixtures with real slug: '+report.fixtures.length,'Requests: '+report.results.length,'HTTP 200: '+successful.length,
-              ...successful.slice(0,60).map(x=>x.host+x.path+' => 200'),
-              'Full responses saved as artifact.'].join('\n');
-            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,summary+'\n');console.log(summary);
+            const result={fixture:{home:fx.home,away:fx.away,slug,id,profile},page_status:page.status,assets,bundles};
+            fs.writeFileSync('diagnostic/tracker-runtime.json',JSON.stringify(result,null,2));
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,['# Tracker runtime source trace','Fixture: '+fx.home+' - '+fx.away,'Tracker page HTTP: '+page.status,'JS assets: '+assets.length,...bundles.map(x=>x.url+' '+x.status+' '+x.bytes+' bytes'),'Search contexts saved in artifact.'].join('\n')+'\n');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-      - name: Upload real slug probe
+      - name: Upload runtime trace
         uses: actions/upload-artifact@v4
         with:
-          name: sportscore-corner-real-slug-probes
+          name: sportscore-tracker-runtime-trace
           path: diagnostic/
           if-no-files-found: error
