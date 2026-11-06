@@ -1198,6 +1198,58 @@
     return { ready: true, sides };
   }
 
+  // Stabilita LIVE prevahy z najviac 8 poslednych platnych merani.
+  function calculateTeamConsistency(match, historyData, collectedAt) {
+    const id = matchId(match);
+    const now = Date.parse(collectedAt || "");
+    if (!id || !Number.isFinite(now)) return { ready: false, reason: "Chýba identifikátor zápasu alebo čas merania." };
+
+    const records = historyRecords(historyData, id)
+      .filter(item => Number.isFinite(item.time) && item.match?.stats)
+      .sort((a, b) => a.time - b.time);
+    if (!records.some(item => Math.abs(item.time - now) < 1000)) {
+      records.push({ time: now, match });
+      records.sort((a, b) => a.time - b.time);
+    }
+    const unique = records.filter((item, index) => index === 0 || item.time !== records[index - 1].time);
+    const measured = unique.map(item => ({
+      time: item.time,
+      pressure: calculatePressure(item.match.stats || [])
+    })).filter(item => item.pressure &&
+      Number.isFinite(item.pressure.home) && Number.isFinite(item.pressure.away)
+    ).slice(-8);
+
+    if (measured.length < 4) {
+      return { ready: false, count: measured.length, reason: "Potrebné sú aspoň 4 platné merania; aktuálne " + measured.length + "." };
+    }
+
+    const states = measured.map(item => {
+      const diff = item.pressure.home - item.pressure.away;
+      return diff >= 10 ? "home" : diff <= -10 ? "away" : "balanced";
+    });
+    const count = states.length;
+    const balanced = states.filter(state => state === "balanced").length;
+    const homeLeads = states.filter(state => state === "home").length;
+    const awayLeads = states.filter(state => state === "away").length;
+    const score = side => Math.round(
+      (states.filter(state => state === side).length + balanced * 0.5) / count * 100
+    );
+    const latestState = states[count - 1];
+    let latestStreak = 0;
+    for (let i = count - 1; i >= 0 && states[i] === latestState; i--) latestStreak++;
+
+    return {
+      ready: true,
+      count,
+      spanMinutes: Number(((measured[count - 1].time - measured[0].time) / 60000).toFixed(1)),
+      home: { score: score("home"), leadSamples: homeLeads },
+      away: { score: score("away"), leadSamples: awayLeads },
+      balancedSamples: balanced,
+      latestState,
+      latestStreak
+    };
+  }
+
   // Diagnostické skóre kvality príležitosti; nie je to pravdepodobnosť gólu.
   // Chýbajúce komponenty sa vynechajú a váhy sa prepočítajú iba z dostupných dát.
   function calculateSignalQuality(threat, snapshot, reliability, acceleration, collectedAt) {
@@ -1251,7 +1303,7 @@
     return { ready: true, sides };
   }
 
-  function renderMomentumOverview(target, pressure, snapshot, threat, trend, reliability, acceleration, collectedAt) {
+  function renderMomentumOverview(target, pressure, snapshot, threat, trend, reliability, acceleration, collectedAt, match, historyData) {
     const panel = document.createElement("div");
     panel.style.cssText = "margin:12px 0;padding:12px;background:#0c1929;border:1px solid #344b65;border-radius:10px;";
     const heading = document.createElement("div");
@@ -1433,6 +1485,47 @@
     powerWarning.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.4;margin-top:7px;";
     powerPanel.appendChild(powerWarning);
     panel.appendChild(powerPanel);
+
+    const consistency = calculateTeamConsistency(match, historyData, collectedAt);
+    const consistencyPanel = document.createElement("div");
+    consistencyPanel.style.cssText = "margin-top:10px;padding:11px;background:#142338;border:1px solid #38516e;border-radius:9px;";
+    const consistencyHeading = document.createElement("div");
+    consistencyHeading.textContent = "AI TEAM CONSISTENCY · STABILITA PREVAHY";
+    consistencyHeading.style.cssText = "font-size:11px;font-weight:900;color:#e2e8f0;margin-bottom:8px;";
+    consistencyPanel.appendChild(consistencyHeading);
+    if (consistency.ready) {
+      ["home", "away"].forEach(side => {
+        const item = consistency[side];
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;gap:8px;margin:7px 0;font-size:11px;";
+        const name = document.createElement("strong");
+        name.textContent = side === "home" ? "DOMÁCI" : "HOSTIA";
+        name.style.color = "#cbd5e1";
+        const value = document.createElement("strong");
+        value.textContent = item.score + "/100 · prevaha v " + item.leadSamples + "/" + consistency.count + " meraniach";
+        value.style.color = item.score >= 65 ? "#39e6a5" : item.score >= 50 ? "#fbbf24" : "#cbd5e1";
+        row.append(name, value);
+        consistencyPanel.appendChild(row);
+      });
+      const stateLabel = consistency.latestState === "home" ? "Domáci majú aktuálnu prevahu"
+        : consistency.latestState === "away" ? "Hostia majú aktuálnu prevahu"
+        : "Aktuálne je prevaha vyrovnaná";
+      const detail = document.createElement("div");
+      detail.textContent = stateLabel + " · aktuálny stav trvá " + consistency.latestStreak +
+        " meraní · vzorka " + consistency.count + " meraní za " + consistency.spanMinutes + " min.";
+      detail.style.cssText = "font-size:10px;color:#cbd5e1;line-height:1.45;margin-top:6px;";
+      consistencyPanel.appendChild(detail);
+    } else {
+      const waiting = document.createElement("div");
+      waiting.textContent = consistency.reason;
+      waiting.style.cssText = "font-size:10px;color:#94a3b8;";
+      consistencyPanel.appendChild(waiting);
+    }
+    const consistencyWarning = document.createElement("div");
+    consistencyWarning.textContent = "Skóre vyjadruje podiel meraní s prevahou; vyrovnané merania sa počítajú polovicou. Nie je to pravdepodobnosť gólu ani dlhodobá sila tímu.";
+    consistencyWarning.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.4;margin-top:7px;";
+    consistencyPanel.appendChild(consistencyWarning);
+    panel.appendChild(consistencyPanel);
 
     const qualityScores = calculateSignalQuality(threat, snapshot, reliability, acceleration, collectedAt);
     const qualityPanel = document.createElement("div");
@@ -3281,7 +3374,7 @@
     const momentumTrend = renderMomentumTrend(momentumSection, match, historyData, collectedAt, threat);
     const momentumReliability = getMatchReliability(match, historyData, collectedAt);
     const pressureAcceleration = calculatePressureAcceleration(match, historyData, collectedAt);
-    renderMomentumOverview(momentumSection, pressure, snapshot, threat, momentumTrend, momentumReliability, pressureAcceleration, collectedAt);
+    renderMomentumOverview(momentumSection, pressure, snapshot, threat, momentumTrend, momentumReliability, pressureAcceleration, collectedAt, match, historyData);
 
     if (!allowSignals) {
       addSignalPanel(signalSection, {
