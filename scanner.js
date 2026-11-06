@@ -2511,43 +2511,53 @@
     qualityNote.style.cssText = "font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.45;";
     systemStatsEl.appendChild(qualityNote);
 
-    // AI FILTER ENGINE v2: porovnáva vopred určené profily iba z
-    // uložených signálových polí. Každý zápas sa započíta raz na profil.
+    // AI FILTER ENGINE v2: adaptívne sledovanie profilov nad prvým signálom
+    // každého zápasu. Používajú sa len hodnoty uložené pri vzniku signálu.
     const filterHeading = document.createElement("div");
-    filterHeading.textContent = "AI FILTER ENGINE v2 · TEST PROFILOV";
+    filterHeading.textContent = "AI FILTER ENGINE v2 · ADAPTÍVNE SLEDOVANIE";
     filterHeading.style.cssText = "font-size:13px;font-weight:900;margin:18px 0 8px;color:#dbeafe;";
     systemStatsEl.appendChild(filterHeading);
+
+    const firstSignalByMatch = new Map();
+    (signals || []).forEach((item, index) => {
+      const rawId = item?.matchId;
+      const key = rawId !== null && rawId !== undefined && String(rawId).trim()
+        ? String(rawId)
+        : "__missing_filter_match_id__" + index;
+      const prior = firstSignalByMatch.get(key);
+      const time = Date.parse(item?.createdAt || "");
+      const priorTime = prior ? Date.parse(prior.item?.createdAt || "") : NaN;
+      if (!prior || (Number.isFinite(time) && (!Number.isFinite(priorTime) || time < priorTime))) {
+        firstSignalByMatch.set(key, { item, index });
+      }
+    });
+    const strictFirstSignals = [...firstSignalByMatch.values()]
+      .sort((a, b) => a.index - b.index)
+      .map(entry => entry.item);
+    const strictFirstWithScore = strictFirstSignals.filter(item =>
+      item?.qualityScoreVersion === "ai-quality-v1" &&
+      typeof item.qualityScore === "number" &&
+      Number.isFinite(item.qualityScore) &&
+      item.qualityScore >= 0 && item.qualityScore <= 100
+    );
+    const strictFirstWithoutScore = strictFirstSignals.length - strictFirstWithScore.length;
+
     const filterProfiles = [
-      { label: "Základ · Quality ≥65", test: item => Number(item.qualityScore) >= 65 },
-      { label: "Vysoká kvalita · Quality ≥80", test: item => Number(item.qualityScore) >= 80 },
-      { label: "Kvalita + aktivita ≥6", test: item => Number(item.qualityScore) >= 65 && Number(item.activityRate) >= 6 },
-      { label: "Kvalita + GOAL THREAT ≥75", test: item => Number(item.qualityScore) >= 65 && Number(item.goalThreat) >= 75 },
-      { label: "Kvalita + aktivita ≥6 + THREAT ≥75", test: item =>
-        Number(item.qualityScore) >= 65 && Number(item.activityRate) >= 6 && Number(item.goalThreat) >= 75 }
+      { label: "Základ · prvý signál zápasu", test: () => true },
+      { label: "GOAL THREAT ≥65", test: item => typeof item.goalThreat === "number" && Number.isFinite(item.goalThreat) && item.goalThreat >= 65 },
+      { label: "GOAL THREAT ≥75", test: item => typeof item.goalThreat === "number" && Number.isFinite(item.goalThreat) && item.goalThreat >= 75 },
+      { label: "Aktivita ≥10", test: item => typeof item.activityRate === "number" && Number.isFinite(item.activityRate) && item.activityRate >= 10 },
+      { label: "Aktivita ≥15", test: item => typeof item.activityRate === "number" && Number.isFinite(item.activityRate) && item.activityRate >= 15 },
+      { label: "GOAL THREAT ≥65 + aktivita ≥10", test: item =>
+        typeof item.goalThreat === "number" && Number.isFinite(item.goalThreat) && item.goalThreat >= 65 &&
+        typeof item.activityRate === "number" && Number.isFinite(item.activityRate) && item.activityRate >= 10 }
     ];
     const filterGrid = document.createElement("div");
     filterGrid.style.cssText = "display:grid;grid-template-columns:1fr;gap:7px;";
     systemStatsEl.appendChild(filterGrid);
+
     filterProfiles.forEach(profile => {
-      const eligible = qualitySignals.filter(item =>
-        Number.isFinite(Number(item.activityRate)) &&
-        Number.isFinite(Number(item.goalThreat)) &&
-        profile.test(item)
-      );
-      const byMatch = new Map();
-      eligible.forEach((item, index) => {
-        const rawId = item?.matchId;
-        const key = rawId !== null && rawId !== undefined && String(rawId).trim()
-          ? String(rawId)
-          : "__missing_profile_match_id__" + index;
-        const prior = byMatch.get(key);
-        const time = Date.parse(item?.createdAt || "");
-        const priorTime = Date.parse(prior?.createdAt || "");
-        if (!prior || (Number.isFinite(time) && (!Number.isFinite(priorTime) || time < priorTime))) {
-          byMatch.set(key, item);
-        }
-      });
-      const cohort = [...byMatch.values()];
+      const cohort = strictFirstSignals.filter(profile.test);
       const w = cohort.filter(item => item.status === "WIN").length;
       const l = cohort.filter(item => item.status === "LOSS").length;
       const o = cohort.filter(item => item.status === "OPEN").length;
@@ -2560,14 +2570,30 @@
       title.textContent = profile.label;
       title.style.cssText = "font-size:12px;font-weight:900;color:#fff;";
       const detail = document.createElement("div");
-      detail.textContent = cohort.length + " unikátnych zápasov · WIN " + w + " / LOSS " + l +
+      detail.textContent = cohort.length + " zápasov · WIN " + w + " / LOSS " + l +
         " · úspešnosť " + rate + " · OPEN " + o + " · UNRESOLVED " + u;
       detail.style.cssText = "font-size:11px;color:#b7c5d6;margin-top:5px;line-height:1.45;";
-      row.append(title, detail);
+      const readiness = document.createElement("div");
+      readiness.textContent = settled < 30
+        ? "ZBIERAM VZORKU · chýba " + (30 - settled) + " vyhodnotených zápasov do prvého kontrolného bodu"
+        : (w / settled >= 0.60
+          ? "NA ĎALŠIE TESTOVANIE · úspešnosť ≥60 %, nie je to potvrdenie ziskovosti"
+          : "BEZ POZITÍVNEHO SIGNÁLU · úspešnosť zatiaľ pod 60 %");
+      readiness.style.cssText = "font-size:10px;color:" + (settled >= 30 && w / settled >= 0.60 ? "#fbbf24" : "#94a3b8") + ";margin-top:5px;";
+      row.append(title, detail, readiness);
       filterGrid.appendChild(row);
     });
+
+    const filterMeta = document.createElement("div");
+    filterMeta.textContent = "Prísna kohorta: " + strictFirstSignals.length +
+      " prvých signálov z unikátnych zápasov · s uloženým Quality Score: " +
+      strictFirstWithScore.length + " · prvý signál bez Quality Score: " + strictFirstWithoutScore +
+      ". Ak prvý signál zápasu nemá skóre, neskorší signál ho nenahrádza.";
+    filterMeta.style.cssText = "font-size:11px;color:#a8b8cc;margin-top:8px;line-height:1.45;";
+    systemStatsEl.appendChild(filterMeta);
+
     const filterNote = document.createElement("div");
-    filterNote.textContent = "Testovacie profily nie sú aktívne stávkové filtre. Porovnanie používa iba signály s uloženým Quality Score, aktivitou a GOAL THREAT; v každom profile sa počíta najviac jeden najskorší signál na zápas. Malá vzorka a úspešnosť bez kurzov nepreukazujú kladné ROI.";
+    filterNote.textContent = "Adaptívny kontrolný bod je 30 vyhodnotených unikátnych zápasov na profil; hranica 60 % slúži iba na výber profilov na ďalšie testovanie. Profily sa môžu prekrývať. Chýbajúce metriky profil nespĺňajú a nepovažujú sa za nulu. Malá vzorka, úspešnosť bez kurzov a bez ROI nepreukazujú ziskovosť. Toto sledovanie nemení tvorbu signálov ani zber dát.";
     filterNote.style.cssText = "font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.45;";
     systemStatsEl.appendChild(filterNote);
 
