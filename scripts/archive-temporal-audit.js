@@ -111,6 +111,11 @@ function median(a) {
   const b = [...a].sort((x,y)=>x-y), i = Math.floor(b.length/2);
   return b.length % 2 ? b[i] : (b[i-1]+b[i])/2;
 }
+function percentile(a, p) {
+  if (!a.length) return null;
+  const b = [...a].sort((x,y)=>x-y);
+  return b[Math.min(b.length - 1, Math.max(0, Math.ceil(p * b.length) - 1))];
+}
 function bump(map, key, n=1) { map.set(String(key), (map.get(String(key)) || 0) + n); }
 function top(map, limit=30) { return [...map.entries()].sort((a,b)=>b[1]-a[1]).slice(0,limit).map(([value,count])=>({value,count})); }
 
@@ -134,6 +139,8 @@ const minuteTypes = new Map(), eventTimeTypes = new Map(), reasonCounts = new Ma
 const minuteValues = [], eventMinuteValues = [], goalEventsSamples = [], matchRows = [], allLabeled = [], goalEventAuditRows = [];
 const labelCounts = { positive: 0, negative: 0, ambiguous: 0, no_event_list: 0, invalid_final_score: 0 };
 let totalSnapshots = 0, parsedSnapshotMinutes = 0, parsedGoalTimes = 0, totalGoals = 0;
+const collectedAtGapsSeconds = [];
+let snapshotsWithInvalidCollectedAt = 0, nonPositiveCollectedAtGaps = 0;
 let matchesWithEvents = 0, matchesWithCompleteGoalTimeline = 0, matchesWithScoreTimelineAgreement = 0;
 let matchesWithValidFinal = 0, goalEventsWithoutTime = 0, nonMonotonicMatches = 0;
 let duplicateCollectedAt = 0, snapshotScoreMissing = 0, sameMinuteGoalAmbiguities = 0;
@@ -170,6 +177,21 @@ for (const [id, x] of matches) {
     seen.add(key); snaps.push(s);
   }
   snaps.sort((a,b) => String(a?.collected_at || "").localeCompare(String(b?.collected_at || "")));
+  let matchMaxGapSeconds = null, matchGapsOver3m = 0, matchGapsOver5m = 0, matchGapsOver7m = 0;
+  for (let i = 0; i < snaps.length; i++) {
+    const current = ts(snaps[i]?.collected_at);
+    if (current === null) { snapshotsWithInvalidCollectedAt++; continue; }
+    if (i === 0) continue;
+    const previous = ts(snaps[i - 1]?.collected_at);
+    if (previous === null) continue;
+    const gap = (current - previous) / 1000;
+    collectedAtGapsSeconds.push(gap);
+    if (gap <= 0) nonPositiveCollectedAtGaps++;
+    if (matchMaxGapSeconds === null || gap > matchMaxGapSeconds) matchMaxGapSeconds = gap;
+    if (gap > 180) matchGapsOver3m++;
+    if (gap > 300) matchGapsOver5m++;
+    if (gap > 420) matchGapsOver7m++;
+  }
   for (const g of goalRecords) {
     const before = [...snaps].reverse().find(s => {
       const m = parseMinute(s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute);
@@ -299,6 +321,9 @@ for (const [id, x] of matches) {
     goal_count_matches_final: goalCountAgrees, timeline_complete_candidate: timelineComplete,
     snapshot_count: snaps.length, parsed_minute_count: snaps.filter(s => parseMinute(s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute) !== null).length,
     non_monotonic_minutes: hasMinuteRegression, minute_regression_count: regressionCount,
+    max_collected_at_gap_seconds: matchMaxGapSeconds,
+    collected_at_gaps_over_3m: matchGapsOver3m, collected_at_gaps_over_5m: matchGapsOver5m,
+    collected_at_gaps_over_7m: matchGapsOver7m,
     eligible_10m_examples: eligible,
     positive_10m: positives, negative_10m: negatives, ambiguous_10m: ambiguous
   });
@@ -355,7 +380,20 @@ const report = {
     snapshots_with_unverifiable_goal_event_sides: sideScoreUnverifiable,
     matches_with_non_monotonic_snapshot_minutes: nonMonotonicMatches,
     note: "A minute regression now excludes only the ambiguous interval until the minute catches up; earlier safe snapshots remain eligible. Training labels require independently resolved home/away goal sides.",
-    duplicate_collected_at_snapshots: duplicateCollectedAt, snapshots_missing_score: snapshotScoreMissing
+    duplicate_collected_at_snapshots: duplicateCollectedAt, snapshots_missing_score: snapshotScoreMissing,
+    collected_at_interval_audit: {
+      valid_adjacent_intervals: collectedAtGapsSeconds.length,
+      snapshots_with_invalid_collected_at: snapshotsWithInvalidCollectedAt,
+      non_positive_intervals: nonPositiveCollectedAtGaps,
+      median_gap_seconds: median(collectedAtGapsSeconds),
+      p90_gap_seconds: percentile(collectedAtGapsSeconds, 0.90),
+      p95_gap_seconds: percentile(collectedAtGapsSeconds, 0.95),
+      max_gap_seconds: collectedAtGapsSeconds.length ? Math.max(...collectedAtGapsSeconds) : null,
+      intervals_over_3_minutes: collectedAtGapsSeconds.filter(v => v > 180).length,
+      intervals_over_5_minutes: collectedAtGapsSeconds.filter(v => v > 300).length,
+      intervals_over_7_minutes: collectedAtGapsSeconds.filter(v => v > 420).length,
+      note: "Adjacent collected_at intervals only; a gap does not by itself prove collector downtime because the archive may sample selectively."
+    }
   },
   ten_minute_labels: {
     positive: labelCounts.positive, negative: labelCounts.negative,
