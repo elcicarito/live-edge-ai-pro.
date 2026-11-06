@@ -482,8 +482,6 @@
   }
 
   function renderCurrentStats(card, stats) {
-    addText(card, "KOMPLETNÉ ŠTATISTIKY ZÁPASU", "15px");
-
     const available = Array.isArray(stats)
       ? stats.filter(item =>
           item &&
@@ -502,19 +500,40 @@
 
     available.forEach(item => {
       const row = document.createElement("div");
-      row.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 9px;margin:4px 0;background:#101b2b;border-radius:7px;font-size:12px;";
+      row.style.cssText = "padding:9px 10px;margin:6px 0;background:#101b2b;border:1px solid #26384f;border-radius:9px;";
+      const values = document.createElement("div");
+      values.style.cssText = "display:grid;grid-template-columns:minmax(38px,1fr) minmax(90px,1.5fr) minmax(38px,1fr);align-items:center;gap:8px;font-size:13px;";
+      const home = document.createElement("strong");
+      const away = document.createElement("strong");
       const label = document.createElement("span");
+      const suffix = item.suffix === null || item.suffix === undefined ? "" : String(item.suffix);
+      home.textContent = String(item.home) + suffix;
+      away.textContent = String(item.away) + suffix;
       label.textContent = String(item.label);
-      label.style.cssText = "color:#a8b8cc;flex:1;";
-      const value = document.createElement("strong");
-      const suffix = item.suffix === null || item.suffix === undefined
-        ? ""
-        : String(item.suffix);
-      value.textContent = `${item.home}${suffix}  :  ${item.away}${suffix}`;
-      value.style.cssText = "color:#ffffff;text-align:right;white-space:nowrap;";
-      row.append(label, value);
+      home.style.cssText = "color:#fff;text-align:left;font-variant-numeric:tabular-nums;";
+      away.style.cssText = "color:#fff;text-align:right;font-variant-numeric:tabular-nums;";
+      label.style.cssText = "color:#a8b8cc;text-align:center;font-size:11px;line-height:1.3;";
+      values.append(home, label, away);
+      row.appendChild(values);
+
+      const h = Number(String(item.home).replace(",", ".").replace(/[^0-9.+-]/g, ""));
+      const a = Number(String(item.away).replace(",", ".").replace(/[^0-9.+-]/g, ""));
+      if (Number.isFinite(h) && Number.isFinite(a) && h >= 0 && a >= 0 && h + a > 0) {
+        const bar = document.createElement("div");
+        bar.style.cssText = "display:flex;gap:3px;height:5px;margin-top:8px;overflow:hidden;border-radius:8px;background:#26384f;";
+        const homeBar = document.createElement("div");
+        const awayBar = document.createElement("div");
+        homeBar.style.cssText = `width:${h / (h + a) * 100}%;background:#39e6a5;border-radius:8px;`;
+        awayBar.style.cssText = `width:${a / (h + a) * 100}%;background:#64748b;border-radius:8px;`;
+        bar.append(homeBar, awayBar);
+        row.appendChild(bar);
+      }
       card.appendChild(row);
     });
+    const legend = document.createElement("div");
+    legend.textContent = "DOMÁCI  ·  HOSTIA";
+    legend.style.cssText = "font-size:10px;color:#71839b;text-align:center;margin-top:7px;letter-spacing:.5px;";
+    card.appendChild(legend);
   }
 
   // Kontrola kvality dát je iba informačná; nemení výpočet tlaku ani signálov.
@@ -1683,11 +1702,28 @@
     const detail = document.createElement("details");
     detail.style.cssText = "border-top:1px solid #293b52;padding-top:8px;";
     const detailSummary = document.createElement("summary");
-    detailSummary.textContent = "📊 Štatistiky, tlak a diagnostika";
-    detailSummary.style.cssText = "cursor:pointer;list-style:none;font-size:13px;font-weight:800;color:#39e6a5;padding:5px 0;";
+    detailSummary.textContent = "📊 OTVORIŤ PREHĽAD ZÁPASU";
+    detailSummary.style.cssText = "cursor:pointer;list-style:none;font-size:13px;font-weight:900;color:#39e6a5;padding:8px 2px;";
     detail.appendChild(detailSummary);
 
-    addText(detail, "HISTÓRIA SIGNÁLOV", "13px");
+    const makeSection = (title, open = false) => {
+      const section = document.createElement("details");
+      section.open = open;
+      section.style.cssText = "margin:9px 0;padding:10px;background:#111d2d;border:1px solid #293d55;border-radius:10px;";
+      const summary = document.createElement("summary");
+      summary.textContent = title;
+      summary.style.cssText = "cursor:pointer;list-style:none;font-size:13px;font-weight:900;color:#e2e8f0;padding:3px 0;";
+      section.appendChild(summary);
+      detail.appendChild(section);
+      return section;
+    };
+
+    const signalSection = makeSection("⚡ SIGNÁLY A ICH HISTÓRIA", true);
+    const statsSection = makeSection("📊 ŠTATISTIKY ZÁPASU");
+    const momentumSection = makeSection("🔥 MOMENTUM A VÝVOJ TLAKU");
+    const diagnosticsSection = makeSection("🛠 KVALITA DÁT A DIAGNOSTIKA");
+
+    addText(signalSection, "HISTÓRIA SIGNÁLOV", "13px");
     if (relatedSignals.length) {
       relatedSignals
         .slice()
@@ -1708,16 +1744,16 @@
           signalRow.textContent = `${stamp} · ${side} – ${item.team || "tím"} · ${item.startMinute ?? "?"}. min · ${item.startScore || "?"} · ${statusLabel}`;
           signalRow.style.cssText = "font-size:12px;color:#cbd5e1;padding:7px 9px;margin:5px 0;background:#101b2b;border-radius:8px;border-left:3px solid " +
             (item.status === "WIN" ? "#4ade80" : item.status === "LOSS" ? "#f87171" : item.status === "OPEN" ? "#39e6a5" : "#fbbf24") + ";";
-          detail.appendChild(signalRow);
+          signalSection.appendChild(signalRow);
         });
     } else if (Array.isArray(signalArchive?.signals)) {
-      addText(detail, "Pre tento zápas zatiaľ nie sú uložené žiadne signály.");
+      addText(signalSection, "Pre tento zápas zatiaľ nie sú uložené žiadne signály.");
     } else {
-      addText(detail, "Archív signálov sa nepodarilo načítať.");
+      addText(signalSection, "Archív signálov sa nepodarilo načítať.");
     }
 
     if (staleMode) {
-      addSignalPanel(detail, {
+      addSignalPanel(signalSection, {
         heading: "UPOZORNENIE",
         title: "ZASTARANÉ DÁTA – NIE LIVE",
         detail: "Toto je posledný uložený obraz zápasu. Aktuálny stav sa nepotvrdil; nepoužívaj ho na rozhodovanie ani stávky.",
@@ -1728,18 +1764,18 @@
     }
 
     addText(
-      detail,
+      diagnosticsSection,
       `${getCompetitionFlag(match)} ${match.competition || "Neznáma súťaž"} | ${minute === "HT" ? "Prestávka" : minute + ". minúta"} | meranie: ${collectedAt || "neznámy čas"}`
     );
 
     const quality = getDataQuality(match, collectedAt);
     addBadge(
-      detail,
+      diagnosticsSection,
       quality.label,
       quality.background,
       quality.border
     );
-    addText(detail, quality.detail);
+    addText(diagnosticsSection, quality.detail);
 
     const reliability = getMatchReliability(
       match,
@@ -1747,31 +1783,31 @@
       collectedAt
     );
 
-    addText(detail, "SPOĽAHLIVOSŤ ZBERU – HISTÓRIA", "14px");
+    addText(diagnosticsSection, "SPOĽAHLIVOSŤ ZBERU – HISTÓRIA", "14px");
     if (reliability) {
       addBadge(
-        detail,
+        diagnosticsSection,
         reliability.label,
         reliability.background,
         reliability.border
       );
       addText(
-        detail,
+        diagnosticsSection,
         `Vzorka: ${reliability.count} meraní | Momentum dostupné: ${reliability.momentumCoverage}% | Všetky kľúčové štatistiky: ${reliability.fullCoverage}%`
       );
       addText(
-        detail,
+        diagnosticsSection,
         `Priemerný interval: ${reliability.averageGap === null ? "zatiaľ bez porovnania" : reliability.averageGap.toFixed(1) + " min"} | Najdlhšia medzera: ${reliability.maxGap === null ? "—" : reliability.maxGap.toFixed(1) + " min"} | Medzery nad 7 min: ${reliability.longGaps}`
       );
     } else {
-      addText(detail, "Zatiaľ nie je dostupná história meraní tohto zápasu.");
+      addText(diagnosticsSection, "Zatiaľ nie je dostupná história meraní tohto zápasu.");
     }
     addText(
-      detail,
+      diagnosticsSection,
       "Ukazovateľ vychádza z uložených kompletných zberov (približne posledných 24 hodín); je iba informačný."
     );
 
-    renderCurrentStats(detail, match.stats || []);
+    renderCurrentStats(statsSection, match.stats || []);
 
     // BTTS je samostatný modrý model; jeho história sa nemieša so zeleným gólovým modelom.
     const bttsSignals = Array.isArray(bttsArchive?.signals)
@@ -1782,7 +1818,7 @@
       Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)
     )[0];
     if (bttsOpenSignals.length) {
-      bttsOpenSignals.forEach((signal, index) => addSignalPanel(detail, {
+      bttsOpenSignals.forEach((signal, index) => addSignalPanel(signalSection, {
         heading: "🔵 BTTS – " + (signal.tier || "PODMIENKA"),
         title: signal.predictedTeam || (signal.predictedSide === "home" ? match.home : match.away),
         detail: `Podmienky: ${signal.tier} | ${signal.combinedSot} SOT spolu | ${signal.combinedShots} striel spolu | vstup ${signal.startMinute}'. Skóre pri signále: ${signal.startScore}. Cieľ: predikovaný tím skóruje do konca zápasu.`,
@@ -1791,7 +1827,7 @@
         titleColor: "#7dd3fc"
       }));
     } else if (bttsLatest) {
-      addSignalPanel(detail, {
+      addSignalPanel(signalSection, {
         heading: "🔵 BTTS – HISTÓRIA",
         title: bttsLatest.status === "WIN" ? "WIN" : bttsLatest.status === "LOSS" ? "LOSS" : "NEVYRIEŠENÉ",
         detail: `${bttsLatest.tier} | vstup ${bttsLatest.startMinute}' pri skóre ${bttsLatest.startScore} | konečné skóre ${bttsLatest.settledScore || "—"}`,
@@ -1800,7 +1836,7 @@
         titleColor: "#7dd3fc"
       });
     } else {
-      addSignalPanel(detail, {
+      addSignalPanel(signalSection, {
         heading: "🔵 BTTS",
         title: "Bez potvrdeného signálu",
         detail: "Sledujú sa samostatne všetky tri prahy pri 1:0 a samostatná podmienka pri 0:1.",
@@ -1816,52 +1852,52 @@
 
     if (pressure) {
       addText(
-        detail,
+        momentumSection,
         `Tlak: Domáci ${pressure.home}/100 | Hostia ${pressure.away}/100`
       );
     } else {
-      addText(detail, "Tlak: čakám na štatistiky.");
+      addText(momentumSection, "Tlak: čakám na štatistiky.");
     }
 
     if (snapshot.ready) {
       addText(
-        detail,
+        momentumSection,
         `Porovnávané merania: ${snapshot.oldTime} | Rozdiel ${snapshot.minutes} min`
       );
 
       addText(
-        detail,
+        momentumSection,
         `Nové strely na bránu: ${snapshot.homeShots} : ${snapshot.awayShots}`
       );
 
       addText(
-        detail,
+        momentumSection,
         `Nové nebezpečné útoky: ${snapshot.homeAttacks} : ${snapshot.awayAttacks}`
       );
 
       addText(
-        detail,
+        momentumSection,
         `Aktivita spolu: Domáci ${snapshot.homeActivity} | Hostia ${snapshot.awayActivity}`
       );
 
       addText(
-        detail,
+        momentumSection,
         `Aktivita za 10 min: Domáci ${snapshot.homeActivityRate.toFixed(1)} | Hostia ${snapshot.awayActivityRate.toFixed(1)}`
       );
     } else {
-      addText(detail, snapshot.text);
+      addText(momentumSection, snapshot.text);
     }
 
     if (threat) {
       addText(
-        detail,
+        momentumSection,
         `GOAL THREAT: Domáci ${threat.home}/100 | Hostia ${threat.away}/100`,
         "15px"
       );
     }
 
     if (!allowSignals) {
-      addSignalPanel(detail, {
+      addSignalPanel(signalSection, {
         heading: staleMode ? "LIVE SIGNÁL" : "LIVE SIGNÁL",
         title: staleMode ? "SIGNÁLY VYPNUTÉ – ZASTARANÉ DÁTA" : "ZBER DÁT NIE JE KOMPLETNÝ",
         detail: staleMode ? "Z tohto záznamu sa nevytvára ani nevyhodnocuje žiadny LIVE signál." : "Nové signály sú momentálne zablokované.",
@@ -1878,7 +1914,7 @@
       );
 
       if (signal) {
-        addSignalPanel(detail, {
+        addSignalPanel(signalSection, {
           heading: "⚡ LIVE SIGNÁL – POTVRDENÝ",
           title: signal.team,
           detail:
@@ -1899,7 +1935,7 @@
         const side = threat.home >= threat.away ? "Domáci" : "Hostia";
         const score = Math.max(threat.home, threat.away);
 
-        addSignalPanel(detail, {
+        addSignalPanel(signalSection, {
           heading: "⚠ ZVÝŠENÝ TLAK",
           title: `${side} – ${score}/100`,
           detail: "Zatiaľ nie sú splnené všetky podmienky pre LIVE signál.",
@@ -1909,7 +1945,7 @@
         });
 
       } else {
-        addSignalPanel(detail, {
+        addSignalPanel(signalSection, {
           heading: "LIVE SIGNÁL",
           title: "Zatiaľ bez potvrdeného signálu",
           detail: "Systém naďalej sleduje vývoj zápasu.",
