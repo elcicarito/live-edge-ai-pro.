@@ -232,8 +232,6 @@ for (const [id, x] of matches) {
     bump(minuteTypes, rawMinute === null || rawMinute === undefined ? "missing" : typeof rawMinute);
     if (minute === null) continue;
     parsedSnapshotMinutes++; minuteValues.push(minute);
-    if (previousMinute !== null && minute < previousMinute) nonMonotonic = true;
-    previousMinute = minute;
     const score = scorePair(s);
     if (!score) snapshotScoreMissing++;
     if (timelineComplete && score && !minuteAmbiguous[snapshotIndex]) {
