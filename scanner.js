@@ -2268,6 +2268,29 @@
       });
   }
 
+  function updateDashboard(current, liveCount, signalArchive, bttsArchive, fresh, complete) {
+    const set = (id, value) => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = String(value);
+    };
+    const greenSignals = Array.isArray(signalArchive?.signals) ? signalArchive.signals : [];
+    const bttsSignals = Array.isArray(bttsArchive?.signals) ? bttsArchive.signals : [];
+    const greenOpen = greenSignals.filter(item => item?.status === "OPEN").length;
+    const bttsOpen = bttsSignals.filter(item => item?.status === "OPEN").length;
+    const status = !fresh ? "NEAKTUÁLNE" : complete ? "KOMPLETNÉ" : "NEÚPLNÉ";
+    const collectedAt = Date.parse(current?.collected_at || "");
+    const updated = Number.isFinite(collectedAt)
+      ? new Date(collectedAt).toLocaleString("sk-SK")
+      : "nedostupná";
+    set("dashboard-live-count", fresh ? liveCount : 0);
+    set("dashboard-green-count", greenOpen);
+    set("dashboard-btts-count", bttsOpen);
+    set("dashboard-data-status", status);
+    set("dashboard-updated", "Posledný zber dát: " + updated + " · " + status);
+    const statusElement = document.getElementById("dashboard-data-status");
+    if (statusElement) statusElement.style.color = !fresh ? "#f87171" : complete ? "#39e6a5" : "#fbbf24";
+  }
+
   async function scan() {
     if (scanning) return;
     scanning = true;
@@ -2323,6 +2346,7 @@
           }))
           .filter(item => item.match && isLive(item.match));
 
+        updateDashboard(current, 0, signalArchive, bttsArchive, false, false);
         addText(engine, "LIVE zápasy: 0 – aktuálny feed nie je potvrdený");
         addText(engine, `Posledné uložené zápasy: ${staleMatches.length}`);
         addText(engine, "Zobrazenie je iba archívny náhľad. Žiadne signály, vyhodnocovanie ani aktualizácia skóre sa z neho nevykonáva.");
@@ -2372,6 +2396,7 @@
         .filter(item => isLive(item.match));
 
       const actualMatches = matches.map(item => item.match);
+      updateDashboard(current, matches.length, signalArchive, bttsArchive, true, allowSignals);
 
       if (allowSignals) {
         settleSignals(actualMatches);
@@ -2456,6 +2481,7 @@
 
       matchesEl.innerHTML = "";
       engine.innerHTML = "";
+      updateDashboard(null, 0, null, null, false, false);
 
       addText(engine, "SMART SIGNAL ENGINE v14");
       addText(engine, "Nepodarilo sa načítať aktuálne LIVE dáta.");
