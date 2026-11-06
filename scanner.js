@@ -21,6 +21,8 @@
   const matchArchiveLeagueEl = document.getElementById("match-archive-league");
   const matchArchiveDateEl = document.getElementById("match-archive-date");
   const matchArchiveResetEl = document.getElementById("match-archive-reset");
+  const greenSignalArchiveEl = document.getElementById("green-signal-archive");
+  const bttsSignalArchiveEl = document.getElementById("btts-signal-archive");
   let matchArchiveData = null;
   let archiveLeagueFilter = "";
   let archiveDateFilter = "";
@@ -1003,7 +1005,9 @@
     if (changed) saveSignals();
   }
 
-  function renderServerSignalArchive(data) {
+  function renderServerSignalArchive(data, target = greenSignalArchiveEl) {
+    if (!target) return;
+    target.innerHTML = "";
     const serverSignals = Array.isArray(data?.signals) ? data.signals : [];
     const localSignals = Array.isArray(signalHistory) ? signalHistory : [];
 
@@ -1049,11 +1053,11 @@
     const evaluated = wins + losses;
     const rate = evaluated ? Math.round(wins / evaluated * 100) : 0;
 
-    addText(engine, "TRVALÝ ARCHÍV SIGNÁLOV", "16px");
-    addText(engine, `Spolu: ${signals.length} | Výhry: ${wins} | Prehry: ${losses} | Otvorené: ${open} | Neoverené: ${unresolved}`);
-    addText(engine, `Úspešnosť vyhodnotených: ${rate}%`);
-    addText(engine, "Archív spája záznamy z GitHubu a históriu tohto prehliadača; duplicitné signály sa zobrazia iba raz.");
-    addText(engine, "Neoverené znamená, že zápas zmizol z LIVE feedu bez potvrdeného konečného výsledku. Nezapočítava sa ako prehra.");
+    addText(target, "TRVALÝ ARCHÍV SIGNÁLOV", "16px");
+    addText(target, `Spolu: ${signals.length} | Výhry: ${wins} | Prehry: ${losses} | Otvorené: ${open} | Neoverené: ${unresolved}`);
+    addText(target, `Úspešnosť vyhodnotených: ${rate}%`);
+    addText(target, "Archív spája záznamy z GitHubu a históriu tohto prehliadača; duplicitné signály sa zobrazia iba raz.");
+    addText(target, "Neoverené znamená, že zápas zmizol z LIVE feedu bez potvrdeného konečného výsledku. Nezapočítava sa ako prehra.");
 
     // Rozbory úspešnosti počítajú iba potvrdené WIN/LOSS výsledky.
     // Pri malej vzorke zobraz upozornenie, aby percentá nevyzerali spoľahlivejšie, než sú.
@@ -1072,9 +1076,9 @@
         else group.losses++;
       });
 
-      addText(engine, title, "15px");
+      addText(target, title, "15px");
       if (!groups.size) {
-        addText(engine, "Zatiaľ málo vyhodnotených dát.");
+        addText(target, "Zatiaľ málo vyhodnotených dát.");
         return;
       }
 
@@ -1088,7 +1092,7 @@
           const count = value.wins + value.losses;
           const percent = Math.round(value.wins / count * 100);
           const reliability = count < 10 ? " | malá vzorka" : "";
-          addText(engine, key + ": " + percent + "% (" + value.wins + " výhier / " + value.losses + " prehier, N=" + count + ")" + reliability);
+          addText(target, key + ": " + percent + "% (" + value.wins + " výhier / " + value.losses + " prehier, N=" + count + ")" + reliability);
         });
     }
 
@@ -1143,15 +1147,78 @@
       detail.textContent = (item.team || item.side || "Tím") + " | " + label + " | začiatok " + (item.startMinute ?? "?") + ". min" + settledDetail;
       detail.style.cssText = `font-size:13px;color:${style.color};font-weight:800;`;
       line.append(title, detail);
-      engine.appendChild(line);
+      target.appendChild(line);
     });
 
     if (signals.length > recent.length) {
-      addText(engine, `Zobrazených posledných ${recent.length} záznamov z ${signals.length}.`);
+      addText(target, `Zobrazených posledných ${recent.length} záznamov z ${signals.length}.`);
     }
     if (!recent.length) {
-      addText(engine, "Zatiaľ nie sú uložené žiadne signály.");
+      addText(target, "Zatiaľ nie sú uložené žiadne signály.");
     }
+  }
+
+  function renderBttsSignalArchive(data, target = bttsSignalArchiveEl) {
+    if (!target) return;
+    target.innerHTML = "";
+    const signals = Array.isArray(data?.signals) ? data.signals.slice() : [];
+    const tiers = [
+      ["10_sot5_shots8", "1:0 · SOT ≥5 · strely ≥8"],
+      ["10_sot5_shots10", "1:0 · SOT ≥5 · strely ≥10"],
+      ["10_sot5_shots12", "1:0 · SOT ≥5 · strely ≥12"],
+      ["01_sot6_shots8", "0:1 · SOT ≥6 · strely ≥8"]
+    ];
+    const totalWins = signals.filter(x => x.status === "WIN").length;
+    const totalLosses = signals.filter(x => x.status === "LOSS").length;
+    const totalOpen = signals.filter(x => x.status === "OPEN").length;
+    const totalUnresolved = signals.filter(x => x.status === "UNRESOLVED").length;
+    addText(target, `Spolu: ${signals.length} | WIN: ${totalWins} | LOSS: ${totalLosses} | otvorené: ${totalOpen} | neoverené: ${totalUnresolved}`);
+    addText(target, "Úspešnosť počíta iba potvrdené WIN/LOSS. Neoverené a otvorené signály sa do percenta nezapočítavajú.");
+    tiers.forEach(([key, label]) => {
+      const rows = signals.filter(x => x.tierKey === key);
+      const wins = rows.filter(x => x.status === "WIN").length;
+      const losses = rows.filter(x => x.status === "LOSS").length;
+      const open = rows.filter(x => x.status === "OPEN").length;
+      const unresolved = rows.filter(x => x.status === "UNRESOLVED").length;
+      const evaluated = wins + losses;
+      const card = document.createElement("div");
+      card.style.cssText = "margin:12px 0;padding:12px;border:1px solid #2563eb;border-radius:10px;background:#101b2b;";
+      const heading = document.createElement("div");
+      heading.textContent = label;
+      heading.style.cssText = "font-weight:900;color:#93c5fd;margin-bottom:7px;";
+      const summary = document.createElement("div");
+      summary.textContent = `Vzorka: ${rows.length} | WIN: ${wins} | LOSS: ${losses} | OPEN: ${open} | neoverené: ${unresolved} | úspešnosť: ${evaluated ? Math.round(wins / evaluated * 100) + "%" : "bez výsledkov"}${evaluated < 10 ? " · malá vzorka" : ""}`;
+      summary.style.cssText = "font-size:12px;line-height:1.6;color:#e2e8f0;";
+      card.append(heading, summary);
+      target.appendChild(card);
+    });
+    const recent = signals.sort((a,b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)).slice(0,150);
+    addText(target, "JEDNOTLIVÉ BTTS SIGNÁLY", "15px");
+    if (!recent.length) {
+      addText(target, "Zatiaľ nie sú zaznamenané žiadne BTTS signály.");
+      return;
+    }
+    recent.forEach(item => {
+      const style = item.status === "WIN"
+        ? ["#052e1b", "#22c55e", "#4ade80", "VÝHRA"]
+        : item.status === "LOSS"
+          ? ["#3b0a0a", "#ef4444", "#f87171", "PREHRA"]
+          : item.status === "OPEN"
+            ? ["#172554", "#3b82f6", "#93c5fd", "OTVORENÝ"]
+            : ["#292524", "#a8a29e", "#d6d3d1", "NEOVERENÝ"];
+      const row = document.createElement("div");
+      row.style.cssText = `margin:8px 0;padding:10px;border-radius:9px;background:${style[0]};border:1px solid ${style[1]};`;
+      const title = document.createElement("div");
+      title.textContent = `${item.home || "?"} ${item.startScore ? "(" + item.startScore + ")" : ""} – ${item.away || "?"}`;
+      title.style.cssText = "font-weight:800;margin-bottom:5px;";
+      const detail = document.createElement("div");
+      detail.textContent = `${item.tier || item.tierKey || "BTTS"} | ${style[3]} | ${item.startMinute ?? "?"}. min | SOT ${item.combinedSot ?? "?"} | strely ${item.combinedShots ?? "?"}${item.settledScore ? " | konečný stav " + item.settledScore : ""}`;
+      detail.style.cssText = `font-size:12px;line-height:1.5;color:${style[2]};font-weight:700;`;
+      row.append(title, detail);
+      target.appendChild(row);
+    });
+    if (signals.length > recent.length) addText(target, `Zobrazených posledných ${recent.length} záznamov z ${signals.length}.`);
+    addText(target, "Prahy 1:0 sa môžu prekrývať: rovnaký zápas môže byť samostatne započítaný pri 8, 10 aj 12 strelách. Vzorky sa preto nesčítavajú.");
   }
 
   function renderSystemStats(current, signalArchive, matchArchive) {
@@ -1924,7 +1991,8 @@
         }
 
         renderSummary();
-        if (signalArchive) renderServerSignalArchive(signalArchive);
+        if (signalArchive) renderServerSignalArchive(signalArchive, greenSignalArchiveEl);
+        if (bttsArchive) renderBttsSignalArchive(bttsArchive, bttsSignalArchiveEl);
         renderMatchArchive(matchArchive);
         renderSystemStats(current, signalArchive, matchArchive);
 
@@ -2027,29 +2095,10 @@
       renderMatchesGrouped(matches, historyData, allowSignals, false, signalArchive, bttsArchive);
 
       renderSummary();
-      if (signalArchive) renderServerSignalArchive(signalArchive);
+      if (signalArchive) renderServerSignalArchive(signalArchive, greenSignalArchiveEl);
       else addText(engine, "Trvalý archív signálov sa nepodarilo načítať.");
 
-      const bttsRows = Array.isArray(bttsArchive?.signals) ? bttsArchive.signals : [];
-      addText(engine, "SAMOSTATNÝ BTTS MODEL – VÝSLEDKY PODĽA PODMIENKY", "16px");
-      const bttsTiers = [
-        ["10_sot5_shots8", "1:0 | SOT ≥5 | strely ≥8"],
-        ["10_sot5_shots10", "1:0 | SOT ≥5 | strely ≥10"],
-        ["10_sot5_shots12", "1:0 | SOT ≥5 | strely ≥12"],
-        ["01_sot6_shots8", "0:1 | SOT ≥6 | strely ≥8"]
-      ];
-      bttsTiers.forEach(([key, label]) => {
-        const rows = bttsRows.filter(x => x.tierKey === key);
-        const wins = rows.filter(x => x.status === "WIN").length;
-        const losses = rows.filter(x => x.status === "LOSS").length;
-        const open = rows.filter(x => x.status === "OPEN").length;
-        const unresolved = rows.filter(x => x.status === "UNRESOLVED").length;
-        const evaluated = wins + losses;
-        addText(engine, label, "14px");
-        addText(engine, `Vzorka: ${rows.length} | WIN: ${wins} | LOSS: ${losses} | OPEN: ${open} | neoverené: ${unresolved} | úspešnosť: ${evaluated ? Math.round(wins / evaluated * 100) + "%" : "zatiaľ bez výsledkov"}`);
-      });
-      addText(engine, "Varianty 1:0 sa vyhodnocujú samostatne. Jeden zápas môže patriť do viacerých prahov, preto sa ich vzorky nesčítavajú ako nezávislé zápasy.");
-      addText(engine, "BTTS archív a štatistiky sú oddelené od modelu Gól do 15 min.");
+      if (bttsArchive) renderBttsSignalArchive(bttsArchive, bttsSignalArchiveEl);
       renderMatchArchive(matchArchive);
       renderSystemStats(current, signalArchive, matchArchive);
 
