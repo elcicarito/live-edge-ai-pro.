@@ -63,6 +63,15 @@ jobs:
             }
             return String(match?.status_text || match?.statusText || "").toLowerCase().trim();
           }
+ 
+          function formatOf(match) {
+            const league = String(match?.competition?.name || match?.league?.name || match?.competition || match?.league || "").toLowerCase();
+            const teams = [match?.home || match?.home_name || "", match?.away || match?.away_name || ""].join(" ").toLowerCase();
+            const ncaa = /ncaa|national collegiate athletic association/.test(league);
+            const women = /women|woman|ladies|lady|female|wbb/.test(league) || /women|lady|ladies/.test(teams);
+            return ncaa && !women ? "halves" : "quarters";
+          }
+          const periodCount = match => formatOf(match) === "halves" ? 2 : 4;
 
           function isLive(match) {
             const s = statusOf(match).replace(/[\s_-]+/g, "");
@@ -141,16 +150,20 @@ jobs:
               const html = await response.text();
               const home = [];
               const away = [];
-              for (let q = 1; q <= 4; q++) {
-                const marker = "Q" + q + " Points";
-                const at = html.indexOf(marker);
+              const markers = formatOf(match) === "halves"
+                ? ["1st Half Points", "First Half Points", "H1 Points", "2nd Half Points", "Second Half Points", "H2 Points"]
+                : ["Q1 Points", "Q2 Points", "Q3 Points", "Q4 Points"];
+              for (let q = 0; q < markers.length; q++) {
+                const marker = markers[q];
+                const at = html.toLowerCase().indexOf(marker.toLowerCase());
                 if (at < 0) continue;
                 const block = html.slice(at, at + 1400);
                 const homeMatch = block.match(/class=["']home-val["'][^>]*>\s*(\d+)/i);
                 const awayMatch = block.match(/class=["']away-val["'][^>]*>\s*(\d+)/i);
                 if (homeMatch && awayMatch) {
-                  home[q - 1] = Number(homeMatch[1]);
-                  away[q - 1] = Number(awayMatch[1]);
+                  const periodIndex = formatOf(match) === "halves" ? (q < 3 ? 0 : 1) : q;
+                  home[periodIndex] = Number(homeMatch[1]);
+                  away[periodIndex] = Number(awayMatch[1]);
                 }
               }
               if (!home.some(Number.isFinite) && !away.some(Number.isFinite)) return null;
@@ -215,9 +228,9 @@ jobs:
             const archiveById = new Map(archive.map(m => [String(m.id || m.slug || m.url || ""), m]));
             // Enrich a small batch of finished games missing quarter data on each run.
             // Failed/empty pages are retried after six hours to avoid hammering the provider.
-            const hasCompleteQuarterScores = scores => {
+            const hasCompleteQuarterScores = (scores, match) => {
               if (!scores?.home || !scores?.away) return false;
-              return [0, 1, 2, 3].every(q => {
+              return Array.from({ length: periodCount(match) }, (_, q) => q).every(q => {
                 const h = Number(scores.home[q]), a = Number(scores.away[q]);
                 return scores.home[q] !== null && scores.home[q] !== undefined &&
                   scores.away[q] !== null && scores.away[q] !== undefined &&
@@ -228,7 +241,7 @@ jobs:
               const id = String(match.id || match.slug || match.url || "");
               const existing = archiveById.get(id) || {};
               // Keep partial records and retry them after six hours until Q1-Q4 are complete.
-              if (hasCompleteQuarterScores(existing.period_scores)) return false;
+              if (hasCompleteQuarterScores(existing.period_scores, match)) return false;
               const checked = Date.parse(existing.quarter_scores_checked_at || "");
               return !Number.isFinite(checked) || Date.now() - checked > 6 * 60 * 60 * 1000;
             }).slice(0, 8);
@@ -245,6 +258,7 @@ jobs:
                 const newScores = enriched.period_scores;
                 const home = [], away = [];
                 for (let q = 0; q < 4; q++) {
+                  if (q >= periodCount(match)) { home[q] = null; away[q] = null; continue; }
                   const oldH = Number(oldScores.home?.[q]), oldA = Number(oldScores.away?.[q]);
                   const oldValid = oldScores.home?.[q] !== null && oldScores.home?.[q] !== undefined &&
                     oldScores.away?.[q] !== null && oldScores.away?.[q] !== undefined &&
@@ -353,7 +367,7 @@ jobs:
           const complete = (m, q) => { const total = qTotal(m, q); return total !== null && total > 0; };
           const periodOf = m => {
             const s = String(m.status_text || m.period?.name || m.period || m.status || "").toLowerCase();
-            const match = s.match(/(?:^|\\b)([1-4])(?:st|nd|rd|th)?\\s*(?:quarter|period|q)\\b|\\b(?:quarter|period|q)\\s*([1-4])(?:\\b|$)/);
+            const match = s.match(/(?:^|\b)([1-4])(?:st|nd|rd|th)?\s*(?:quarter|period|q)\b|\b(?:quarter|period|q)\s*([1-4])(?:\b|$)/);
             if (match) return Number(match[1] || match[2]);
             if (/half.?time|halftime|break/.test(s)) return formatOf(m) === "halves" ? 2 : 3;
             if (/finished|ended|full.?time/.test(s)) return formatOf(m) === "halves" ? 3 : 5;
@@ -449,7 +463,7 @@ jobs:
             complete_training_games: quarterTraining.length,
             complete_half_training_games: halfTraining.length,
             settled_this_run: settled, created_this_run: created, predictions: trimmed
-          }, null, 2) + "\\n");
+          }, null, 2) + "\n");
           console.log("PREDICTIONS: vytvorené", created, "vyhodnotené", settled,
             "tréning Q zápasy", quarterTraining.length, "tréning NCAA polčasy", halfTraining.length,
             "celkom", trimmed.length);
