@@ -3,6 +3,7 @@
   const CURRENT_URL = "./data/live-current.json";
   const HISTORY_URL = "./data/live-history.json";
   const SIGNAL_ARCHIVE_URL = "./data/signal-archive.json";
+  const BTTS_ARCHIVE_URL = "./data/btts-signal-archive.json";
   const MATCH_ARCHIVE_URL = "./data/live-archive.json";
   const SIGNAL_KEY = "live_edge_signals_v6";
 
@@ -1493,7 +1494,7 @@
     return found ? found.flag : "🌍";
   }
 
-  function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false, signalArchive = null, target = matchesEl) {
+  function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false, signalArchive = null, bttsArchive = null, target = matchesEl) {
     const card = document.createElement("div");
 
     card.style.cssText =
@@ -1670,6 +1671,43 @@
 
     renderCurrentStats(detail, match.stats || []);
 
+    // BTTS je samostatný modrý model; jeho história sa nemieša so zeleným gólovým modelom.
+    const bttsSignals = Array.isArray(bttsArchive?.signals)
+      ? bttsArchive.signals.filter(item => String(item.matchId) === matchId(match))
+      : [];
+    const bttsOpen = bttsSignals.find(item => item.status === "OPEN");
+    const bttsLatest = bttsSignals.slice().sort((a, b) =>
+      Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)
+    )[0];
+    if (bttsOpen) {
+      addSignalPanel(detail, {
+        heading: "🔵 BTTS – POTVRDENÝ SIGNÁL",
+        title: bttsOpen.predictedTeam || (bttsOpen.predictedSide === "home" ? match.home : match.away),
+        detail: `Podmienky: ${bttsOpen.tier} | ${bttsOpen.combinedSot} SOT spolu | ${bttsOpen.combinedShots} striel spolu | vstup ${bttsOpen.startMinute}'. Skóre pri signále: ${bttsOpen.startScore}. Cieľ: predikovaný tím skóruje do konca zápasu.`,
+        background: "#102d4a",
+        border: "#38bdf8",
+        titleColor: "#7dd3fc"
+      });
+    } else if (bttsLatest) {
+      addSignalPanel(detail, {
+        heading: "🔵 BTTS – HISTÓRIA",
+        title: bttsLatest.status === "WIN" ? "WIN" : bttsLatest.status === "LOSS" ? "LOSS" : "NEVYRIEŠENÉ",
+        detail: `${bttsLatest.tier} | vstup ${bttsLatest.startMinute}' pri skóre ${bttsLatest.startScore} | konečné skóre ${bttsLatest.settledScore || "—"}`,
+        background: "#102d4a",
+        border: "#38bdf8",
+        titleColor: "#7dd3fc"
+      });
+    } else {
+      addSignalPanel(detail, {
+        heading: "🔵 BTTS",
+        title: "Bez potvrdeného signálu",
+        detail: "Sleduje sa 46.–50. minúta, skóre 1:0 alebo 0:1 a kombinácia SOT + celkových striel oboch tímov.",
+        background: "#102d4a",
+        border: "#2563eb",
+        titleColor: "#93c5fd"
+      });
+    }
+
     const pressure = calculatePressure(match.stats || []);
     const snapshot = getSnapshot(match, historyData, collectedAt);
     const threat = calculateThreat(pressure, snapshot);
@@ -1784,7 +1822,7 @@
     target.appendChild(card);
   }
 
-  function renderMatchesGrouped(items, historyData, allowSignals, staleMode, signalArchive) {
+  function renderMatchesGrouped(items, historyData, allowSignals, staleMode, signalArchive, bttsArchive) {
     const groups = new Map();
 
     items.forEach(item => {
@@ -1812,6 +1850,7 @@
           allowSignals,
           staleMode,
           signalArchive,
+          bttsArchive,
           section
         ));
 
@@ -1824,7 +1863,7 @@
     scanning = true;
 
     try {
-      const [current, historyData, signalArchive, matchArchive] = await Promise.all([
+      const [current, historyData, signalArchive, bttsArchive, matchArchive] = await Promise.all([
         getJSON(CURRENT_URL),
         getJSON(HISTORY_URL).catch(error => {
           console.warn("História zberu nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
@@ -1832,6 +1871,10 @@
         }),
         getJSON(SIGNAL_ARCHIVE_URL).catch(error => {
           console.warn("Trvalý archív signálov nie je dostupný:", error);
+          return null;
+        }),
+        getJSON(BTTS_ARCHIVE_URL).catch(error => {
+          console.warn("BTTS archív zatiaľ nie je dostupný:", error);
           return null;
         }),
         getJSON(MATCH_ARCHIVE_URL).catch(error => {
@@ -1875,7 +1918,7 @@
         addText(engine, "Zobrazenie je iba archívny náhľad. Žiadne signály, vyhodnocovanie ani aktualizácia skóre sa z neho nevykonáva.");
 
         if (staleMatches.length) {
-          renderMatchesGrouped(staleMatches, historyData, false, true, signalArchive);
+          renderMatchesGrouped(staleMatches, historyData, false, true, signalArchive, bttsArchive);
         } else {
           addText(matchesEl, "Nie sú dostupné ani posledné uložené LIVE zápasy.");
         }
@@ -1981,11 +2024,22 @@
         );
       }
 
-      renderMatchesGrouped(matches, historyData, allowSignals, false, signalArchive);
+      renderMatchesGrouped(matches, historyData, allowSignals, false, signalArchive, bttsArchive);
 
       renderSummary();
       if (signalArchive) renderServerSignalArchive(signalArchive);
       else addText(engine, "Trvalý archív signálov sa nepodarilo načítať.");
+
+      const bttsRows = Array.isArray(bttsArchive?.signals) ? bttsArchive.signals : [];
+      const bttsWins = bttsRows.filter(x => x.status === "WIN").length;
+      const bttsLosses = bttsRows.filter(x => x.status === "LOSS").length;
+      const bttsOpenCount = bttsRows.filter(x => x.status === "OPEN").length;
+      const bttsUnresolved = bttsRows.filter(x => x.status === "UNRESOLVED").length;
+      const bttsEvaluated = bttsWins + bttsLosses;
+      addText(engine, "SAMOSTATNÝ BTTS MODEL", "16px");
+      addText(engine, `Signály: ${bttsRows.length} | WIN: ${bttsWins} | LOSS: ${bttsLosses} | OPEN: ${bttsOpenCount} | NEVYRIEŠENÉ: ${bttsUnresolved}`);
+      addText(engine, `Úspešnosť vyhodnotených BTTS: ${bttsEvaluated ? Math.round(bttsWins / bttsEvaluated * 100) + "%" : "zatiaľ bez vyhodnotených zápasov"}`);
+      addText(engine, "BTTS archív a štatistiky sú oddelené od modelu Gól do 15 min.");
       renderMatchArchive(matchArchive);
       renderSystemStats(current, signalArchive, matchArchive);
 
