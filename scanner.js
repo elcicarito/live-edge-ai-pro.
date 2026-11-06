@@ -2763,7 +2763,6 @@
         else if (bttsSignalArchiveEl) { bttsSignalArchiveEl.innerHTML = ""; addText(bttsSignalArchiveEl, "Archív BTTS sa nepodarilo načítať."); }
         renderMatchArchive(matchArchive);
         renderSystemStats(current, signalArchive, matchArchive);
-      renderApiDataQuality(current, matchArchive, matchHistoryData);
         renderApiDataQuality(current, matchArchive, matchHistoryData);
       renderFootballPerformanceCenter(signalArchive, bttsArchive);
         renderFootballPerformanceCenter(signalArchive, bttsArchive);
