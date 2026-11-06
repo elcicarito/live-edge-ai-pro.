@@ -2129,6 +2129,50 @@
       const extra = document.createElement("div");
       extra.textContent = momentumDetail;
       extra.style.cssText = "font-size:10px;color:#94a3b8;margin-top:6px;line-height:1.4;";
+      const analysis = item.momentumAnalysis;
+      if (analysis && analysis.version === "momentum-archive-v1") {
+        const details = document.createElement("details");
+        details.style.cssText = "margin-top:8px;padding:8px;background:#0c1929;border:1px solid #344b65;border-radius:8px;";
+        const summary = document.createElement("summary");
+        summary.textContent = "Zobraziť uloženú AI analýzu momenta";
+        summary.style.cssText = "cursor:pointer;font-size:10px;font-weight:800;color:#93c5fd;";
+        details.appendChild(summary);
+        const body = document.createElement("div");
+        body.style.cssText = "font-size:10px;color:#cbd5e1;line-height:1.6;margin-top:7px;";
+        const line = (label, value) => {
+          const div = document.createElement("div");
+          div.textContent = label + ": " + value;
+          body.appendChild(div);
+        };
+        line("Tlak D/H", analysis.pressure?.home + "/" + analysis.pressure?.away);
+        line("Aktivita D/H", analysis.activityRate?.home + "/" + analysis.activityRate?.away);
+        line("GOAL THREAT D/H", analysis.goalThreat?.home + "/" + analysis.goalThreat?.away);
+        line("TEAM POWER D/H", analysis.teamPower?.home + "/100 · " + analysis.teamPower?.away + "/100");
+        line("TEAM CONSISTENCY", analysis.consistency
+          ? analysis.consistency.home.score + "/100 · " + analysis.consistency.away.score + "/100 (" + analysis.consistency.count + " meraní)"
+          : "nedostatok historických meraní");
+        line("OPPONENT WEAKNESS", analysis.opponentWeakness
+          ? analysis.opponentWeakness.sides.home.score + "/100 · " + analysis.opponentWeakness.sides.away.score + "/100"
+          : "nedostatok historických meraní");
+        line("MATCH DOMINANCE", analysis.matchDominance
+          ? analysis.matchDominance.home + "/100 · " + analysis.matchDominance.away + "/100"
+          : "nedostupné");
+        line("ZRÝCHLENIE", analysis.acceleration
+          ? "domáci " + analysis.acceleration.homeDelta + " · hostia " + analysis.acceleration.awayDelta
+          : "nedostatok intervalov");
+        line("QUALITY SCORE", analysis.qualityScore == null ? "nedostupné" : analysis.qualityScore + "/100");
+        const note = document.createElement("div");
+        note.textContent = "Snapshot uložený pri vzniku signálu. Staršie signály bez tohto poľa spätne nedopočítavame.";
+        note.style.cssText = "font-size:9px;color:#94a3b8;margin-top:6px;";
+        body.appendChild(note);
+        details.appendChild(body);
+        card.appendChild(details);
+      } else {
+        const legacy = document.createElement("div");
+        legacy.textContent = "Rozšírená AI analýza momenta nebola pri tomto historickom signále uložená.";
+        legacy.style.cssText = "font-size:9px;color:#94a3b8;margin-top:6px;";
+        card.appendChild(legacy);
+      }
       card.append(top, scoreline, quality, outcome, extra);
       history.appendChild(card);
     });
