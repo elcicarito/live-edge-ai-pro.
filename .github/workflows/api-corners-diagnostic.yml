@@ -86,7 +86,7 @@ jobs:
             for (const [name, result] of Object.entries(report)) scan(result.body, name);
             const scriptFindings = (report.tracker_scripts || []).flatMap(s => [
               ...(s.corner_hits || []).map(hit => ' - **' + s.url + '** corner: `' + hit.slice(0, 500) + '`'),
-              ...(s.api_refs || []).map(hit => ' - **' + s.url + '** API ref: `' + hit.slice(0, 300) + '`')
+              ...(s.api_refs || []).map(hit => ' - **' + s.url + '** API ref: `' + hit.slice(0, 300) + '`'),
               ...(s.transport_hits || []).map(hit => ' - **' + s.url + '** transport: `' + hit.slice(0, 500) + '`'),
             ]);
             const summary = [
