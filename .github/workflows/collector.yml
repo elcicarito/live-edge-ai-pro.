@@ -45,6 +45,38 @@ jobs:
           const DROP_RATIO = 0.5;
           const MIN_BASELINE = 6;
 
+          const collectorMetrics = {
+            started_at: new Date().toISOString(),
+            request_count: 0,
+            success_count: 0,
+            failure_count: 0,
+            http_429_count: 0,
+            http_5xx_count: 0,
+            retry_count: 0,
+            network_error_count: 0,
+            endpoint_counts: {}
+          };
+
+          function metricEndpoint(rawUrl) {
+            try {
+              const pathname = new URL(rawUrl).pathname;
+              if (pathname.includes("/fixtures/")) return "fixtures";
+              if (pathname.includes("/match/")) return "match_detail";
+              return pathname || "other";
+            } catch {
+              return "other";
+            }
+          }
+
+          function countMetric(endpoint, key) {
+            if (!collectorMetrics.endpoint_counts[endpoint]) {
+              collectorMetrics.endpoint_counts[endpoint] = {
+                requests: 0, successes: 0, failures: 0
+              };
+            }
+            collectorMetrics.endpoint_counts[endpoint][key]++;
+          }
+
           async function getJSON(url, attempts = 7) {
             let lastError;
 
@@ -54,6 +86,9 @@ jobs:
               try {
                 const separator = url.includes("?") ? "&" : "?";
                 const freshUrl = `${url}${separator}_cache=${Date.now()}_${i}`;
+                const endpoint = metricEndpoint(url);
+                collectorMetrics.request_count++;
+                countMetric(endpoint, "requests");
 
                 const response = await fetch(freshUrl, {
                   headers: {
@@ -66,7 +101,14 @@ jobs:
                   cache: "no-store"
                 });
 
-                if (!response.ok) {
+                if (response.ok) {
+                  collectorMetrics.success_count++;
+                  countMetric(endpoint, "successes");
+                } else {
+                  collectorMetrics.failure_count++;
+                  countMetric(endpoint, "failures");
+                  if (response.status === 429) collectorMetrics.http_429_count++;
+                  if (response.status >= 500) collectorMetrics.http_5xx_count++;
                   const error = new Error(`HTTP ${response.status}`);
                   error.status = response.status;
                   const retryAfter = response.headers.get("retry-after");
@@ -89,6 +131,11 @@ jobs:
 
               } catch (error) {
                 lastError = error;
+                if (!error.status) {
+                  collectorMetrics.failure_count++;
+                  collectorMetrics.network_error_count++;
+                  countMetric(endpoint, "failures");
+                }
                 console.log(`Pokus ${i}/${attempts}: ${error.message}`);
 
                 const retryable = !error.status ||
@@ -97,6 +144,7 @@ jobs:
 
                 if (!retryable || i >= attempts) break;
 
+                collectorMetrics.retry_count++;
                 const backoffMs = Math.min(45000, 5000 * (2 ** (i - 1)));
                 const delayMs = Math.min(60000, Math.max(backoffMs, retryAfterMs));
                 console.log(`Opakujem požiadavku o ${Math.ceil(delayMs / 1000)} s.`);
@@ -844,6 +892,22 @@ jobs:
             // =========================================
             // AKTUÁLNE LIVE DÁTA
             // =========================================
+
+            collectorMetrics.finished_at = new Date().toISOString();
+            collectorMetrics.duration_ms =
+              Date.parse(collectorMetrics.finished_at) - Date.parse(collectorMetrics.started_at);
+            output.collector_metrics = collectorMetrics;
+            console.log("FOOTBALL COLLECTOR METRICS:", JSON.stringify(collectorMetrics));
+
+            const metricsPath = "data/football-collector-metrics.jsonl";
+            const metricsHistory = fs.existsSync(metricsPath)
+              ? fs.readFileSync(metricsPath, "utf8").split("\n").filter(Boolean)
+              : [];
+            metricsHistory.push(JSON.stringify({
+              sport: "football",
+              ...collectorMetrics
+            }));
+            fs.writeFileSync(metricsPath, metricsHistory.slice(-1000).join("\n") + "\n");
 
             // Aktuálny LIVE zoznam oddeľujeme od bezpečnosti archivácie.
             // Ak API vrátilo platný zoznam a každý vrátený zápas má
@@ -1880,7 +1944,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/live-current.json data/live-latest.json data/live-history.jsonl data/live-history.json data/live-match-timeline.json data/live-match-history.jsonl data/live-archive.json data/signal-archive.json data/btts-signal-archive.json
+          git add data/live-current.json data/live-latest.json data/live-history.jsonl data/live-history.json data/live-match-timeline.json data/live-match-history.jsonl data/live-archive.json data/signal-archive.json data/btts-signal-archive.json data/football-collector-metrics.jsonl
 
           if git diff --cached --quiet; then
             echo "Žiadne nové zmeny na uloženie."
