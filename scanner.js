@@ -1117,6 +1117,29 @@
       return null;
     });
 
+    // Momentum sa analyzuje iba pri záznamoch, ktoré majú uložené skutočné
+    // snapshoty. Staršie signály bez týchto údajov sa spätne neodhadujú.
+    renderBreakdown("ÚSPEŠNOSŤ PODĽA MOMENTA – KTORÝ TÍM MAL PREVAHU", item => {
+      if (item.momentumSide === "home") return "Prevaha domácich";
+      if (item.momentumSide === "away") return "Prevaha hostí";
+      return null;
+    });
+
+    renderBreakdown("ÚSPEŠNOSŤ PODĽA SILY MOMENTA", item => {
+      if (item.momentumStrength === "slight") return "Mierne (rozdiel 3–9)";
+      if (item.momentumStrength === "medium") return "Stredné (rozdiel 10–19)";
+      if (item.momentumStrength === "strong") return "Silné (rozdiel 20+)";
+      return null;
+    });
+
+    renderBreakdown("ÚSPEŠNOSŤ PODĽA AKTIVITY PREDIKOVANÉHO TÍMU", item => {
+      const activity = Number(item.activityRate);
+      if (!Number.isFinite(activity)) return null;
+      if (activity < 6) return "Nižšia aktivita (<6)";
+      if (activity < 10) return "Stredná aktivita (6–9,9)";
+      return "Vysoká aktivita (10+)";
+    });
+
     const recent = [...signals].sort((a, b) =>
       Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)
     ).slice(0, 100);
@@ -1147,7 +1170,15 @@
       const settledDetail = item.settledScore
         ? " | vyhodnotené pri stave " + item.settledScore + (item.settledMinute != null ? " v " + item.settledMinute + ". min" : "")
         : "";
-      detail.textContent = (item.team || item.side || "Tím") + " | " + label + " | začiatok " + (item.startMinute ?? "?") + ". min" + settledDetail;
+      const momentumDetail = Number.isFinite(Number(item.pressureHome)) &&
+        Number.isFinite(Number(item.pressureAway)) &&
+        Number.isFinite(Number(item.activityHome)) &&
+        Number.isFinite(Number(item.activityAway))
+        ? " | tlak D/H " + item.pressureHome + "/" + item.pressureAway + "%" +
+          " | aktivita D/H " + item.activityHome + "/" + item.activityAway +
+          " | momentum " + (item.momentumStrength || "—") + " (" + (item.momentumDiff ?? "—") + ")"
+        : " | momentum: bez historického snapshotu";
+      detail.textContent = (item.team || item.side || "Tím") + " | " + label + " | začiatok " + (item.startMinute ?? "?") + ". min" + momentumDetail + settledDetail;
       detail.style.cssText = `font-size:13px;color:${style.color};font-weight:800;`;
       line.append(title, detail);
       target.appendChild(line);
