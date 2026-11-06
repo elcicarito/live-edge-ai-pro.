@@ -1996,7 +1996,9 @@
 
         renderSummary();
         if (signalArchive) renderServerSignalArchive(signalArchive, greenSignalArchiveEl);
+        else if (greenSignalArchiveEl) { greenSignalArchiveEl.innerHTML = ""; addText(greenSignalArchiveEl, "Archív zelených signálov sa nepodarilo načítať."); }
         if (bttsArchive) renderBttsSignalArchive(bttsArchive, bttsSignalArchiveEl);
+        else if (bttsSignalArchiveEl) { bttsSignalArchiveEl.innerHTML = ""; addText(bttsSignalArchiveEl, "Archív BTTS sa nepodarilo načítať."); }
         renderMatchArchive(matchArchive);
         renderSystemStats(current, signalArchive, matchArchive);
 
@@ -2100,9 +2102,10 @@
 
       renderSummary();
       if (signalArchive) renderServerSignalArchive(signalArchive, greenSignalArchiveEl);
-      else addText(engine, "Trvalý archív signálov sa nepodarilo načítať.");
-
+      else if (greenSignalArchiveEl) { greenSignalArchiveEl.innerHTML = ""; addText(greenSignalArchiveEl, "Archív zelených signálov sa nepodarilo načítať."); }
       if (bttsArchive) renderBttsSignalArchive(bttsArchive, bttsSignalArchiveEl);
+      else if (bttsSignalArchiveEl) { bttsSignalArchiveEl.innerHTML = ""; addText(bttsSignalArchiveEl, "Archív BTTS sa nepodarilo načítať."); }
+
       renderMatchArchive(matchArchive);
       renderSystemStats(current, signalArchive, matchArchive);
 
