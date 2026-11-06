@@ -2047,7 +2047,7 @@
     addQuickStat("NEB. ÚTOKY", statValue(match.stats || [], "dangerous attacks"));
     if (quickStats.childElementCount) card.appendChild(quickStats);
 
-    const priority = getMatchPriority(match, collectedAt, allowSignals, staleMode, signalArchive, bttsArchive);
+    const priority = getMatchPriority(match, historyData, collectedAt, allowSignals, staleMode, signalArchive, bttsArchive);
     if (priority.label) {
       const priorityTag = document.createElement("div");
       priorityTag.textContent = priority.label;
@@ -2349,7 +2349,7 @@
     target.appendChild(card);
   }
 
-  function getMatchPriority(match, collectedAt, allowSignals, staleMode, signalArchive, bttsArchive) {
+  function getMatchPriority(match, historyData, collectedAt, allowSignals, staleMode, signalArchive, bttsArchive) {
     if (staleMode) return { rank: 0, score: 0, label: null, color: "", background: "", border: "" };
 
     const id = matchId(match);
@@ -2401,7 +2401,7 @@
 
     const priorityByItem = new Map(items.map(item => [
       item,
-      getMatchPriority(item.match, item.collectedAt, allowSignals, staleMode, signalArchive, bttsArchive)
+      getMatchPriority(item.match, historyData, item.collectedAt, allowSignals, staleMode, signalArchive, bttsArchive)
     ]));
     const getPriority = item => priorityByItem.get(item) || { rank: 0, score: 0 };
     const rankedGroups = [...groups.entries()].map(([league, leagueItems]) => {
