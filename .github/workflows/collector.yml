@@ -1028,6 +1028,74 @@ jobs:
             );
 
             // =========================================
+            // TRVALÁ HISTÓRIA UKONČENÝCH ZÁPASOV
+            // Sedemdňová LIVE história je iba pracovné okno.
+            // Po potvrdení konečného výsledku uložíme zápas a jeho
+            // dostupné LIVE snímky do archívu bez automatickej retencie.
+            // Zápas sa uloží iba raz podľa stabilného ID.
+            // =========================================
+            const PERMANENT_MATCH_HISTORY_PATH = "data/live-match-history.jsonl";
+            const permanentIds = new Set();
+
+            if (fs.existsSync(PERMANENT_MATCH_HISTORY_PATH)) {
+              const existingLines = fs.readFileSync(
+                PERMANENT_MATCH_HISTORY_PATH,
+                "utf8"
+              ).split("\n").filter(Boolean);
+
+              for (const line of existingLines) {
+                try {
+                  const item = JSON.parse(line);
+                  if (item?.match_id) permanentIds.add(String(item.match_id));
+                } catch {
+                  // Poškodený riadok neblokuje archiváciu ostatných zápasov.
+                }
+              }
+            }
+
+            const permanentRecords = [];
+            for (const item of archive.archived_matches || []) {
+              if (
+                item?.status_confirmation !== "confirmed_finished" ||
+                !item.final_match ||
+                !item.id
+              ) continue;
+
+              const id = String(item.id);
+              if (permanentIds.has(id)) continue;
+
+              const timelineItem = timelineById.get(id);
+              permanentRecords.push({
+                schema_version: 1,
+                match_id: id,
+                archived_at: item.archived_at || now,
+                home: timelineItem?.home || item.final_match.home || "",
+                away: timelineItem?.away || item.final_match.away || "",
+                competition: timelineItem?.competition || item.final_match.competition || "",
+                final_score: item.final_score || null,
+                final_status: item.final_status || getStatus(item.final_match),
+                final_match: item.final_match,
+                snapshots: Array.isArray(timelineItem?.snapshots)
+                  ? timelineItem.snapshots
+                  : []
+              });
+              permanentIds.add(id);
+            }
+
+            if (permanentRecords.length) {
+              fs.appendFileSync(
+                PERMANENT_MATCH_HISTORY_PATH,
+                permanentRecords.map(item => JSON.stringify(item)).join("\n") + "\n"
+              );
+            }
+
+            console.log("PERMANENT MATCH HISTORY:", JSON.stringify({
+              newly_archived: permanentRecords.length,
+              total_archived: permanentIds.size,
+              retention: "permanent"
+            }));
+
+            // =========================================
             // TRVALÝ ARCHÍV LIVE SIGNÁLOV
             // Rovnaké váhy a prahy ako v scanner.js.
             // =========================================
@@ -1557,7 +1625,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/live-current.json data/live-latest.json data/live-history.jsonl data/live-history.json data/live-match-timeline.json data/live-archive.json data/signal-archive.json data/btts-signal-archive.json
+          git add data/live-current.json data/live-latest.json data/live-history.jsonl data/live-history.json data/live-match-timeline.json data/live-match-history.jsonl data/live-archive.json data/signal-archive.json data/btts-signal-archive.json
 
           if git diff --cached --quiet; then
             echo "Žiadne nové zmeny na uloženie."
