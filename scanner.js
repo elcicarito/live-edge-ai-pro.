@@ -1250,6 +1250,66 @@
     };
   }
 
+  // Odhad oslabovania odporu súpera z trendu relatívneho tlaku; nie je to priamo meraná obranná kvalita.
+  function calculateOpponentWeakness(match, historyData, collectedAt) {
+    const id = matchId(match);
+    const now = Date.parse(collectedAt || "");
+    if (!id || !Number.isFinite(now)) return { ready: false, reason: "Chýba identifikátor zápasu alebo čas merania." };
+
+    const records = historyRecords(historyData, id)
+      .filter(item => Number.isFinite(item.time) && item.match?.stats)
+      .sort((a, b) => a.time - b.time);
+    if (!records.some(item => Math.abs(item.time - now) < 1000)) {
+      records.push({ time: now, match });
+      records.sort((a, b) => a.time - b.time);
+    }
+    const unique = records.filter((item, index) => index === 0 || item.time !== records[index - 1].time);
+    const measured = unique.map(item => ({
+      time: item.time,
+      pressure: calculatePressure(item.match.stats || [])
+    })).filter(item => item.pressure &&
+      Number.isFinite(item.pressure.home) && Number.isFinite(item.pressure.away)
+    ).slice(-5);
+
+    if (measured.length < 4) {
+      return { ready: false, count: measured.length, reason: "Na odhad oslabovania odporu treba aspoň 4 platné merania; aktuálne " + measured.length + "." };
+    }
+
+    const first = measured[0].pressure;
+    const latest = measured[measured.length - 1].pressure;
+    const sides = {};
+    ["home", "away"].forEach(side => {
+      const opponent = side === "home" ? "away" : "home";
+      const diffs = measured.map(item => item.pressure[side] - item.pressure[opponent]);
+      const improvement = diffs[diffs.length - 1] - diffs[0];
+      const positiveSteps = diffs.slice(1).filter((value, index) => value - diffs[index] >= 2).length;
+      const leadSamples = diffs.filter(value => value >= 10).length;
+      const trendScore = Math.max(0, Math.min(100, 50 + improvement * 2));
+      const persistenceScore = leadSamples / diffs.length * 100;
+      const stepScore = positiveSteps / (diffs.length - 1) * 100;
+      const score = Math.round(trendScore * 0.5 + persistenceScore * 0.3 + stepScore * 0.2);
+      const currentDiff = diffs[diffs.length - 1];
+      sides[side] = {
+        score,
+        improvement: Math.round(improvement),
+        leadSamples,
+        positiveSteps,
+        status: currentDiff < 10 ? "PREVAHA NIE JE POTVRDENÁ"
+          : improvement >= 8 ? "ODPOR SÚPERA SLABNE"
+          : improvement <= -8 ? "SÚPER SA ZOTAVUJE"
+          : "TLAK BEZ JASNÉHO POSUNU"
+      };
+    });
+
+    return {
+      ready: true,
+      count: measured.length,
+      spanMinutes: Number(((measured[measured.length - 1].time - measured[0].time) / 60000).toFixed(1)),
+      sides,
+      currentPressure: { home: latest.home, away: latest.away }
+    };
+  }
+
   // Diagnostické skóre kvality príležitosti; nie je to pravdepodobnosť gólu.
   // Chýbajúce komponenty sa vynechajú a váhy sa prepočítajú iba z dostupných dát.
   function calculateSignalQuality(threat, snapshot, reliability, acceleration, collectedAt) {
@@ -1526,6 +1586,51 @@
     consistencyWarning.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.4;margin-top:7px;";
     consistencyPanel.appendChild(consistencyWarning);
     panel.appendChild(consistencyPanel);
+
+    const opponentWeakness = calculateOpponentWeakness(match, historyData, collectedAt);
+    const weaknessPanel = document.createElement("div");
+    weaknessPanel.style.cssText = "margin-top:10px;padding:11px;background:#142338;border:1px solid #38516e;border-radius:9px;";
+    const weaknessHeading = document.createElement("div");
+    weaknessHeading.textContent = "AI OPPONENT WEAKNESS · OSLABOVANIE ODPORU SÚPERA";
+    weaknessHeading.style.cssText = "font-size:11px;font-weight:900;color:#e2e8f0;margin-bottom:8px;";
+    weaknessPanel.appendChild(weaknessHeading);
+    if (opponentWeakness.ready) {
+      ["home", "away"].forEach(side => {
+        const item = opponentWeakness.sides[side];
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;gap:8px;margin:7px 0;font-size:11px;";
+        const name = document.createElement("strong");
+        name.textContent = side === "home" ? "DOMÁCI" : "HOSTIA";
+        name.style.color = "#cbd5e1";
+        const value = document.createElement("strong");
+        value.textContent = item.score + "/100 · " + item.status;
+        value.style.color = item.status === "ODPOR SÚPERA SLABNE" ? "#39e6a5"
+          : item.status === "SÚPER SA ZOTAVUJE" ? "#fbbf24" : "#cbd5e1";
+        row.append(name, value);
+        weaknessPanel.appendChild(row);
+        const detail = document.createElement("div");
+        detail.textContent = "Zmena rozdielu tlaku " + (item.improvement > 0 ? "+" : "") +
+          item.improvement + " bodov · prevaha ≥10 bodov v " + item.leadSamples +
+          "/" + opponentWeakness.count + " meraniach";
+        detail.style.cssText = "font-size:10px;color:#94a3b8;margin:0 0 5px;line-height:1.4;";
+        weaknessPanel.appendChild(detail);
+      });
+      const range = document.createElement("div");
+      range.textContent = "Vzorka " + opponentWeakness.count + " meraní za " +
+        opponentWeakness.spanMinutes + " minút. Skóre kombinuje trend rozdielu tlaku (50 %), opakovanú prevahu (30 %) a rastúce kroky tlaku (20 %).";
+      range.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.45;margin-top:6px;";
+      weaknessPanel.appendChild(range);
+    } else {
+      const waiting = document.createElement("div");
+      waiting.textContent = opponentWeakness.reason;
+      waiting.style.cssText = "font-size:10px;color:#94a3b8;";
+      weaknessPanel.appendChild(waiting);
+    }
+    const weaknessWarning = document.createElement("div");
+    weaknessWarning.textContent = "Ide iba o odhad zmeny relatívneho LIVE tlaku. API neposkytuje priame meranie kvality obrany súpera; skóre nie je pravdepodobnosť gólu ani stávkový signál.";
+    weaknessWarning.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.4;margin-top:7px;";
+    weaknessPanel.appendChild(weaknessWarning);
+    panel.appendChild(weaknessPanel);
 
     const qualityScores = calculateSignalQuality(threat, snapshot, reliability, acceleration, collectedAt);
     const qualityPanel = document.createElement("div");
