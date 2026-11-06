@@ -1005,17 +1005,24 @@
     svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", "Vývoj momenta domácich a hostí");
     svg.style.cssText = "display:block;max-width:100%;margin:4px 0;";
-    [25, 55, 85, 115].forEach(y => {
+    [25, 70, 115].forEach((y, index) => {
       const line = document.createElementNS(svgNS, "line");
-      line.setAttribute("x1", "26"); line.setAttribute("x2", "310");
+      line.setAttribute("x1", "34"); line.setAttribute("x2", "310");
       line.setAttribute("y1", String(y)); line.setAttribute("y2", String(y));
       line.setAttribute("stroke", "#64748b"); line.setAttribute("opacity", ".25");
       line.setAttribute("stroke-dasharray", "3 4"); svg.appendChild(line);
+      const axisLabel = document.createElementNS(svgNS, "text");
+      axisLabel.setAttribute("x", "27"); axisLabel.setAttribute("y", String(y + 3));
+      axisLabel.setAttribute("text-anchor", "end");
+      axisLabel.setAttribute("fill", "#94a3b8");
+      axisLabel.setAttribute("font-size", "8");
+      axisLabel.textContent = index === 0 ? "100" : index === 1 ? "50" : "0";
+      svg.appendChild(axisLabel);
     });
 
     const minTime = visible[0].time;
     const maxTime = visible[visible.length - 1].time;
-    const x = time => maxTime === minTime ? 26 : 26 + (time - minTime) / (maxTime - minTime) * 284;
+    const x = time => maxTime === minTime ? 34 : 34 + (time - minTime) / (maxTime - minTime) * 276;
     const y = value => 115 - Math.max(0, Math.min(100, value)) * 0.9;
     const drawLine = (key, color) => {
       const polyline = document.createElementNS(svgNS, "polyline");
