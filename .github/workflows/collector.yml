@@ -1368,6 +1368,125 @@ jobs:
                 };
               }
 
+              // Uložený analytický snapshot momenta v okamihu vzniku signálu.
+              // Všetky metriky vychádzajú iba z dostupnej histórie do collectedTime; bez spätného dopĺňania.
+              const pressureHistory = uniqueQualityRecords.map(item => ({
+                time: item.time,
+                pressure: frontendPressure(item.match.stats || [])
+              })).filter(item => item.pressure &&
+                Number.isFinite(item.pressure.home) && Number.isFinite(item.pressure.away));
+              const consistencyRows = pressureHistory.slice(-8);
+              let consistencyData = null;
+              if (consistencyRows.length >= 4) {
+                const states = consistencyRows.map(item => {
+                  const diff = item.pressure.home - item.pressure.away;
+                  return diff >= 10 ? "home" : diff <= -10 ? "away" : "balanced";
+                });
+                const balanced = states.filter(x => x === "balanced").length;
+                const homeLeads = states.filter(x => x === "home").length;
+                const awayLeads = states.filter(x => x === "away").length;
+                const score = side => Math.round((states.filter(x => x === side).length + balanced * 0.5) / states.length * 100);
+                let streak = 0;
+                for (let i = states.length - 1; i >= 0 && states[i] === states[states.length - 1]; i--) streak++;
+                consistencyData = {
+                  count: states.length, balancedSamples: balanced,
+                  home: { score: score("home"), leadSamples: homeLeads },
+                  away: { score: score("away"), leadSamples: awayLeads },
+                  latestState: states[states.length - 1], latestStreak: streak,
+                  spanMinutes: Number(((consistencyRows[consistencyRows.length - 1].time - consistencyRows[0].time) / 60000).toFixed(1))
+                };
+              }
+
+              const weaknessRows = pressureHistory.slice(-5);
+              let weaknessData = null;
+              if (weaknessRows.length >= 4) {
+                const sides = {};
+                ["home", "away"].forEach(side => {
+                  const opponent = side === "home" ? "away" : "home";
+                  const diffs = weaknessRows.map(item => item.pressure[side] - item.pressure[opponent]);
+                  const improvement = diffs[diffs.length - 1] - diffs[0];
+                  const positiveSteps = diffs.slice(1).filter((value, index) => value - diffs[index] >= 2).length;
+                  const leadSamples = diffs.filter(value => value >= 10).length;
+                  const score = Math.round(
+                    Math.max(0, Math.min(100, 50 + improvement * 2)) * 0.5 +
+                    (leadSamples / diffs.length * 100) * 0.3 +
+                    (positiveSteps / (diffs.length - 1) * 100) * 0.2
+                  );
+                  sides[side] = { score, improvement: Math.round(improvement), leadSamples, positiveSteps };
+                });
+                weaknessData = { count: weaknessRows.length, sides,
+                  spanMinutes: Number(((weaknessRows[weaknessRows.length - 1].time - weaknessRows[0].time) / 60000).toFixed(1)) };
+              }
+
+              const accelerationIntervals = [];
+              for (let i = 1; i < uniqueQualityRecords.length; i++) {
+                const previous = uniqueQualityRecords[i - 1], current = uniqueQualityRecords[i];
+                const minutes = (current.time - previous.time) / 60000;
+                if (!Number.isFinite(minutes) || minutes < 3 || minutes > 15) continue;
+                const oldShots = frontendStatValue(previous.match.stats || [], "shots on target");
+                const shots = frontendStatValue(current.match.stats || [], "shots on target");
+                const oldAttacks = frontendStatValue(previous.match.stats || [], "dangerous attacks");
+                const attacks = frontendStatValue(current.match.stats || [], "dangerous attacks");
+                if (!oldShots || !shots || !oldAttacks || !attacks ||
+                    shots.home < oldShots.home || shots.away < oldShots.away ||
+                    attacks.home < oldAttacks.home || attacks.away < oldAttacks.away) continue;
+                accelerationIntervals.push({
+                  homeRate: ((shots.home - oldShots.home) * 3 + attacks.home - oldAttacks.home) / minutes * 10,
+                  awayRate: ((shots.away - oldShots.away) * 3 + attacks.away - oldAttacks.away) / minutes * 10
+                });
+              }
+              let accelerationData = null;
+              if (accelerationIntervals.length >= 2) {
+                const previous = accelerationIntervals[accelerationIntervals.length - 2];
+                const latest = accelerationIntervals[accelerationIntervals.length - 1];
+                accelerationData = {
+                  homeDelta: Number((latest.homeRate - previous.homeRate).toFixed(1)),
+                  awayDelta: Number((latest.awayRate - previous.awayRate).toFixed(1)),
+                  homePreviousRate: Number(previous.homeRate.toFixed(1)),
+                  homeLatestRate: Number(latest.homeRate.toFixed(1)),
+                  awayPreviousRate: Number(previous.awayRate.toFixed(1)),
+                  awayLatestRate: Number(latest.awayRate.toFixed(1))
+                };
+              }
+
+              const powerScore = side => {
+                const parts = [{ value: pressure[side], weight: 50 }];
+                if (Number.isFinite(snapshot[side + "ActivityRate"])) {
+                  parts.push({ value: Math.max(0, Math.min(100, snapshot[side + "ActivityRate"] * 10)), weight: 35 });
+                }
+                if (accelerationData && Number.isFinite(accelerationData[side + "Delta"])) {
+                  parts.push({ value: Math.max(0, Math.min(100, 50 + accelerationData[side + "Delta"] * 5)), weight: 15 });
+                }
+                const weight = parts.reduce((sum, part) => sum + part.weight, 0);
+                return Math.round(parts.reduce((sum, part) => sum + part.value * part.weight, 0) / weight);
+              };
+              const teamPowerData = { home: powerScore("home"), away: powerScore("away") };
+              let dominanceData = null;
+              if (consistencyData && weaknessData) {
+                const combine = side => Math.round(
+                  pressure[side] * 0.4 +
+                  consistencyData[side].score * 0.35 +
+                  weaknessData.sides[side].score * 0.25
+                );
+                dominanceData = { home: combine("home"), away: combine("away") };
+              }
+              const momentumAnalysis = {
+                version: "momentum-archive-v1",
+                capturedAt: record.collected_at || signalNow,
+                pressure: { home: pressure.home, away: pressure.away },
+                activityRate: {
+                  home: Number(snapshot.homeActivityRate.toFixed(1)),
+                  away: Number(snapshot.awayActivityRate.toFixed(1))
+                },
+                goalThreat: { home: threat.home, away: threat.away },
+                qualityScore: Number.isFinite(qualityScore) ? qualityScore : null,
+                teamPower: teamPowerData,
+                acceleration: accelerationData,
+                consistency: consistencyData,
+                opponentWeakness: weaknessData,
+                matchDominance: dominanceData
+              };
+
               const momentumDiff = Math.abs(threat.home - threat.away);
               return {
                 ...selected,
@@ -1381,7 +1500,8 @@ jobs:
                 threatAway: threat.away,
                 momentumSide: threat.home >= threat.away ? "home" : "away",
                 momentumDiff,
-                momentumStrength: momentumDiff >= 20 ? "strong" : momentumDiff >= 10 ? "medium" : "slight"
+                momentumStrength: momentumDiff >= 20 ? "strong" : momentumDiff >= 10 ? "medium" : "slight",
+                momentumAnalysis
               };
             }
 
@@ -1494,6 +1614,7 @@ jobs:
                   momentumSide: candidate.momentumSide,
                   momentumDiff: candidate.momentumDiff,
                   momentumStrength: candidate.momentumStrength,
+                  momentumAnalysis: candidate.momentumAnalysis,
                   createdAt: record.collected_at || signalNow,
                   status: "OPEN",
                   startScore: `${Number(match.home_score || 0)}:${Number(match.away_score || 0)}`,
