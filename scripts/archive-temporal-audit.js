@@ -54,9 +54,15 @@ function statsOf(s) {
 }
 function statFeature(stats, keys) {
   const wanted = keys.map(norm);
-  const item = (stats || []).find(st => {
-    const label = norm(st?.label || st?.name || st?.type || "");
-    return wanted.some(k => label === k || label.includes(k));
+  const rows = (stats || []).filter(st => st && (st.label || st.name || st.type));
+  const labelOf = st => norm(st.label || st.name || st.type || "");
+  let item = rows.find(st => wanted.includes(labelOf(st)));
+  if (!item) item = rows.find(st => {
+    const label = labelOf(st);
+    if (!wanted.some(k => label.includes(k))) return false;
+    if (wanted.includes("shots") && (label.includes("shotsontarget") || label.includes("shotsofftarget"))) return false;
+    if (wanted.includes("attacks") && label.includes("dangerousattacks")) return false;
+    return true;
   });
   if (!item) return { home: null, away: null, label: "" };
   const h = Number(item.home), a = Number(item.away);
