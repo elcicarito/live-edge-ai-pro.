@@ -137,6 +137,7 @@ let totalSnapshots = 0, parsedSnapshotMinutes = 0, parsedGoalTimes = 0, totalGoa
 let matchesWithEvents = 0, matchesWithCompleteGoalTimeline = 0, matchesWithScoreTimelineAgreement = 0;
 let matchesWithValidFinal = 0, goalEventsWithoutTime = 0, nonMonotonicMatches = 0;
 let duplicateCollectedAt = 0, snapshotScoreMissing = 0, sameMinuteGoalAmbiguities = 0;
+let sideScoreAgreementCount = 0, sideScoreUnverifiable = 0;
 
 for (const [id, x] of matches) {
   const fm = x.final_match || {};
@@ -224,7 +225,7 @@ for (const [id, x] of matches) {
   const hasMinuteRegression = regressionCount > 0;
 
   let eligible = 0, positives = 0, negatives = 0, ambiguous = 0;
-  let agreementCount = 0, sideScoreAgreementCount = 0, sideScoreUnverifiable = 0;
+  let agreementCount = 0, matchSideScoreAgreementCount = 0, matchSideScoreUnverifiable = 0;
   for (let snapshotIndex = 0; snapshotIndex < snaps.length; snapshotIndex++) {
     const s = snaps[snapshotIndex];
     const rawMinute = s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute;
@@ -242,8 +243,8 @@ for (const [id, x] of matches) {
       const sides = beforeEvents.map(g => goalSide(g.event, x));
       if (!sameAtMinute && sides.every(Boolean)) {
         const expected = [sides.filter(v => v === "home").length, sides.filter(v => v === "away").length];
-        if (score[0] === expected[0] && score[1] === expected[1]) sideScoreAgreementCount++;
-      } else if (!sameAtMinute) sideScoreUnverifiable++;
+        if (score[0] === expected[0] && score[1] === expected[1]) matchSideScoreAgreementCount++;
+      } else if (!sameAtMinute) matchSideScoreUnverifiable++;
     }
 
     if (!events.length) { labelCounts.no_event_list++; continue; }
@@ -287,6 +288,8 @@ for (const [id, x] of matches) {
     if (futureGoal) { positives++; labelCounts.positive++; }
     else { negatives++; labelCounts.negative++; }
   }
+  sideScoreAgreementCount += matchSideScoreAgreementCount;
+  sideScoreUnverifiable += matchSideScoreUnverifiable;
   if (hasMinuteRegression) nonMonotonicMatches++;
   if (timelineComplete && agreementCount > 0) matchesWithScoreTimelineAgreement++;
   matchRows.push({
