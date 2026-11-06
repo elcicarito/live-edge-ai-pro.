@@ -1296,6 +1296,7 @@ jobs:
                 if (!validCollection || !Array.isArray(batch.records)) continue;
                 for (const historicalRecord of batch.records) {
                   if (!historicalRecord.match || frontendMatchId(historicalRecord.match) !== frontendMatchId(match)) continue;
+                  if (!isLive(historicalRecord.match)) continue;
                   const time = Date.parse(historicalRecord.collected_at || batch.collected_at || "");
                   if (Number.isFinite(time)) qualityRecords.push({ time, match: historicalRecord.match });
                 }
