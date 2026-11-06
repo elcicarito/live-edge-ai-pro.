@@ -1966,6 +1966,14 @@
     addQuickStat("NEB. ÚTOKY", statValue(match.stats || [], "dangerous attacks"));
     if (quickStats.childElementCount) card.appendChild(quickStats);
 
+    const priority = getMatchPriority(match, collectedAt, allowSignals, staleMode, signalArchive, bttsArchive);
+    if (priority.label) {
+      const priorityTag = document.createElement("div");
+      priorityTag.textContent = priority.label;
+      priorityTag.style.cssText = "display:inline-flex;align-items:center;font-size:10px;font-weight:900;letter-spacing:.35px;padding:5px 8px;margin:0 0 9px;border-radius:7px;color:" + priority.color + ";background:" + priority.background + ";border:1px solid " + priority.border + ";";
+      card.appendChild(priorityTag);
+    }
+
     const relatedSignals = Array.isArray(signalArchive?.signals)
       ? signalArchive.signals.filter(item => String(item.matchId) === matchId(match))
       : [];
@@ -2260,6 +2268,47 @@
     target.appendChild(card);
   }
 
+  function getMatchPriority(match, collectedAt, allowSignals, staleMode, signalArchive, bttsArchive) {
+    if (staleMode) return { rank: 0, score: 0, label: null, color: "", background: "", border: "" };
+
+    const id = matchId(match);
+    const hasOpenGreen = Array.isArray(signalArchive?.signals) &&
+      signalArchive.signals.some(item => String(item.matchId) === id && item.status === "OPEN");
+    const hasOpenBtts = Array.isArray(bttsArchive?.signals) &&
+      bttsArchive.signals.some(item => String(item.matchId) === id && item.status === "OPEN");
+
+    const pressure = calculatePressure(match.stats || []);
+    const snapshot = getSnapshot(match, historyData, collectedAt);
+    const threat = calculateThreat(pressure, snapshot);
+    const currentGreen = allowSignals && Boolean(makeSignal(match, threat, snapshot, collectedAt));
+    const confirmed = currentGreen || hasOpenGreen || hasOpenBtts;
+    const score = threat ? Math.max(threat.home, threat.away) : 0;
+
+    if (confirmed) {
+      return {
+        rank: 2,
+        score,
+        label: "⚡ POTVRDENÝ SIGNÁL",
+        color: "#8fffd0",
+        background: "#123b2d",
+        border: "#39e6a5"
+      };
+    }
+
+    if (threat && score >= 55) {
+      return {
+        rank: 1,
+        score,
+        label: "⚠ ZVÝŠENÝ TLAK",
+        color: "#fcd38d",
+        background: "#422b12",
+        border: "#f59e0b"
+      };
+    }
+
+    return { rank: 0, score, label: null, color: "", background: "", border: "" };
+  }
+
   function renderMatchesGrouped(items, historyData, allowSignals, staleMode, signalArchive, bttsArchive) {
     const groups = new Map();
 
@@ -2269,9 +2318,22 @@
       groups.get(name).push(item);
     });
 
-    [...groups.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0], "sk"))
-      .forEach(([league, leagueItems]) => {
+    const getPriority = item => getMatchPriority(
+      item.match, item.collectedAt, allowSignals, staleMode, signalArchive, bttsArchive
+    );
+    const rankedGroups = [...groups.entries()].map(([league, leagueItems]) => {
+      leagueItems.sort((a, b) => {
+        const pa = getPriority(a);
+        const pb = getPriority(b);
+        return pb.rank - pa.rank || pb.score - pa.score;
+      });
+      const top = leagueItems.length ? getPriority(leagueItems[0]) : { rank: 0, score: 0 };
+      return { league, leagueItems, rank: top.rank, score: top.score };
+    });
+
+    rankedGroups
+      .sort((a, b) => b.rank - a.rank || b.score - a.score || a.league.localeCompare(b.league, "sk"))
+      .forEach(({ league, leagueItems }) => {
         const section = document.createElement("section");
         section.style.cssText = "margin:16px 0 20px;padding:10px;background:#0a1422;border:1px solid #263a52;border-radius:12px;";
 
