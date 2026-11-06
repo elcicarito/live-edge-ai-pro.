@@ -62,6 +62,17 @@
     return textOf(typeof teamScore === "object" ? teamScore.current ?? teamScore.total ?? teamScore.points : teamScore, match?.[side + "_score"], match?.[side + "Score"], match?.[side + "_points"]) || "–";
   };
   const leagueOf = m => textOf(m?.competition?.name, m?.league?.name, m?.tournament?.name, m?.competition, m?.league);
+  const formatOf = m => {
+    const league = leagueOf(m).toLowerCase();
+    const teams = [teamName(m, "home"), teamName(m, "away")].join(" ").toLowerCase();
+    const ncaa = /ncaa|national collegiate athletic association/.test(league);
+    const women = /women|woman|ladies|lady|female|wbb/.test(league) || /women|lady|ladies/.test(teams);
+    return ncaa && !women ? "halves" : "quarters";
+  };
+  const periodCount = m => formatOf(m) === "halves" ? 2 : 4;
+  const periodLabel = (m, i) => formatOf(m) === "halves"
+    ? (i < 2 ? "H" + (i + 1) : "OT" + (i - 1))
+    : (i < 4 ? "Q" + (i + 1) : "OT" + (i - 3));
   const flagOf = league => {
     const s = String(league || "").toLowerCase();
     if (/ncaa|national collegiate|usa|united states|nba|wnba/.test(s)) return "🇺🇸";
