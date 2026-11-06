@@ -1672,7 +1672,7 @@
       Number.isFinite(Number(item.sourceSnapshot.minute ?? item.startMinute))
     );
     const parseIncidentMinute = value => {
-      const match = String(value ?? "").trim().match(/^(\\d+)(?:\\+(\\d+))?$/);
+      const match = String(value ?? "").trim().match(/^(\d+)(?:\+(\d+))?$/);
       return match ? Number(match[1]) + Number(match[2] || 0) : null;
     };
     const incidentRows = incidentSignals.map(item => {
