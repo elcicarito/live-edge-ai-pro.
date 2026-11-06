@@ -9,13 +9,36 @@
 <title>LIVE EDGE AI PRO</title>
 
 <style>
-body{
-  margin:0;
-  background:#090f1c;
-  color:#fff;
-  font-family:Arial,sans-serif;
-  padding:20px
-}
+*{box-sizing:border-box}
+body{margin:0;background:#080e19;color:#f4f7fb;font-family:Arial,sans-serif;padding:14px;max-width:1100px;margin-inline:auto}
+.app-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 2px 16px}
+.brand{display:flex;flex-direction:column;gap:5px}
+.brand h1{margin:0;color:#39e6a5;font-size:22px;letter-spacing:.4px}
+.brand small{color:#91a2b8;font-size:11px;letter-spacing:1px}
+.live-indicator{display:inline-flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid #23644f;border-radius:999px;background:#10271f;color:#63e6b5;font-size:10px;font-weight:900;white-space:nowrap}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#39e6a5;box-shadow:0 0 10px #39e6a5}
+h1{color:#39e6a5;font-size:25px}
+.card{background:#111c2b;border:1px solid #22344b;padding:15px;border-radius:15px;margin:12px 0;box-shadow:0 8px 22px #0002}
+.card h3{margin:0 0 10px;font-size:16px}
+.dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:8px 0 14px}
+.metric{min-width:0;padding:13px 11px;border:1px solid #293b52;border-radius:13px;background:linear-gradient(145deg,#152338,#101a29)}
+.metric-value{font-size:24px;font-weight:900;line-height:1.1;color:#f7fbff;overflow-wrap:anywhere}
+.metric-label{margin-top:6px;font-size:10px;color:#91a2b8;font-weight:800;letter-spacing:.45px;text-transform:uppercase}
+.metric.green .metric-value{color:#39e6a5}
+.metric.blue .metric-value{color:#60a5fa}
+.metric-status .metric-value{font-size:14px;padding-top:5px}
+#dashboard-updated{font-size:11px;color:#8294aa;margin:0 2px 13px}
+.section-kicker{font-size:11px;font-weight:900;letter-spacing:1px;color:#8fa3ba;margin:18px 2px 8px}
+#matches{margin-top:0}
+#signal{font-size:12px;color:#a9bad0}
+#pressure-engine{margin-top:0!important}
+.engine-details summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;font-weight:800;color:#fff}
+.engine-details summary::-webkit-details-marker{display:none}
+.engine-details summary:after{content:"＋";color:#39e6a5;font-size:20px}
+.engine-details[open] summary:after{content:"−"}
+button{background:#39e6a5;color:#07120f;border:0;padding:14px;border-radius:9px;font-weight:bold;width:100%;cursor:pointer}
+small{color:#9baabe}
+@media(max-width:560px){body{padding:10px}.app-header{padding:8px 2px 12px}.brand h1{font-size:19px}.dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.metric{padding:12px}.metric-value{font-size:22px}}
 h1{
   color:#39e6a5;
   font-size:25px
@@ -85,31 +108,43 @@ small{
 
 <body>
 
-<h1>LIVE EDGE AI PRO</h1>
+<header class="app-header">
+  <div class="brand">
+    <h1>LIVE EDGE AI PRO</h1>
+    <small>FOOTBALL INTELLIGENCE · LIVE ANALYTICS</small>
+  </div>
+  <div class="live-indicator"><span class="live-dot"></span> LIVE MONITORING</div>
+</header>
 <div class="sport-switch" role="group" aria-label="Výber športu">
   <button id="football-tab" class="sport-tab active" type="button">⚽ FUTBAL</button>
   <button id="basketball-tab" class="sport-tab" type="button">🏀 BASKETBAL</button>
 </div>
 
 <div id="football-view">
-<p class="status">● LIVE FOOTBALL SCANNER</p>
+<div class="dashboard-grid" aria-label="LIVE prehľad">
+  <div class="metric"><div class="metric-value" id="dashboard-live-count">—</div><div class="metric-label">Sledované zápasy</div></div>
+  <div class="metric green"><div class="metric-value" id="dashboard-green-count">—</div><div class="metric-label">Otvorené zelené</div></div>
+  <div class="metric blue"><div class="metric-value" id="dashboard-btts-count">—</div><div class="metric-label">Otvorené BTTS</div></div>
+  <div class="metric metric-status"><div class="metric-value" id="dashboard-data-status">ČAKÁM</div><div class="metric-label">Stav dát</div></div>
+</div>
+<p id="dashboard-updated">Posledná aktualizácia: čakám na prvý zber</p>
 
+<div class="section-kicker">⚡ LIVE SIGNÁLY</div>
 <div class="card">
-<h3>LIVE zápasy</h3>
-<p id="matches">Načítavam LIVE zápasy...</p>
+  <p id="signal">Načítavam signály...</p>
 </div>
 
+<div class="section-kicker">⚽ SLEDOVANÉ ZÁPASY</div>
 <div class="card">
-<h3>AI Pressure Engine</h3>
-<p>Analýza tlaku domácich a hostí</p>
+  <p id="matches">Načítavam LIVE zápasy...</p>
 </div>
 
-<div class="card">
-<h3>LIVE signály</h3>
-<p id="signal">Načítavam signály...</p>
-</div>
+<details class="card engine-details">
+  <summary>🧠 AI PRESSURE ENGINE · STAV A DIAGNOSTIKA</summary>
+  <div id="pressure-engine"><p>Načítavam diagnostiku...</p></div>
+</details>
 
-<details class="card stats-card" open>
+<details class="card stats-card">
 <summary>📊 ŠTATISTIKY SYSTÉMU</summary>
 <div id="system-stats"><p>Načítavam štatistiky...</p></div>
 </details>
@@ -206,7 +241,7 @@ OBNOVIŤ SKENER
   basketballTab.addEventListener("click", () => selectSport("basketball"));
 })();
 </script>
-<script src="./scanner.js?v=48"></script>
+<script src="./scanner.js?v=49"></script>
 <script src="./basketball.js?v=5"></script>
 
 </body>
