@@ -15,7 +15,7 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -109,11 +109,35 @@ jobs:
               const rawUrl = String(match?.url || "");
               if (!rawUrl) return null;
               const pageUrl = rawUrl.startsWith("http") ? rawUrl : "https://sportscore.com" + (rawUrl.startsWith("/") ? rawUrl : "/" + rawUrl);
-              const response = await fetch(pageUrl, {
-                headers: { "User-Agent": "Mozilla/5.0 LIVE-EDGE-AI-PRO", "Accept": "text/html" },
-                signal: AbortSignal.timeout(15000)
-              });
-              if (!response.ok) throw new Error("Match page HTTP " + response.status);
+              let response;
+              for (let attempt = 1; attempt <= 2; attempt++) {
+                try {
+                  response = await fetch(pageUrl, {
+                    headers: {
+                      "User-Agent": "Mozilla/5.0 (compatible; LIVE-EDGE-AI-PRO/1.0)",
+                      "Accept": "text/html",
+                      "Cache-Control": "no-cache"
+                    },
+                    signal: AbortSignal.timeout(15000)
+                  });
+                  if (response.ok) break;
+                  const status = response.status;
+                  if (attempt === 2 || (status !== 429 && status < 500)) {
+                    throw new Error("Match page HTTP " + status);
+                  }
+                  const retryAfter = Number(response.headers.get("retry-after"));
+                  const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+                    ? Math.min(retryAfter * 1000, 20000)
+                    : (status === 429 ? 10000 : 5000);
+                  console.log("Match page HTTP " + status + "; opakujem pokus po " + Math.round(waitMs / 1000) + " s.");
+                  await sleep(waitMs);
+                } catch (error) {
+                  if (attempt === 2 || String(error.message).includes("HTTP 4")) throw error;
+                  console.log("Chyba stránky zápasu; opakujem pokus:", error.message);
+                  await sleep(5000);
+                }
+              }
+              if (!response?.ok) throw new Error("Match page sa nepodarilo načítať.");
               const html = await response.text();
               const home = [];
               const away = [];
@@ -136,37 +160,35 @@ jobs:
               };
             }
 
-            async function enrichQuarterScores(list, concurrency = 4) {
+            async function enrichQuarterScores(list) {
               const output = list.slice();
-              let next = 0;
-              async function worker() {
-                while (next < output.length) {
-                  const index = next++;
-                  const match = output[index];
-                  try {
-                    const quarters = await getQuarterScores(match);
-                    if (quarters) {
-                      output[index] = {
-                        ...match,
-                        period_scores: quarters,
-                        quarter_scores_source: "SportScore match page",
-                        quarter_scores_checked_at: new Date().toISOString()
-                      };
-                      console.log("QUARTER SCORES OK:", match.home || match.home_name, "-", match.away || match.away_name, JSON.stringify(quarters));
-                    } else {
-                      output[index] = { ...match, quarter_scores_checked_at: new Date().toISOString() };
-                      console.log("QUARTER SCORES not present:", match.url || match.id);
-                    }
-                  } catch (error) {
-                    console.log("QUARTER SCORES failed:", match.url || match.id, error.message);
+              // Sequential requests with spacing reduce HTTP 429 rate limits from SportScore.
+              for (let index = 0; index < output.length; index++) {
+                const match = output[index];
+                if (index > 0) await sleep(1200);
+                try {
+                  const quarters = await getQuarterScores(match);
+                  if (quarters) {
+                    output[index] = {
+                      ...match,
+                      period_scores: quarters,
+                      quarter_scores_source: "SportScore match page",
+                      quarter_scores_checked_at: new Date().toISOString()
+                    };
+                    console.log("QUARTER SCORES OK:", match.home || match.home_name, "-", match.away || match.away_name, JSON.stringify(quarters));
+                  } else {
+                    output[index] = { ...match, quarter_scores_checked_at: new Date().toISOString() };
+                    console.log("QUARTER SCORES not present:", match.url || match.id);
                   }
+                } catch (error) {
+                  // Do not stamp failed requests as checked: they remain eligible for a later retry.
+                  console.log("QUARTER SCORES failed:", match.url || match.id, error.message);
                 }
               }
-              await Promise.all(Array.from({ length: Math.min(concurrency, output.length) }, () => worker()));
               return output;
             }
 
-            const enrichedLiveMatches = await enrichQuarterScores(liveMatches, 4);
+            const enrichedLiveMatches = await enrichQuarterScores(liveMatches);
             const liveById = new Map(enrichedLiveMatches.map(m => [String(m.id || m.slug || m.url || ""), m]));
             const enrichedMatches = matches.map(m => liveById.get(String(m.id || m.slug || m.url || "")) || m);
             console.log("LIVE zápasy s dostupným rozpisom štvrtín:", enrichedLiveMatches.filter(m => m.period_scores).length, "/", enrichedLiveMatches.length);
@@ -210,7 +232,7 @@ jobs:
               const checked = Date.parse(existing.quarter_scores_checked_at || "");
               return !Number.isFinite(checked) || Date.now() - checked > 6 * 60 * 60 * 1000;
             }).slice(0, 8);
-            const enrichedFinishedBatch = await enrichQuarterScores(finishedNeedingQuarters, 4);
+            const enrichedFinishedBatch = await enrichQuarterScores(finishedNeedingQuarters);
             const enrichedFinishedById = new Map(enrichedFinishedBatch.map(m => [String(m.id || m.slug || m.url || ""), m]));
             for (const match of finishedMatches) {
               const id = String(match.id || match.slug || match.url || "");
