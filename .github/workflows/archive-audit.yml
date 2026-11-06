@@ -67,3 +67,8 @@ jobs:
           path: audit-output/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Read-only temporal audit for next-10-minute goal labels
+        shell: bash
+        run: |
+          node scripts/archive-temporal-audit.js
