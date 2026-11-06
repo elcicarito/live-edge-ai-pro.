@@ -350,17 +350,36 @@ for (const [id, x] of matches) {
 }
 
 const chronological = matchRows.filter(r => ts(r.archived_at) !== null).sort((a,b) => ts(a.archived_at) - ts(b.archived_at));
-const splitAt = Math.floor(chronological.length * 0.8);
+const archiveBatches = [];
+for (const row of chronological) {
+  const last = archiveBatches[archiveBatches.length - 1];
+  if (last && last.archived_at === row.archived_at) last.rows.push(row);
+  else archiveBatches.push({ archived_at: row.archived_at, rows: [row] });
+}
+const targetTrainMatches = Math.floor(chronological.length * 0.8);
+let splitBatchCount = 0, cumulativeMatches = 0, bestSplitDistance = Infinity;
+for (let i = 0; i <= archiveBatches.length; i++) {
+  const distance = Math.abs(cumulativeMatches - targetTrainMatches);
+  if (distance < bestSplitDistance) {
+    bestSplitDistance = distance;
+    splitBatchCount = i;
+  }
+  if (i < archiveBatches.length) cumulativeMatches += archiveBatches[i].rows.length;
+}
+const trainRows = archiveBatches.slice(0, splitBatchCount).flatMap(batch => batch.rows);
+const testRows = archiveBatches.slice(splitBatchCount).flatMap(batch => batch.rows);
 const split = {
-  method: "chronological by archived_at; split by whole match, never by snapshot",
-  dated_matches: chronological.length, proposed_train_matches: splitAt,
-  proposed_test_matches: chronological.length - splitAt,
-  train_end_archived_at: chronological[splitAt - 1]?.archived_at || null,
-  test_start_archived_at: chronological[splitAt]?.archived_at || null,
+  method: "chronological by archived_at; whole matches and identical archived_at batches stay on one side",
+  dated_matches: chronological.length, timestamp_batches: archiveBatches.length,
+  target_train_matches_approx: targetTrainMatches,
+  proposed_train_matches: trainRows.length,
+  proposed_test_matches: testRows.length,
+  train_end_archived_at: archiveBatches[splitBatchCount - 1]?.archived_at || null,
+  test_start_archived_at: archiveBatches[splitBatchCount]?.archived_at || null,
   train_labeled_snapshots: 0, test_labeled_snapshots: 0,
   train_positive: 0, test_positive: 0, train_negative: 0, test_negative: 0
 };
-const trainIds = new Set(chronological.slice(0, splitAt).map(r=>r.match_id));
+const trainIds = new Set(trainRows.map(r=>r.match_id));
 for (const r of allLabeled) {
   if (trainIds.has(r.match_id)) {
     split.train_labeled_snapshots++;
