@@ -1329,8 +1329,7 @@
     const serverSignals = Array.isArray(data?.signals) ? data.signals : [];
     const localSignals = Array.isArray(signalHistory) ? signalHistory : [];
 
-    // Spoj trvalý archív zo servera s históriou v tomto prehliadači.
-    // Kľúč bráni duplicitám toho istého signálu v oboch zdrojoch.
+    // Spoj trvalý archív zo servera s históriou tohto prehliadača bez duplicít.
     const merged = new Map();
     const signalKey = item => [
       String(item.matchId || ""),
@@ -1350,9 +1349,6 @@
       const previous = merged.get(key);
       const previousSettled = previous && ["WIN", "LOSS", "UNRESOLVED"].includes(previous.status);
       const serverSettled = ["WIN", "LOSS", "UNRESOLVED"].includes(item.status);
-
-      // Serverové údaje doplnia miestny záznam; už vyhodnotený výsledok
-      // sa nestratí, ak druhý zdroj ešte stále uvádza OPEN.
       const combined = { ...(previous || {}), ...item, archiveSource: previous ? "both" : "server" };
       if (previousSettled && !serverSettled) {
         combined.status = previous.status;
@@ -1371,18 +1367,56 @@
     const open = signals.filter(item => item.status === "OPEN").length;
     const evaluated = wins + losses;
     const rate = evaluated ? Math.round(wins / evaluated * 100) : 0;
+    const settledSignals = signals.filter(item => item.status === "WIN" || item.status === "LOSS");
 
-    addText(target, "TRVALÝ ARCHÍV SIGNÁLOV", "16px");
-    addText(target, `Spolu: ${signals.length} | Výhry: ${wins} | Prehry: ${losses} | Otvorené: ${open} | Neoverené: ${unresolved}`);
-    addText(target, `Úspešnosť vyhodnotených: ${rate}%`);
-    addText(target, "Archív spája záznamy z GitHubu a históriu tohto prehliadača; duplicitné signály sa zobrazia iba raz.");
-    addText(target, "Neoverené znamená, že zápas zmizol z LIVE feedu bez potvrdeného konečného výsledku. Nezapočítava sa ako prehra.");
+    const heading = document.createElement("div");
+    heading.textContent = "ZELENÝ SIGNÁL · ARCHÍV A VÝSLEDKY";
+    heading.style.cssText = "font-size:15px;font-weight:900;letter-spacing:.3px;color:#e2e8f0;margin:2px 0 10px;";
+    target.appendChild(heading);
 
-    // Rozbory úspešnosti počítajú iba potvrdené WIN/LOSS výsledky.
-    // Pri malej vzorke zobraz upozornenie, aby percentá nevyzerali spoľahlivejšie, než sú.
-    const settledSignals = signals.filter(item =>
-      item.status === "WIN" || item.status === "LOSS"
-    );
+    const summary = document.createElement("div");
+    summary.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0 10px;";
+    const metric = (label, value, color) => {
+      const tile = document.createElement("div");
+      tile.style.cssText = "min-width:0;padding:10px;background:#102033;border:1px solid #2c4058;border-radius:9px;";
+      const number = document.createElement("div");
+      number.textContent = String(value);
+      number.style.cssText = "font-size:21px;font-weight:900;color:" + color + ";font-variant-numeric:tabular-nums;";
+      const caption = document.createElement("div");
+      caption.textContent = label;
+      caption.style.cssText = "font-size:10px;font-weight:800;color:#aebed0;margin-top:2px;";
+      tile.append(number, caption);
+      summary.appendChild(tile);
+    };
+    metric("SPOLU SIGNÁLOV", signals.length, "#f1f5f9");
+    metric("ÚSPEŠNOSŤ · WIN / LOSS", rate + "%", evaluated ? "#4ade80" : "#cbd5e1");
+    metric("VÝHRY", wins, "#4ade80");
+    metric("PREHRY", losses, "#f87171");
+    metric("OTVORENÉ", open, "#93c5fd");
+    metric("NEOVERENÉ", unresolved, "#d6d3d1");
+    target.appendChild(summary);
+
+    const note = document.createElement("div");
+    note.textContent = "Úspešnosť sa počíta iba z potvrdených výhier a prehier. Neoverené zápasy sa nezapočítavajú ako prehry.";
+    note.style.cssText = "font-size:10px;line-height:1.45;color:#aebed0;margin:5px 0 12px;";
+    target.appendChild(note);
+
+    function createDetails(title, open = false) {
+      const details = document.createElement("details");
+      details.open = open;
+      details.style.cssText = "margin:9px 0;padding:10px;background:#0c1929;border:1px solid #2c4058;border-radius:9px;";
+      const summaryEl = document.createElement("summary");
+      summaryEl.textContent = title;
+      summaryEl.style.cssText = "cursor:pointer;font-size:12px;font-weight:900;color:#e2e8f0;outline:none;";
+      details.appendChild(summaryEl);
+      target.appendChild(details);
+      return details;
+    }
+
+    const breakdownDetails = createDetails("📊 ANALÝZA ÚSPEŠNOSTI PODĽA PODMIENOK", false);
+    const breakdown = document.createElement("div");
+    breakdown.style.cssText = "padding-top:8px;";
+    breakdownDetails.appendChild(breakdown);
 
     function renderBreakdown(title, keyFn) {
       const groups = new Map();
@@ -1395,118 +1429,137 @@
         else group.losses++;
       });
 
-      addText(target, title, "15px");
+      const section = document.createElement("div");
+      section.style.cssText = "margin:10px 0;padding-top:8px;border-top:1px solid #263a52;";
+      const label = document.createElement("div");
+      label.textContent = title;
+      label.style.cssText = "font-size:11px;font-weight:900;color:#cbd5e1;margin-bottom:6px;";
+      section.appendChild(label);
       if (!groups.size) {
-        addText(target, "Zatiaľ málo vyhodnotených dát.");
-        return;
+        const empty = document.createElement("div");
+        empty.textContent = "Zatiaľ nedostatok vyhodnotených dát.";
+        empty.style.cssText = "font-size:11px;color:#94a3b8;";
+        section.appendChild(empty);
+      } else {
+        [...groups.entries()]
+          .sort((a, b) => {
+            const na = a[1].wins + a[1].losses;
+            const nb = b[1].wins + b[1].losses;
+            return nb - na || String(a[0]).localeCompare(String(b[0]), "sk");
+          })
+          .forEach(([key, value]) => {
+            const count = value.wins + value.losses;
+            const percent = Math.round(value.wins / count * 100);
+            const row = document.createElement("div");
+            row.style.cssText = "display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #1e3045;font-size:11px;";
+            const name = document.createElement("span");
+            name.textContent = key + (count < 10 ? " · malá vzorka" : "");
+            name.style.cssText = "color:#cbd5e1;min-width:0;";
+            const result = document.createElement("strong");
+            result.textContent = percent + "%  ·  " + value.wins + "V / " + value.losses + "P  ·  N=" + count;
+            result.style.cssText = "color:" + (percent >= 60 ? "#4ade80" : percent >= 50 ? "#fbbf24" : "#f87171") + ";white-space:nowrap;font-variant-numeric:tabular-nums;";
+            row.append(name, result);
+            section.appendChild(row);
+          });
       }
-
-      [...groups.entries()]
-        .sort((a, b) => {
-          const na = a[1].wins + a[1].losses;
-          const nb = b[1].wins + b[1].losses;
-          return nb - na || String(a[0]).localeCompare(String(b[0]), "sk");
-        })
-        .forEach(([key, value]) => {
-          const count = value.wins + value.losses;
-          const percent = Math.round(value.wins / count * 100);
-          const reliability = count < 10 ? " | malá vzorka" : "";
-          addText(target, key + ": " + percent + "% (" + value.wins + " výhier / " + value.losses + " prehier, N=" + count + ")" + reliability);
-        });
+      breakdown.appendChild(section);
     }
 
-    renderBreakdown("ÚSPEŠNOSŤ PODĽA MINÚTY", item => {
+    renderBreakdown("PODĽA MINÚTY", item => {
       const minute = Number(item.startMinute);
       if (!Number.isFinite(minute)) return null;
       const from = Math.floor(minute / 10) * 10;
       return from + "–" + (from + 9) + ". min";
     });
-
-    renderBreakdown("ÚSPEŠNOSŤ PODĽA POČIATOČNÉHO SKÓRE", item => {
+    renderBreakdown("PODĽA POČIATOČNÉHO SKÓRE", item => {
       const score = String(item.startScore || "").trim();
       return /^\\d+[:\\-]\\d+$/.test(score) ? score.replace("-", ":") : null;
     });
-
-    renderBreakdown("ÚSPEŠNOSŤ PODĽA STRANY", item => {
-      if (item.side === "home") return "Domáci";
-      if (item.side === "away") return "Hostia";
-      return null;
-    });
-
-    // Momentum sa analyzuje iba pri záznamoch, ktoré majú uložené skutočné
-    // snapshoty. Staršie signály bez týchto údajov sa spätne neodhadujú.
-    renderBreakdown("ÚSPEŠNOSŤ PODĽA MOMENTA – KTORÝ TÍM MAL PREVAHU", item => {
-      if (item.momentumSide === "home") return "Prevaha domácich";
-      if (item.momentumSide === "away") return "Prevaha hostí";
-      return null;
-    });
-
-    renderBreakdown("ÚSPEŠNOSŤ PODĽA SILY MOMENTA", item => {
-      if (item.momentumStrength === "slight") return "Mierne (rozdiel 3–9)";
-      if (item.momentumStrength === "medium") return "Stredné (rozdiel 10–19)";
-      if (item.momentumStrength === "strong") return "Silné (rozdiel 20+)";
-      return null;
-    });
-
-    renderBreakdown("ÚSPEŠNOSŤ PODĽA AKTIVITY PREDIKOVANÉHO TÍMU", item => {
+    renderBreakdown("PODĽA STRANY", item =>
+      item.side === "home" ? "Domáci" : item.side === "away" ? "Hostia" : null
+    );
+    renderBreakdown("PODĽA PREVAHY MOMENTA", item =>
+      item.momentumSide === "home" ? "Prevaha domácich" :
+      item.momentumSide === "away" ? "Prevaha hostí" : null
+    );
+    renderBreakdown("PODĽA SILY MOMENTA", item =>
+      item.momentumStrength === "slight" ? "Mierne (3–9)" :
+      item.momentumStrength === "medium" ? "Stredné (10–19)" :
+      item.momentumStrength === "strong" ? "Silné (20+)" : null
+    );
+    renderBreakdown("PODĽA AKTIVITY PREDIKOVANÉHO TÍMU", item => {
       const activity = Number(item.activityRate);
       if (!Number.isFinite(activity)) return null;
-      if (activity < 6) return "Nižšia aktivita (<6)";
-      if (activity < 10) return "Stredná aktivita (6–9,9)";
-      return "Vysoká aktivita (10+)";
+      return activity < 6 ? "Nižšia (<6)" : activity < 10 ? "Stredná (6–9,9)" : "Vysoká (10+)";
     });
 
     const recent = [...signals].sort((a, b) =>
       Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)
     ).slice(0, 100);
+    const historyDetails = createDetails("🗂 HISTÓRIA SIGNÁLOV · POSLEDNÝCH 100", true);
+    const history = document.createElement("div");
+    history.style.cssText = "padding-top:8px;";
+    historyDetails.appendChild(history);
 
     recent.forEach(item => {
-      const statusLabels = {
-        WIN: "VÝHRA",
-        LOSS: "PREHRA",
-        OPEN: "OTVORENÝ",
-        UNRESOLVED: "NEOVERENÝ"
-      };
-      const label = statusLabels[item.status] || String(item.status || "NEZNÁMY");
-      const line = document.createElement("div");
-      const statusStyle = {
+      const statusLabels = { WIN: "VÝHRA", LOSS: "PREHRA", OPEN: "OTVORENÝ", UNRESOLVED: "NEOVERENÝ" };
+      const styles = {
         WIN: { background: "#052e1b", border: "#22c55e", color: "#4ade80" },
         LOSS: { background: "#3b0a0a", border: "#ef4444", color: "#f87171" },
         OPEN: { background: "#172554", border: "#3b82f6", color: "#93c5fd" },
         UNRESOLVED: { background: "#292524", border: "#a8a29e", color: "#d6d3d1" }
       };
-      const style = statusStyle[item.status] || {
-        background: "#0d1929", border: "#31445c", color: "#cbd5e1"
-      };
-      line.style.cssText = `margin:8px 0;padding:10px;border-radius:9px;background:${style.background};border:1px solid ${style.border};`;
-      const title = document.createElement("div");
-      title.textContent = (item.home || "?") + (item.startScore ? " (" + item.startScore + ")" : "") + " – " + (item.away || "?");
-      title.style.cssText = "font-weight:800;margin-bottom:5px;";
-      const detail = document.createElement("div");
-      const settledDetail = item.settledScore
-        ? " | vyhodnotené pri stave " + item.settledScore + (item.settledMinute != null ? " v " + item.settledMinute + ". min" : "")
-        : "";
+      const style = styles[item.status] || { background: "#0d1929", border: "#31445c", color: "#cbd5e1" };
+      const card = document.createElement("div");
+      card.style.cssText = "margin:8px 0;padding:10px;border-radius:9px;background:" + style.background + ";border:1px solid " + style.border + ";";
+      const top = document.createElement("div");
+      top.style.cssText = "display:flex;justify-content:space-between;align-items:flex-start;gap:8px;";
+      const teams = document.createElement("strong");
+      teams.textContent = (item.home || "?") + " – " + (item.away || "?");
+      teams.style.cssText = "font-size:12px;line-height:1.35;color:#f1f5f9;min-width:0;";
+      const badge = document.createElement("span");
+      badge.textContent = statusLabels[item.status] || String(item.status || "NEZNÁMY");
+      badge.style.cssText = "flex:none;font-size:9px;font-weight:900;padding:4px 6px;border-radius:6px;background:#0b1220;color:" + style.color + ";border:1px solid " + style.border + ";";
+      top.append(teams, badge);
+
+      const scoreline = document.createElement("div");
+      scoreline.textContent = "Pri signále " + (item.startScore || "?") + "  ·  " + (item.startMinute ?? "?") + ". min  ·  " + (item.team || (item.side === "home" ? "Domáci" : "Hostia"));
+      scoreline.style.cssText = "font-size:11px;color:#cbd5e1;margin-top:6px;";
+      const outcome = document.createElement("div");
+      outcome.textContent = item.settledScore
+        ? "Konečné vyhodnotenie: " + item.settledScore + (item.settledMinute != null ? " · " + item.settledMinute + ". min" : "")
+        : item.status === "OPEN" ? "Čaká sa na potvrdenie výsledku."
+        : item.status === "UNRESOLVED" ? "Výsledok sa nepodarilo spoľahlivo overiť."
+        : "Výsledok zatiaľ nie je doplnený.";
+      outcome.style.cssText = "font-size:10px;color:" + style.color + ";margin-top:4px;";
       const momentumDetail = Number.isFinite(Number(item.pressureHome)) &&
         Number.isFinite(Number(item.pressureAway)) &&
         Number.isFinite(Number(item.activityHome)) &&
         Number.isFinite(Number(item.activityAway))
-        ? " | tlak D/H " + item.pressureHome + "/" + item.pressureAway + "%" +
-          " | aktivita D/H " + item.activityHome + "/" + item.activityAway +
-          " | momentum " + (item.momentumStrength || "—") + " (" + (item.momentumDiff ?? "—") + ")"
-        : " | momentum: bez historického snapshotu";
-      detail.textContent = (item.team || item.side || "Tím") + " | " + label + " | začiatok " + (item.startMinute ?? "?") + ". min" + momentumDetail + settledDetail;
-      detail.style.cssText = `font-size:13px;color:${style.color};font-weight:800;`;
-      line.append(title, detail);
-      target.appendChild(line);
+        ? "Tlak D/H " + item.pressureHome + "/" + item.pressureAway +
+          "  ·  Aktivita D/H " + item.activityHome + "/" + item.activityAway +
+          "  ·  Momentum " + (item.momentumStrength || "—") + " (" + (item.momentumDiff ?? "—") + ")"
+        : "Momentum: historický snapshot nie je dostupný.";
+      const extra = document.createElement("div");
+      extra.textContent = momentumDetail;
+      extra.style.cssText = "font-size:10px;color:#94a3b8;margin-top:6px;line-height:1.4;";
+      card.append(top, scoreline, outcome, extra);
+      history.appendChild(card);
     });
 
-    if (signals.length > recent.length) {
-      addText(target, `Zobrazených posledných ${recent.length} záznamov z ${signals.length}.`);
-    }
     if (!recent.length) {
-      addText(target, "Zatiaľ nie sú uložené žiadne signály.");
+      const empty = document.createElement("div");
+      empty.textContent = "Zatiaľ nie sú uložené žiadne zelené signály.";
+      empty.style.cssText = "font-size:11px;color:#94a3b8;padding:8px 0;";
+      history.appendChild(empty);
+    } else if (signals.length > recent.length) {
+      const info = document.createElement("div");
+      info.textContent = "Zobrazených posledných " + recent.length + " záznamov z celkových " + signals.length + ".";
+      info.style.cssText = "font-size:10px;color:#94a3b8;margin-top:8px;";
+      history.appendChild(info);
     }
   }
+
 
   function renderBttsSignalArchive(data, target = bttsSignalArchiveEl) {
     if (!target) return;
