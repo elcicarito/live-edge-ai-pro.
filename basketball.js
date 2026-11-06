@@ -388,7 +388,8 @@
       const rows = Array.isArray(data.predictions) ? data.predictions : [];
       const open = rows.filter(p => p.actual_total === null || p.actual_total === undefined)
         .sort((a,b) => String(b.observed_at).localeCompare(String(a.observed_at)));
-      const settled = rows.filter(p => Number.isFinite(Number(p.absolute_error)))
+      const settled = rows.filter(p => p.absolute_error !== null && p.absolute_error !== undefined &&
+        Number.isFinite(Number(p.absolute_error)))
         .sort((a,b) => String(b.settled_at).localeCompare(String(a.settled_at)));
       const mae = settled.length ? settled.reduce((sum,p) => sum + Number(p.absolute_error),0) / settled.length : null;
       renderModelPerformance(archiveData, rows, settled);
