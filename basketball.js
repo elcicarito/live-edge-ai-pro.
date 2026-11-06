@@ -123,7 +123,7 @@
     const wrap = document.createElement("div");
     wrap.style.cssText = "overflow-x:auto;margin-top:12px";
     if (!home.length && !away.length) {
-      wrap.textContent = "Štvrtinové skóre: zdroj zatiaľ neposkytol rozpis bodov po štvrtinách.";
+      wrap.textContent = formatOf(match) === "halves" ? "Skóre po polčasoch: zdroj zatiaľ neposkytol rozpis bodov po polčasoch." : "Štvrtinové skóre: zdroj zatiaľ neposkytol rozpis bodov po štvrtinách.";
       wrap.style.cssText += ";font-size:12px;color:#9baabe";
       card.appendChild(wrap);
       return;
@@ -268,7 +268,8 @@
         const body = document.createElement("div");
         body.style.cssText = "padding:0 0 8px";
         renderArchiveQuality(leagueMatches, body, league);
-        renderArchiveStats(leagueMatches, body, "📊 ŠTATISTIKY ŠTVRTÍ – " + league, null);
+        const periodTitle = leagueMatches.length && leagueMatches.every(match => formatOf(match) === "halves") ? "POLČASOV" : "ŠTVRTÍ";
+        renderArchiveStats(leagueMatches, body, "📊 ŠTATISTIKY " + periodTitle + " – " + league, null);
         leagueMatches.forEach(match => body.appendChild(makeCard(match,true)));
         section.appendChild(body);
         archiveList.appendChild(section);
