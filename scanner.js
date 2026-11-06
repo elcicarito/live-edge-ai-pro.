@@ -498,11 +498,50 @@
       return;
     }
 
-    available.forEach(item => {
+    // Celkové strely počítame iba ako SOT + strely mimo brány.
+    // Ak API už poskytuje vlastnú položku Total Shots, nep pridávame druhý súčet.
+    const findStat = pattern => available.find(item =>
+      pattern.test(String(item.label || "").toLowerCase())
+    );
+    const sot = findStat(/shots? on target|strely na bránu|strely na branu/);
+    const offTarget = findStat(/shots? off target|strely mimo bránu|strely mimo branu/);
+    const hasTotalShots = available.some(item =>
+      /total shots|shots total|celkové strely|celkove strely/i.test(String(item.label || ""))
+    );
+    const toNumber = value => {
+      if (value === null || value === undefined || String(value).trim() === "") return null;
+      const parsed = Number(String(value).replace(",", ".").replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    };
+
+    const displayStats = available.slice();
+    if (!hasTotalShots && sot && offTarget) {
+      const homeSot = toNumber(sot.home);
+      const awaySot = toNumber(sot.away);
+      const homeOff = toNumber(offTarget.home);
+      const awayOff = toNumber(offTarget.away);
+      if ([homeSot, awaySot, homeOff, awayOff].every(value => value !== null)) {
+        displayStats.unshift({
+          label: "Celkové strely (SOT + mimo)",
+          home: homeSot + homeOff,
+          away: awaySot + awayOff,
+          suffix: "",
+          derived: true
+        });
+      }
+    }
+
+    const heading = document.createElement("div");
+    heading.style.cssText = "display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:8px;padding:4px 10px 8px;color:#94a3b8;font-size:10px;font-weight:900;letter-spacing:.5px;text-align:center;";
+    heading.innerHTML = "<span style='text-align:left'>DOMÁCI</span><span>ŠTATISTIKA</span><span style='text-align:right'>HOSTIA</span>";
+    card.appendChild(heading);
+
+    displayStats.forEach(item => {
       const row = document.createElement("div");
-      row.style.cssText = "padding:9px 10px;margin:6px 0;background:#101b2b;border:1px solid #26384f;border-radius:9px;";
+      const isKeyShotStat = /shots? on target|strely na bránu|strely na branu|celkové strely|celkove strely/i.test(String(item.label || ""));
+      row.style.cssText = "padding:10px;margin:6px 0;background:" + (isKeyShotStat ? "#14283a" : "#101b2b") + ";border:1px solid " + (isKeyShotStat ? "#32617a" : "#26384f") + ";border-radius:9px;";
       const values = document.createElement("div");
-      values.style.cssText = "display:grid;grid-template-columns:minmax(38px,1fr) minmax(90px,1.5fr) minmax(38px,1fr);align-items:center;gap:8px;font-size:13px;";
+      values.style.cssText = "display:grid;grid-template-columns:minmax(38px,1fr) minmax(90px,1.7fr) minmax(38px,1fr);align-items:center;gap:8px;font-size:13px;";
       const home = document.createElement("strong");
       const away = document.createElement("strong");
       const label = document.createElement("span");
@@ -512,7 +551,7 @@
       label.textContent = String(item.label);
       home.style.cssText = "color:#fff;text-align:left;font-variant-numeric:tabular-nums;";
       away.style.cssText = "color:#fff;text-align:right;font-variant-numeric:tabular-nums;";
-      label.style.cssText = "color:#a8b8cc;text-align:center;font-size:11px;line-height:1.3;";
+      label.style.cssText = "color:" + (isKeyShotStat ? "#d7e8f5" : "#a8b8cc") + ";text-align:center;font-size:11px;font-weight:" + (isKeyShotStat ? "800" : "600") + ";line-height:1.3;";
       values.append(home, label, away);
       row.appendChild(values);
 
@@ -526,17 +565,17 @@
         bar.style.cssText = "display:flex;gap:3px;height:5px;margin-top:8px;overflow:hidden;border-radius:8px;background:#26384f;";
         const homeBar = document.createElement("div");
         const awayBar = document.createElement("div");
-        homeBar.style.cssText = `width:${h / (h + a) * 100}%;background:#39e6a5;border-radius:8px;`;
-        awayBar.style.cssText = `width:${a / (h + a) * 100}%;background:#64748b;border-radius:8px;`;
+        homeBar.style.cssText = "width:" + (h / (h + a) * 100) + "%;background:#39e6a5;border-radius:8px;";
+        awayBar.style.cssText = "width:" + (a / (h + a) * 100) + "%;background:#64748b;border-radius:8px;";
         bar.append(homeBar, awayBar);
         row.appendChild(bar);
       }
       card.appendChild(row);
     });
-    const legend = document.createElement("div");
-    legend.textContent = "DOMÁCI  ·  HOSTIA";
-    legend.style.cssText = "font-size:10px;color:#71839b;text-align:center;margin-top:7px;letter-spacing:.5px;";
-    card.appendChild(legend);
+
+    if (displayStats.some(item => item.derived)) {
+      addText(card, "Celkové strely sú vypočítané zo SOT + striel mimo brány; nejde o samostatnú hodnotu API.", "10px");
+    }
   }
 
   // Kontrola kvality dát je iba informačná; nemení výpočet tlaku ani signálov.
