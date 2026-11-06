@@ -22,7 +22,9 @@
   const matchArchiveDateEl = document.getElementById("match-archive-date");
   const matchArchiveResetEl = document.getElementById("match-archive-reset");
   const greenSignalArchiveEl = document.getElementById("green-signal-archive");
+  const greenSignalArchiveCountEl = document.getElementById("green-signal-archive-count");
   const bttsSignalArchiveEl = document.getElementById("btts-signal-archive");
+  const bttsSignalArchiveCountEl = document.getElementById("btts-signal-archive-count");
   let matchArchiveData = null;
   let archiveLeagueFilter = "";
   let archiveDateFilter = "";
@@ -1046,6 +1048,7 @@
     });
 
     const signals = [...merged.values()];
+    if (greenSignalArchiveCountEl) greenSignalArchiveCountEl.textContent = String(signals.length);
     const wins = signals.filter(item => item.status === "WIN").length;
     const losses = signals.filter(item => item.status === "LOSS").length;
     const unresolved = signals.filter(item => item.status === "UNRESOLVED").length;
@@ -1162,6 +1165,7 @@
     if (!target) return;
     target.innerHTML = "";
     const signals = Array.isArray(data?.signals) ? data.signals.slice() : [];
+    if (bttsSignalArchiveCountEl) bttsSignalArchiveCountEl.textContent = String(signals.length);
     const tiers = [
       ["10_sot5_shots8", "1:0 · SOT ≥5 · strely ≥8"],
       ["10_sot5_shots10", "1:0 · SOT ≥5 · strely ≥10"],
