@@ -1310,6 +1310,34 @@
     };
   }
 
+  // Súhrnný index prevahy v aktuálnom zápase; skladá tri odlišné časové pohľady.
+  function calculateMatchDominance(pressure, consistency, opponentWeakness) {
+    if (!pressure || !consistency?.ready || !opponentWeakness?.ready) {
+      return { ready: false, reason: "Čakám na aktuálny tlak a aspoň 4 platné historické merania." };
+    }
+    const sides = {};
+    ["home", "away"].forEach(side => {
+      const components = [
+        { key: "aktuálny tlak", value: pressure[side], weight: 40 },
+        { key: "stabilita prevahy", value: consistency[side]?.score, weight: 35 },
+        { key: "trend oslabovania odporu", value: opponentWeakness.sides[side]?.score, weight: 25 }
+      ].filter(item => Number.isFinite(item.value));
+      const totalWeight = components.reduce((sum, item) => sum + item.weight, 0);
+      if (!totalWeight) return;
+      const score = Math.round(components.reduce((sum, item) =>
+        sum + Math.max(0, Math.min(100, item.value)) * item.weight, 0) / totalWeight);
+      sides[side] = {
+        score,
+        components: components.map(item => ({ label: item.key, value: Math.round(item.value), weight: item.weight })),
+        label: score >= 70 ? "VÝRAZNÁ PREVAHA"
+          : score >= 60 ? "RASTÚCA PREVAHA"
+          : score >= 45 ? "VYROVNANÝ ZÁPAS" : "BEZ POTVRDENEJ PREVAHY"
+      };
+    });
+    if (!sides.home || !sides.away) return { ready: false, reason: "Nie sú dostupné všetky porovnateľné zložky." };
+    return { ready: true, sides, sampleCount: consistency.count, spanMinutes: consistency.spanMinutes };
+  }
+
   // Diagnostické skóre kvality príležitosti; nie je to pravdepodobnosť gólu.
   // Chýbajúce komponenty sa vynechajú a váhy sa prepočítajú iba z dostupných dát.
   function calculateSignalQuality(threat, snapshot, reliability, acceleration, collectedAt) {
@@ -1631,6 +1659,50 @@
     weaknessWarning.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.4;margin-top:7px;";
     weaknessPanel.appendChild(weaknessWarning);
     panel.appendChild(weaknessPanel);
+
+    const matchDominance = calculateMatchDominance(pressure, consistency, opponentWeakness);
+    const dominancePanel = document.createElement("div");
+    dominancePanel.style.cssText = "margin-top:10px;padding:11px;background:#101f32;border:1px solid #4b6685;border-radius:9px;";
+    const dominanceHeading = document.createElement("div");
+    dominanceHeading.textContent = "AI MATCH DOMINANCE · CELKOVÁ PREVAHA";
+    dominanceHeading.style.cssText = "font-size:11px;font-weight:900;color:#e2e8f0;margin-bottom:8px;";
+    dominancePanel.appendChild(dominanceHeading);
+    if (matchDominance.ready) {
+      ["home", "away"].forEach(side => {
+        const item = matchDominance.sides[side];
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;gap:8px;margin:7px 0;font-size:11px;";
+        const name = document.createElement("strong");
+        name.textContent = side === "home" ? "DOMÁCI" : "HOSTIA";
+        name.style.color = "#cbd5e1";
+        const value = document.createElement("strong");
+        value.textContent = item.score + "/100 · " + item.label;
+        value.style.color = item.score >= 70 ? "#39e6a5" : item.score >= 60 ? "#fbbf24" : "#cbd5e1";
+        row.append(name, value);
+        dominancePanel.appendChild(row);
+        const breakdown = document.createElement("div");
+        breakdown.textContent = item.components.map(part =>
+          part.label + ": " + part.value + "/100 (" + part.weight + "%)"
+        ).join(" · ");
+        breakdown.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.45;margin:0 0 6px;";
+        dominancePanel.appendChild(breakdown);
+      });
+      const sample = document.createElement("div");
+      sample.textContent = "Podklad: " + matchDominance.sampleCount + " meraní za " +
+        matchDominance.spanMinutes + " minút. Zložky: aktuálny tlak 40 %, stabilita prevahy 35 %, trend oslabovania odporu 25 %.";
+      sample.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.45;margin-top:5px;";
+      dominancePanel.appendChild(sample);
+    } else {
+      const waiting = document.createElement("div");
+      waiting.textContent = matchDominance.reason;
+      waiting.style.cssText = "font-size:10px;color:#94a3b8;";
+      dominancePanel.appendChild(waiting);
+    }
+    const dominanceWarning = document.createElement("div");
+    dominanceWarning.textContent = "Súhrnný index troch LIVE ukazovateľov. Nie je to pravdepodobnosť gólu, dlhodobé hodnotenie tímu ani automatický stávkový signál.";
+    dominanceWarning.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.4;margin-top:7px;";
+    dominancePanel.appendChild(dominanceWarning);
+    panel.appendChild(dominancePanel);
 
     const qualityScores = calculateSignalQuality(threat, snapshot, reliability, acceleration, collectedAt);
     const qualityPanel = document.createElement("div");
