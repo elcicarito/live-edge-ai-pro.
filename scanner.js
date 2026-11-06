@@ -3163,9 +3163,9 @@
             : Array.isArray(snapshot.raw_match?.stats) ? snapshot.raw_match.stats
             : Array.isArray(snapshot.stats) ? snapshot.stats : [];
           return {
-            minute: Number.isFinite(Number(snapshot.minute)) ? Number(snapshot.minute) : null,
-            homeScore: Number.isFinite(Number(snapshot.home_score)) ? Number(snapshot.home_score) : null,
-            awayScore: Number.isFinite(Number(snapshot.away_score)) ? Number(snapshot.away_score) : null,
+            minute: snapshot.minute !== null && snapshot.minute !== undefined && snapshot.minute !== "" && Number.isFinite(Number(snapshot.minute)) ? Number(snapshot.minute) : null,
+            homeScore: snapshot.home_score !== null && snapshot.home_score !== undefined && snapshot.home_score !== "" && Number.isFinite(Number(snapshot.home_score)) ? Number(snapshot.home_score) : null,
+            awayScore: snapshot.away_score !== null && snapshot.away_score !== undefined && snapshot.away_score !== "" && Number.isFinite(Number(snapshot.away_score)) ? Number(snapshot.away_score) : null,
             sot: readPair(stats, ["shots on target", "shots on goal"]),
             dangerous: readPair(stats, ["dangerous attacks", "dangerous attack"]),
             attacks: readPair(stats, ["attacks", "total attacks"]),
