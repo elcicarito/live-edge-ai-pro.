@@ -121,11 +121,11 @@
       card.appendChild(wrap);
       return;
     }
-    const count = Math.max(home.length, away.length, 4);
+    const count = Math.max(home.length, away.length, periodCount(match));
     const table = document.createElement("table");
     table.style.cssText = "width:100%;border-collapse:collapse;text-align:center;font-size:12px";
     const head = document.createElement("tr");
-    ["Tím", ...Array.from({length:count},(_,i)=>i<4?"Q"+(i+1):"OT"+(i-3)), "Spolu"].forEach(label => {
+    ["Tím", ...Array.from({length:count},(_,i)=>periodLabel(match,i)), "Spolu"].forEach(label => {
       const th = document.createElement("th"); th.textContent = label; th.style.cssText = "padding:6px;border-bottom:1px solid #35465e;color:#9fb2c9"; head.appendChild(th);
     });
     table.appendChild(head);
@@ -152,58 +152,34 @@
     row.append(names,scores); card.append(header,row); addQuarterTable(card,match); return card;
   }
   function renderArchiveQuality(matches, target, leagueName) {
-    const total = matches.length;
-    let complete = 0, partial = 0, missing = 0, waiting = 0;
-    matches.forEach(match => {
-      const home = periodValues(match, "home");
-      const away = periodValues(match, "away");
-      const validQuarters = [0,1,2,3].filter(q => {
-        const h = Number(home[q]), a = Number(away[q]);
-        return home[q] !== undefined && home[q] !== null && home[q] !== "–" &&
-          away[q] !== undefined && away[q] !== null && away[q] !== "–" &&
-          Number.isFinite(h) && Number.isFinite(a) && h + a > 0;
+    const total=matches.length;
+    const halves=matches.length>0&&matches.every(match=>formatOf(match)==="halves");
+    let complete=0,partial=0,missing=0,waiting=0;
+    matches.forEach(match=>{
+      const home=periodValues(match,"home"),away=periodValues(match,"away");
+      const valid=Array.from({length:periodCount(match)},(_,i)=>i).filter(q=>{
+        const h=Number(home[q]),a=Number(away[q]);
+        return home[q]!==undefined&&home[q]!==null&&home[q]!=="–"&&away[q]!==undefined&&away[q]!==null&&away[q]!=="–"&&Number.isFinite(h)&&Number.isFinite(a)&&h+a>0;
       }).length;
-      if (validQuarters === 4) complete++;
-      else if (validQuarters > 0) partial++;
-      else {
-        missing++;
-        const checked = Date.parse(match.quarter_scores_checked_at || "");
-        if (Number.isFinite(checked) && Date.now() - checked < 6 * 60 * 60 * 1000) waiting++;
+      if(valid===periodCount(match))complete++;else if(valid>0)partial++;else{
+        missing++;const checked=Date.parse(match.quarter_scores_checked_at||"");
+        if(Number.isFinite(checked)&&Date.now()-checked<6*60*60*1000)waiting++;
       }
     });
-    const panel = document.createElement("section");
-    panel.style.cssText = "background:#132238;border:1px solid #354d69;border-radius:12px;padding:14px;margin:8px 0 12px";
-    const title = document.createElement("div");
-    title.textContent = "🔎 KVALITA DÁT – " + leagueName;
-    title.style.cssText = "font-weight:800;font-size:13px;margin-bottom:10px;color:#e7f0fb";
-    panel.appendChild(title);
-    const grid = document.createElement("div");
-    grid.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px";
-    const items = [
-      ["Kompletné Q1–Q4", complete, "#39e6a5"],
-      ["Čiastočné údaje", partial, "#f2c66d"],
-      ["Bez platných štvrťkových údajov", missing, "#ff9b83"],
-      ["Čakajú na opätovnú kontrolu", waiting, "#9fb2c9"]
-    ];
-    items.forEach(([label, value, color]) => {
-      const cell = document.createElement("div");
-      cell.style.cssText = "background:#0d1929;border-radius:8px;padding:10px;min-width:0";
-      const name = document.createElement("div");
-      name.textContent = label;
-      name.style.cssText = "font-size:11px;color:#a9bdd4;line-height:1.35";
-      const number = document.createElement("div");
-      number.textContent = String(value);
-      number.style.cssText = "font-size:20px;font-weight:800;margin-top:5px;color:" + color;
-      cell.append(name, number);
-      grid.appendChild(cell);
+    const panel=document.createElement("section");panel.style.cssText="background:#132238;border:1px solid #354d69;border-radius:12px;padding:14px;margin:8px 0 12px";
+    const title=document.createElement("div");title.textContent="🔎 KVALITA DÁT – "+leagueName;title.style.cssText="font-weight:800;font-size:13px;margin-bottom:10px;color:#e7f0fb";panel.appendChild(title);
+    const grid=document.createElement("div");grid.style.cssText="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px";
+    const periodText=halves?"H1–H2":"Q1–Q4";
+    [["Kompletné "+periodText,complete,"#39e6a5"],["Čiastočné údaje",partial,"#f2c66d"],["Bez platných údajov",missing,"#ff9b83"],["Čakajú na opätovnú kontrolu",waiting,"#9fb2c9"]].forEach(([label,value,color])=>{
+      const cell=document.createElement("div");cell.style.cssText="background:#0d1929;border-radius:8px;padding:10px;min-width:0";
+      const name=document.createElement("div");name.textContent=label;name.style.cssText="font-size:11px;color:#a9bdd4;line-height:1.35";
+      const number=document.createElement("div");number.textContent=String(value);number.style.cssText="font-size:20px;font-weight:800;margin-top:5px;color:"+color;
+      cell.append(name,number);grid.appendChild(cell);
     });
     panel.appendChild(grid);
-    const pct = total ? (complete / total * 100).toFixed(1) : "0.0";
-    const note = document.createElement("div");
-    note.textContent = "Zápasov v lige: " + total + " · Kompletné Q1–Q4: " + pct + "%. Nulové hodnoty v nepokračovaných štvrtinách sa nepovažujú za odohrané body. Čakajúce zápasy sú súčasťou kategórie bez údajov; ďalšie preverenie prebehne po uplynutí 6 hodín.";
-    note.style.cssText = "font-size:11px;color:#9baabe;margin-top:9px;line-height:1.45";
-    panel.appendChild(note);
-    (target || archiveList).appendChild(panel);
+    const pct=total?(complete/total*100).toFixed(1):"0.0";
+    const note=document.createElement("div");note.textContent="Zápasov v lige: "+total+" · Kompletné "+periodText+": "+pct+"%. Mužské NCAA sa vyhodnocuje ako dva polčasy; neexistujúce Q3/Q4 sa nepovažujú za chýbajúce údaje.";
+    note.style.cssText="font-size:11px;color:#9baabe;margin-top:9px;line-height:1.45";panel.appendChild(note);(target||archiveList).appendChild(panel);
   }
   function renderArchiveStats(matches, target = archiveList, titleText = "📊 ŠTATISTIKY ŠTVRTÍ V ARCHÍVE", panelId = "basketball-quarter-stats") {
     const existing = panelId ? document.getElementById(panelId) : null;
