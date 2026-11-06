@@ -318,7 +318,7 @@ jobs:
           });
           NODE
 
-      - name: Build and evaluate next-quarter predictions
+      - name: Build and evaluate format-aware basketball predictions
         run: |
           node <<'NODE'
           const fs = require("fs");
@@ -329,9 +329,19 @@ jobs:
           const current = read(CURRENT, {});
           const archive = read(ARCHIVE, { matches: [] });
           const history = read(PREDICTIONS, { sport: "basketball", predictions: [] });
-          const predictions = (Array.isArray(history.predictions) ? history.predictions : []).filter(p => p.model_version === 3 && p.training_scope === "league");
+          // Keep all existing v3 predictions and all half-model v4 records.
+          const predictions = (Array.isArray(history.predictions) ? history.predictions : [])
+            .filter(p => (p.model_version === 3 && p.training_scope === "league") || p.model_version === 4);
           const keyOf = m => String(m.id || m.slug || m.url || [m.home, m.away, m.time].join("|"));
           const leagueOf = m => String(m.competition?.name || m.league?.name || m.competition || m.league || "Liga neznáma").trim();
+          const formatOf = m => {
+            const league = leagueOf(m).toLowerCase();
+            const teams = [m.home || m.home_name || "", m.away || m.away_name || ""].join(" ").toLowerCase();
+            const ncaa = /ncaa|national collegiate athletic association/.test(league);
+            const women = /women|woman|ladies|lady|female|wbb/.test(league) || /women|lady|ladies/.test(teams);
+            return ncaa && !women ? "halves" : "quarters";
+          };
+          const periodCount = m => formatOf(m) === "halves" ? 2 : 4;
           const qValue = (m, side, q) => {
             const v = m?.period_scores?.[side]?.[q - 1];
             return v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null;
@@ -343,10 +353,10 @@ jobs:
           const complete = (m, q) => { const total = qTotal(m, q); return total !== null && total > 0; };
           const periodOf = m => {
             const s = String(m.status_text || m.period?.name || m.period || m.status || "").toLowerCase();
-            const match = s.match(/(?:^|\b)([1-4])(?:st|nd|rd|th)?\s*(?:quarter|period|q)\b|\b(?:quarter|period|q)\s*([1-4])(?:\b|$)/);
+            const match = s.match(/(?:^|\\b)([1-4])(?:st|nd|rd|th)?\\s*(?:quarter|period|q)\\b|\\b(?:quarter|period|q)\\s*([1-4])(?:\\b|$)/);
             if (match) return Number(match[1] || match[2]);
-            if (/half.?time|halftime|break/.test(s)) return 3;
-            if (/finished|ended|full.?time/.test(s)) return 5;
+            if (/half.?time|halftime|break/.test(s)) return formatOf(m) === "halves" ? 2 : 3;
+            if (/finished|ended|full.?time/.test(s)) return formatOf(m) === "halves" ? 3 : 5;
             return 0;
           };
           const archiveMatches = Array.isArray(archive.matches) ? archive.matches : [];
@@ -357,71 +367,92 @@ jobs:
             if (p.actual_total !== null && p.actual_total !== undefined) continue;
             const m = lookup.get(p.match_key);
             if (!m) continue;
-            const period = periodOf(m);
-            if (period > p.target_quarter && complete(m, p.target_quarter)) {
-              p.actual_total = qTotal(m, p.target_quarter);
+            const halfModel = p.model_version === 4;
+            if (halfModel !== (formatOf(m) === "halves")) continue;
+            const target = halfModel ? Number(p.target_half) : Number(p.target_quarter);
+            if (periodOf(m) > target && complete(m, target)) {
+              p.actual_total = qTotal(m, target);
               p.absolute_error = Math.abs(p.predicted_total - p.actual_total);
               p.settled_at = new Date().toISOString();
               settled++;
             }
           }
-          const training = archiveMatches.filter(m => [1,2,3,4].every(q => complete(m,q)));
+          const quarterTraining = archiveMatches.filter(m => formatOf(m) === "quarters" &&
+            [1,2,3,4].every(q => complete(m,q)));
+          const halfTraining = archiveMatches.filter(m => formatOf(m) === "halves" &&
+            [1,2].every(q => complete(m,q)));
           const live = Array.isArray(current.live_matches) ? current.live_matches : [];
           let created = 0;
+          // Existing v3 quarter model remains unchanged for leagues that use four quarters.
           for (const m of live) {
+            if (formatOf(m) !== "quarters") continue;
             const period = periodOf(m);
             if (period < 2 || period > 4) continue;
             const target = period;
             if (![...Array(target - 1)].every((_,i) => complete(m,i+1))) continue;
             const matchKey = keyOf(m);
-            if (predictions.some(p => p.match_key === matchKey && p.target_quarter === target)) continue;
+            if (predictions.some(p => p.match_key === matchKey && p.model_version === 3 && p.target_quarter === target)) continue;
             const league = leagueOf(m);
-            const leagueRows = training.filter(x => leagueOf(x) === league && complete(x,target));
-            // Strict league-only training: never mix another league into this forecast.
-            const selected = leagueRows;
-            if (selected.length < 10) {
-              console.log("PREDICTION SKIPPED: liga nemá dosť vlastných historických zápasov pre Q" + target, league, selected.length, "(minimum 10)");
-              continue;
-            }
+            const selected = quarterTraining.filter(x => leagueOf(x) === league && complete(x,target));
+            if (selected.length < 10) continue;
             const historicalAverage = selected.reduce((sum,x) => sum + qTotal(x,target),0) / selected.length;
             const previous = Array.from({length:target-1},(_,i)=>qTotal(m,i+1));
             const previousAverage = previous.reduce((sum,v)=>sum+v,0) / previous.length;
             const predicted = Math.round(previousAverage * 0.65 + historicalAverage * 0.35);
             predictions.push({
-              id: matchKey + "::Q" + target,
-            model_version: 3,
-              match_key: matchKey,
-              home: m.home || m.home_name || "Domáci",
-              away: m.away || m.away_name || "Hostia",
-              league,
-              target_quarter: target,
-              predicted_total: predicted,
-              range_low: Math.max(0, predicted - 5),
-              range_high: predicted + 5,
+              id: matchKey + "::Q" + target, model_version: 3, match_key: matchKey,
+              home: m.home || m.home_name || "Domáci", away: m.away || m.away_name || "Hostia",
+              league, target_quarter: target, predicted_total: predicted,
+              range_low: Math.max(0,predicted-5), range_high: predicted+5,
               historical_average: Number(historicalAverage.toFixed(2)),
               previous_quarters_average: Number(previousAverage.toFixed(2)),
-              training_sample: selected.length,
-              training_scope: "league",
-              previous_quarters: previous,
-              observed_at: new Date().toISOString(),
-              data_delay_note: "Zber môže byť oneskorený približne 5 minút.",
-              actual_total: null,
-              absolute_error: null
+              training_sample: selected.length, training_scope: "league", previous_quarters: previous,
+              observed_at: new Date().toISOString(), data_delay_note: "Zber môže byť oneskorený približne 5 minút.",
+              actual_total: null, absolute_error: null
             });
             created++;
-            console.log("NEXT QUARTER PREDICTION:", m.home, "-", m.away, "Q" + target, predicted, "sample", selected.length);
+          }
+          // New v4 model for men's NCAA: forecast the second half from the completed first half
+          // plus the historical second-half average from the same competition only.
+          for (const m of live) {
+            if (formatOf(m) !== "halves" || periodOf(m) !== 2 || !complete(m,1)) continue;
+            const matchKey = keyOf(m);
+            if (predictions.some(p => p.match_key === matchKey && p.model_version === 4 && p.target_half === 2)) continue;
+            const league = leagueOf(m);
+            const selected = halfTraining.filter(x => leagueOf(x) === league && complete(x,2));
+            if (selected.length < 10) {
+              console.log("HALF PREDICTION SKIPPED: NCAA vzorka pod 10 zápasov", league, selected.length);
+              continue;
+            }
+            const historicalAverage = selected.reduce((sum,x) => sum + qTotal(x,2),0) / selected.length;
+            const previousAverage = qTotal(m,1);
+            const predicted = Math.round(previousAverage * 0.65 + historicalAverage * 0.35);
+            predictions.push({
+              id: matchKey + "::H2", model_version: 4, match_key: matchKey,
+              home: m.home || m.home_name || "Domáci", away: m.away || m.away_name || "Hostia",
+              league, target_half: 2, predicted_total: predicted,
+              range_low: Math.max(0,predicted-5), range_high: predicted+5,
+              historical_average: Number(historicalAverage.toFixed(2)),
+              previous_halves_average: Number(previousAverage.toFixed(2)),
+              training_sample: selected.length, training_scope: "league-halves",
+              previous_halves: [previousAverage], observed_at: new Date().toISOString(),
+              data_delay_note: "NCAA mužov: predikcia druhého polčasu po dokončení prvého; zber môže meškať približne 5 minút.",
+              actual_total: null, absolute_error: null
+            });
+            created++;
+            console.log("NEXT HALF PREDICTION:", m.home, "-", m.away, "H2", predicted, "sample", selected.length);
           }
           const trimmed = predictions.sort((a,b)=>String(b.observed_at).localeCompare(String(a.observed_at))).slice(0,1000);
           fs.writeFileSync(PREDICTIONS, JSON.stringify({
-            sport: "basketball",
-            updated_at: new Date().toISOString(),
-            model: "v3: iba zápasy so skutočnými výsledkami Q1–Q4; spoločné body oboch tímov; 65% priemer predchádzajúcich dokončených štvrtín aktuálneho zápasu + 35% historický priemer cieľovej štvrtiny iba z rovnakej ligy; bez kurzov",
-            complete_training_games: training.length,
-            settled_this_run: settled,
-            created_this_run: created,
-            predictions: trimmed
-          }, null, 2) + "\n");
-          console.log("PREDICTIONS: vytvorené", created, "vyhodnotené", settled, "celkom", trimmed.length);
+            sport: "basketball", updated_at: new Date().toISOString(),
+            model: "v3: 4 štvrtiny; v4: mužské NCAA, 2 polčasy; oba modely používajú 65% predchádzajúce obdobie aktuálneho zápasu + 35% historický priemer cieľového obdobia iba z rovnakej ligy; bez kurzov",
+            complete_training_games: quarterTraining.length,
+            complete_half_training_games: halfTraining.length,
+            settled_this_run: settled, created_this_run: created, predictions: trimmed
+          }, null, 2) + "\\n");
+          console.log("PREDICTIONS: vytvorené", created, "vyhodnotené", settled,
+            "tréning Q zápasy", quarterTraining.length, "tréning NCAA polčasy", halfTraining.length,
+            "celkom", trimmed.length);
           NODE
 
       - name: Commit basketball data
