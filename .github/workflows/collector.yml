@@ -1288,9 +1288,90 @@ jobs:
               );
               if (!selected) return null;
 
+              // AI Quality Score sa počíta iba z meraní dostupných v okamihu vzniku.
+              // Pri nedostatočnej vzorke zostáva null; staré signály sa nikdy nedopočítavajú.
+              const qualityRecords = [];
+              for (const batch of history) {
+                const validCollection = batch.collection_complete === true || batch.data_status === "complete";
+                if (!validCollection || !Array.isArray(batch.records)) continue;
+                for (const historicalRecord of batch.records) {
+                  if (!historicalRecord.match || frontendMatchId(historicalRecord.match) !== frontendMatchId(match)) continue;
+                  const time = Date.parse(historicalRecord.collected_at || batch.collected_at || "");
+                  if (Number.isFinite(time)) qualityRecords.push({ time, match: historicalRecord.match });
+                }
+              }
+              if (!qualityRecords.some(item => Math.abs(item.time - collectedTime) < 1000)) {
+                qualityRecords.push({ time: collectedTime, match });
+              }
+              qualityRecords.sort((a, b) => a.time - b.time);
+              const uniqueQualityRecords = qualityRecords.filter((item, index) =>
+                index === 0 || item.time !== qualityRecords[index - 1].time
+              );
+              let qualityScore = null;
+              let qualityScoreComponents = null;
+              if (uniqueQualityRecords.length >= 3) {
+                const momentumReadyCount = uniqueQualityRecords.filter(item =>
+                  frontendStatValue(item.match.stats || [], "shots on target") &&
+                  frontendStatValue(item.match.stats || [], "dangerous attacks")
+                ).length;
+                const momentumCoverage = Math.round(momentumReadyCount / uniqueQualityRecords.length * 100);
+                const sampleDepth = Math.min(100, uniqueQualityRecords.length / 5 * 100);
+                const dataQuality = Math.round(momentumCoverage * 0.7 + sampleDepth * 0.3);
+                const freshness = age <= 2 * 60000 ? 100 : age <= 4 * 60000 ? 80 : 50;
+                const intervals = [];
+                for (let i = 1; i < uniqueQualityRecords.length; i++) {
+                  const previous = uniqueQualityRecords[i - 1];
+                  const current = uniqueQualityRecords[i];
+                  const minutes = (current.time - previous.time) / 60000;
+                  if (!Number.isFinite(minutes) || minutes < 3 || minutes > 15) continue;
+                  const oldShots = frontendStatValue(previous.match.stats || [], "shots on target");
+                  const shots = frontendStatValue(current.match.stats || [], "shots on target");
+                  const oldAttacks = frontendStatValue(previous.match.stats || [], "dangerous attacks");
+                  const attacks = frontendStatValue(current.match.stats || [], "dangerous attacks");
+                  if (!oldShots || !shots || !oldAttacks || !attacks) continue;
+                  if (shots.home < oldShots.home || shots.away < oldShots.away ||
+                      attacks.home < oldAttacks.home || attacks.away < oldAttacks.away) continue;
+                  intervals.push({
+                    homeRate: ((shots.home - oldShots.home) * 3 + attacks.home - oldAttacks.home) / minutes * 10,
+                    awayRate: ((shots.away - oldShots.away) * 3 + attacks.away - oldAttacks.away) / minutes * 10
+                  });
+                }
+                const accelerationReady = intervals.length >= 2;
+                const side = selected.side;
+                const activityScore = Math.max(0, Math.min(100, selected.activity * 10));
+                const components = [
+                  { value: dataQuality, weight: 25 },
+                  { value: freshness, weight: 20 },
+                  { value: threat[side], weight: 20 },
+                  { value: activityScore, weight: 20 }
+                ];
+                if (accelerationReady) {
+                  const delta = Number((
+                    intervals[intervals.length - 1][side + "Rate"] -
+                    intervals[intervals.length - 2][side + "Rate"]
+                  ).toFixed(1));
+                  components.push({
+                    value: Math.max(0, Math.min(100, 50 + delta * 5)),
+                    weight: 15
+                  });
+                }
+                const totalWeight = components.reduce((sum, item) => sum + item.weight, 0);
+                qualityScore = Math.round(components.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight);
+                qualityScoreComponents = {
+                  dataQuality,
+                  freshness,
+                  goalThreat: threat[side],
+                  activityScore,
+                  accelerationIncluded: accelerationReady,
+                  sampleCount: uniqueQualityRecords.length
+                };
+              }
+
               const momentumDiff = Math.abs(threat.home - threat.away);
               return {
                 ...selected,
+                qualityScore,
+                qualityScoreComponents,
                 pressureHome: pressure.home,
                 pressureAway: pressure.away,
                 activityHome: Number(snapshot.homeActivityRate.toFixed(1)),
@@ -1393,6 +1474,11 @@ jobs:
                   deadlineMinute: Math.min(90, minute + 15),
                   goalThreat: candidate.score,
                   activityRate: Number(candidate.activity.toFixed(1)),
+                  ...(Number.isFinite(candidate.qualityScore) ? {
+                    qualityScore: candidate.qualityScore,
+                    qualityScoreVersion: "ai-quality-v1",
+                    qualityScoreComponents: candidate.qualityScoreComponents
+                  } : {}),
                   // Momentum snapshots are stored for later statistical analysis only;
                   // they do not change the green signal trigger conditions.
                   pressureHome: candidate.pressureHome,
