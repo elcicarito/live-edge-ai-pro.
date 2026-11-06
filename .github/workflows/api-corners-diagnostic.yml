@@ -10,127 +10,72 @@ jobs:
   diagnostic:
     runs-on: ubuntu-latest
     steps:
-      - name: Compare match and tracker endpoints
+      - name: Probe current LIVE tracker and extract data routes
         run: |
           mkdir -p diagnostic
           node <<'NODE'
           const fs = require('fs');
-          const urls = {
-            v1_match: 'https://sportscore.com/api/v1/match/?sport=football&slug=cs-herediano-vs-deportivo-saprissa',
-            widget_match: 'https://sportscore.com/api/widget/match/?sport=football&slug=cs-herediano-vs-deportivo-saprissa',
-            widget_tracker: 'https://sportscore.com/api/widget/tracker/?sport=football&id=n54qllhnyzd6qvy'
+          const mainUrl = 'https://widgets-v2.thesports01.com/assets/index.021b287c.js';
+          const repoData = 'https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./main/data/live-current.json';
+          const report = { checked_at: new Date().toISOString(), fixtures: [], probes: {}, bundle: {} };
+          const get = async (url, accept='*/*') => {
+            const r = await fetch(url, {headers:{accept, 'user-agent':'Mozilla/5.0 LIVE-EDGE-DIAGNOSTIC'}});
+            const body = await r.text(); let json=null; try { json=JSON.parse(body); } catch {}
+            return {status:r.status, content_type:r.headers.get('content-type'), body:json ?? body, text:body};
           };
-          (async () => {
-            const report = {};
-            for (const [name, url] of Object.entries(urls)) {
-              try {
-                const response = await fetch(url, { headers: { accept: 'application/json' } });
-                const body = await response.text();
-                let parsed;
-                try { parsed = JSON.parse(body); } catch { parsed = null; }
-                report[name] = {
-                  url,
-                  status: response.status,
-                  content_type: response.headers.get('content-type'),
-                  body: parsed ?? body.slice(0, 20000)
-                };
-              } catch (error) {
-                report[name] = { url, error: String(error) };
-              }
-            }
-            const trackerHtml = String(report.widget_tracker?.body ?? '');
-            const iframeMatch = trackerHtml.match(/<iframe[^>]+src=["']([^"']+)/i);
-            if (iframeMatch) {
-              const iframeUrl = iframeMatch[1].replace(/&amp;/g, '&');
-              try {
-                const response = await fetch(iframeUrl, { headers: { accept: 'text/html,application/xhtml+xml' } });
-                const html = await response.text();
-                report.tracker_iframe = { url: iframeUrl, status: response.status, content_type: response.headers.get('content-type'), body: html.slice(0, 50000) };
-                const assetRefs = [...html.matchAll(/<(?:script|link)[^>]+(?:src|href)=["']([^"']+\.js[^"']*)["']/gi)].map(m => new URL(m[1], iframeUrl).href);
-                const mainScriptUrl = assetRefs.find(url => /\/assets\/index\.[^/]+\.js/.test(url));
-                let lazyChunkUrls = [];
-                if (mainScriptUrl) {
-                  try {
-                    const mainResponse = await fetch(mainScriptUrl);
-                    const mainBody = await mainResponse.text();
-                    lazyChunkUrls = [...mainBody.matchAll(/import\(["'](\.\/[^"']+\.js)["']\)/g)].map(m => new URL(m[1], mainScriptUrl).href);
-                    const assetChunkUrls = [...mainBody.matchAll(/["'](assets\/[^"' ]+\.js)["']/g)].map(m => new URL(m[1], iframeUrl).href);
-                    lazyChunkUrls.push(...assetChunkUrls);
-                  } catch (error) {
-                    report.lazy_chunk_error = String(error);
+          (async()=>{
+            const live = await get(repoData, 'application/json');
+            if (live.status===200 && live.body?.records) report.fixtures = live.body.records.filter(x=>x.match?.status==='live').map(x=>({
+              home:x.match.home, away:x.match.away, minute:x.match.live_minute,
+              slug:(x.match.url||'').split('/').filter(Boolean).pop(), tracker:x.match.tracker
+            }));
+            for (const fx of report.fixtures.slice(0,8)) {
+              const id=fx.tracker?.id || fx.slug;
+              const urls = {
+                tracker_widget:'https://sportscore.com/api/widget/tracker/?sport=football&id='+encodeURIComponent(id),
+                tracker_api:'https://api.thesports01.com/api/widget/tracker/?sport=football&id='+encodeURIComponent(id),
+                match_api:'https://api.thesports01.com/en/match/'+encodeURIComponent(id),
+                match_api2:'https://api.thesports01.com/en/match-'+encodeURIComponent(id)
+              };
+              const key=fx.home+' vs '+fx.away; report.probes[key]={fixture:fx,results:{}};
+              for (const [name,url] of Object.entries(urls)) {
+                try {
+                  const x=await get(url);
+                  report.probes[key].results[name]={url,status:x.status,content_type:x.content_type,body:x.text.slice(0,12000)};
+                  if(name==='tracker_widget' && x.status===200) {
+                    const m=x.text.match(/iframe[^>]+src=["']([^"']+)/i);
+                    if(m) {
+                      const iframe=new URL(m[1].replace(/&amp;/g,'&'),url).href;
+                      const page=await get(iframe,'text/html');
+                      report.probes[key].results.tracker_iframe={url:iframe,status:page.status,body:page.text.slice(0,5000)};
+                    }
                   }
-                }
-                const scriptUrls = [...new Set([...assetRefs, ...lazyChunkUrls])].slice(0, 60);
-                report.tracker_scripts = [];
-                for (const scriptUrl of scriptUrls) {
-                  try {
-                    const scriptResponse = await fetch(scriptUrl);
-                    const scriptBody = await scriptResponse.text();
-                    const hits = [...scriptBody.matchAll(/.{0,160}(?:corner|corners|corner.?kick).{0,240}/gi)].slice(0, 25).map(m => m[0]);
-                    const apiRefs = [...new Set(scriptBody.match(/["'`](?:\/[^"'` ]{2,}|https?:\/\/[^"'` ]+)["'`]/gi) || [])].map(x => x.slice(1, -1)).filter(x => /api|tracker|match|live|event|stat|score|socket|mqtt/i.test(x)).slice(0, 80);
-                    const transportHits = [...scriptBody.matchAll(/.{0,220}(?:axios|XMLHttpRequest|WebSocket|mqtt|subscribe|baseURL|matchDetailData|homeScores|fetch\s*\().{0,300}/gi)].slice(0, 80).map(m => m[0]);
-                    const focusedHits = scriptUrl.includes('/assets/index.')
-                      ? [...scriptBody.matchAll(/.{0,500}(?:MQTT_API|HTTP_API|mqttInstance|mqtt\.connect|\.subscribe\(|subscribeId|match_id|matchId|topic|FBT_CORNER_KICK|homeScores|awayScores).{0,700}/gi)].slice(0, 100).map(m => m[0])
-                      : [];
-                    report.tracker_scripts.push({ url: scriptUrl, status: scriptResponse.status, bytes: scriptBody.length, corner_hits: hits, api_refs: apiRefs, transport_hits: transportHits, focused_hits: focusedHits });
-                  } catch (error) {
-                    report.tracker_scripts.push({ url: scriptUrl, error: String(error) });
-                  }
-                }
-              } catch (error) {
-                report.tracker_iframe = { url: iframeUrl, error: String(error) };
+                } catch(e) { report.probes[key].results[name]={url,error:String(e)}; }
               }
             }
-            fs.writeFileSync('diagnostic/endpoints.json', JSON.stringify(report, null, 2));
-            const matches = [];
-            function scan(value, path, depth = 0) {
-              if (depth > 12 || value == null) return;
-              if (Array.isArray(value)) {
-                value.forEach((item, i) => scan(item, path + '[' + i + ']', depth + 1));
-                return;
+            const b=await get(mainUrl,'application/javascript'); const src=b.text;
+            report.bundle={url:mainUrl,status:b.status,bytes:src.length};
+            fs.writeFileSync('diagnostic/tracker-main.js',src);
+            const terms=['.subscribe(', 'subscribe(', 'mqttInstance', 'MQTT_API', 'HTTP_API', 'connect(', 'subscribeId', 'matchDetailData', 'homeScores', 'FBT_CORNER_KICK'];
+            report.bundle.contexts={};
+            for(const term of terms) {
+              let pos=0,arr=[];
+              while((pos=src.indexOf(term,pos))!==-1 && arr.length<35) {
+                arr.push(src.slice(Math.max(0,pos-450),Math.min(src.length,pos+900))); pos+=term.length;
               }
-              if (typeof value === 'object') {
-                for (const [key, item] of Object.entries(value)) {
-                  const next = path ? path + '.' + key : key;
-                  if (/corner|corners|corner.?kick/i.test(key)) {
-                    matches.push(next + ': ' + JSON.stringify(item).slice(0, 500));
-                  }
-                  scan(item, next, depth + 1);
-                }
-              }
+              report.bundle.contexts[term]=arr;
             }
-            for (const [name, result] of Object.entries(report)) scan(result.body, name);
-            const scriptFindings = (report.tracker_scripts || []).flatMap(s => [
-              ...(s.corner_hits || []).map(hit => ' - **' + s.url + '** corner: `' + hit.slice(0, 500) + '`'),
-              ...(s.api_refs || []).map(hit => ' - **' + s.url + '** API ref: `' + hit.slice(0, 300) + '`'),
-              ...(s.transport_hits || []).map(hit => ' - **' + s.url + '** transport: `' + hit.slice(0, 500) + '`'),
-              ...(s.focused_hits || []).map(hit => ' - **' + s.url + '** FOCUSED: `' + hit.slice(0, 1000) + '`'),
-            ]);
-            const summary = [
-              '# SportScore API – diagnostika rohov',
-              '',
-              ...Object.entries(report).map(([name, result]) => '- **' + name + '**: HTTP ' + (result.status ?? 'ERROR') + (result.error ? ' – ' + result.error : '')),
-              '',
-              '## Nájdené polia súvisiace s rohmi',
-              ...(matches.length ? matches.map(x => '- `' + x + '`') : ['- Nenašli sa žiadne polia s názvom obsahujúcim corner/corners/corner kick v JSON odpovediach.']),
-              '',
-              '## Nálezy v JavaScript bundle',
-              ...(scriptFindings.length ? scriptFindings : ['- Bez zachytených corner výrazov alebo API referencií.']),
-              '',
-              'Kompletné odpovede sú uložené aj v artefakte `sportscore-api-diagnostic`.'
-            ].join('\\n');
-            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + '\\n');
-            console.log(summary);
-            for (const [name, result] of Object.entries(report)) {
-              console.log(name, 'status=', result.status ?? 'ERROR');
-              const text = JSON.stringify(result.body ?? result.error ?? '');
-              console.log('body preview:', text.slice(0, 1800));
-            }
-          })();
+            report.bundle.routes=[...new Set((src.match(/["'`](?:\/[^"'` ]{2,}|https?:\/\/[^"'` ]+)["'`]/g)||[]).map(x=>x.slice(1,-1)).filter(x=>/api|match|tracker|live|event|stat|score|config|profile/i.test(x)))].slice(0,500);
+            fs.writeFileSync('diagnostic/report.json',JSON.stringify(report,null,2));
+            const summary=['# LIVE corners diagnostic','', 'LIVE fixtures probed: '+report.fixtures.length,
+              ...Object.entries(report.probes).map(([n,v])=>'- '+n+': '+Object.entries(v.results).map(([k,r])=>k+'='+(r.status??'ERR')).join(', ')),
+              '', 'Bundle HTTP '+b.status+', '+src.length+' bytes. MQTT/HTTP route contexts saved in artifact.'].join('\n');
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,summary+'\n'); console.log(summary);
+          })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-      - name: Upload raw diagnostic responses
+      - name: Upload diagnostic bundle and report
         uses: actions/upload-artifact@v4
         with:
-          name: sportscore-api-diagnostic
-          path: diagnostic/endpoints.json
+          name: sportscore-live-corners-diagnostic
+          path: diagnostic/
           if-no-files-found: error
