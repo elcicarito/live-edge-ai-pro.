@@ -38,6 +38,7 @@ jobs:
           const HISTORY_PATH = "data/live-history.jsonl";
           const HISTORY_JSON_PATH = "data/live-history.json";
           const SIGNAL_ARCHIVE_PATH = "data/signal-archive.json";
+          const BTTS_ARCHIVE_PATH = "data/btts-signal-archive.json";
 
           const REQUIRED_MISSES = 3;
           const DROP_RATIO = 0.5;
@@ -1231,6 +1232,120 @@ jobs:
               JSON.stringify(signalArchive, null, 2)
             );
 
+            // =========================================
+            // SAMOSTATNÝ BTTS MODEL – 46. až 50. minúta
+            // Strely celkom = SOT + strely mimo brány.
+            // =========================================
+            const bttsArchive = readJson(BTTS_ARCHIVE_PATH, {
+              schema_version: 1,
+              updated_at: null,
+              signals: []
+            });
+            if (!Array.isArray(bttsArchive.signals)) {
+              throw new Error("BTTS archív nemá platné pole signals.");
+            }
+
+            function bttsStat(stats, label) {
+              const item = (stats || []).find(s =>
+                String(s.label || "").toLowerCase() === label
+              );
+              if (!item) return null;
+              const home = Number(item.home);
+              const away = Number(item.away);
+              if (!Number.isFinite(home) || !Number.isFinite(away) || home < 0 || away < 0) return null;
+              return { home, away };
+            }
+
+            if (archiveSafe) {
+              // Vytvor najviac jeden záznam na zápas. Pri 1:0 sa uloží
+              // najsilnejší dosiahnutý prah, aby sa zápas nepočítal 3-krát.
+              for (const record of records) {
+                const match = record?.match;
+                if (!match || !isLive(match)) continue;
+                const id = frontendMatchId(match);
+                if (!id || bttsArchive.signals.some(x => String(x.matchId) === id)) continue;
+
+                const minute = Number(match.live_minute);
+                const homeScore = Number(match.home_score);
+                const awayScore = Number(match.away_score);
+                const age = Date.now() - Date.parse(record.collected_at || "");
+                if (!Number.isFinite(minute) || minute < 46 || minute > 50 ||
+                    !Number.isFinite(homeScore) || !Number.isFinite(awayScore) ||
+                    !Number.isFinite(age) || age < 0 || age > 7 * 60 * 1000) continue;
+
+                const sot = bttsStat(match.stats, "shots on target");
+                const off = bttsStat(match.stats, "shots off target");
+                if (!sot || !off) continue;
+                const combinedSot = sot.home + sot.away;
+                const combinedShots = combinedSot + off.home + off.away;
+
+                let tier = null;
+                let predictedSide = null;
+                if (homeScore === 1 && awayScore === 0 && combinedSot >= 5) {
+                  if (combinedShots >= 12) tier = "1:0 · SOT ≥5 · strely ≥12";
+                  else if (combinedShots >= 10) tier = "1:0 · SOT ≥5 · strely ≥10";
+                  else if (combinedShots >= 8) tier = "1:0 · SOT ≥5 · strely ≥8";
+                  predictedSide = "away";
+                } else if (homeScore === 0 && awayScore === 1 &&
+                           combinedSot >= 6 && combinedShots >= 8) {
+                  tier = "0:1 · SOT ≥6 · strely ≥8";
+                  predictedSide = "home";
+                }
+                if (!tier || !predictedSide) continue;
+
+                bttsArchive.signals.push({
+                  signalId: "btts_" + id + "_" + record.collected_at,
+                  model: "BTTS",
+                  matchId: id,
+                  home: match.home,
+                  away: match.away,
+                  predictedSide,
+                  predictedTeam: predictedSide === "home" ? match.home : match.away,
+                  startMinute: minute,
+                  startScore: homeScore + ":" + awayScore,
+                  combinedSot,
+                  combinedShots,
+                  tier,
+                  createdAt: record.collected_at,
+                  status: "OPEN"
+                });
+              }
+            }
+
+            // Vyhodnocuj výhradne z potvrdeného konečného výsledku.
+            const bttsFinals = new Map(
+              (archive.archived_matches || [])
+                .filter(item => item?.status_confirmation === "confirmed_finished" && item.final_match)
+                .map(item => [frontendMatchId(item.final_match) || String(item.id || ""), item.final_match])
+            );
+            for (const signal of bttsArchive.signals) {
+              if (signal.status !== "OPEN") continue;
+              const finalMatch = bttsFinals.get(String(signal.matchId));
+              if (!finalMatch) continue;
+              const rawScoringSide = signal.predictedSide === "home"
+                ? finalMatch.home_score : finalMatch.away_score;
+              const rawOtherSide = signal.predictedSide === "home"
+                ? finalMatch.away_score : finalMatch.home_score;
+              const scoring = Number(rawScoringSide);
+              const other = Number(rawOtherSide);
+              if (rawScoringSide == null || rawOtherSide == null ||
+                  !Number.isFinite(scoring) || !Number.isFinite(other)) continue;
+              signal.status = scoring > 0 ? "WIN" : "LOSS";
+              signal.settledAt = signalNow;
+              signal.settledScore = Number(finalMatch.home_score) + ":" + Number(finalMatch.away_score);
+              signal.settlementNote = scoring > 0
+                ? "Predikovaný tím skóroval do potvrdeného konca zápasu."
+                : "Predikovaný tím do potvrdeného konca zápasu neskóroval.";
+            }
+            bttsArchive.updated_at = signalNow;
+            fs.writeFileSync(BTTS_ARCHIVE_PATH, JSON.stringify(bttsArchive, null, 2));
+            console.log("BTTS ARCHIVE:", JSON.stringify({
+              total: bttsArchive.signals.length,
+              open: bttsArchive.signals.filter(x => x.status === "OPEN").length,
+              wins: bttsArchive.signals.filter(x => x.status === "WIN").length,
+              losses: bttsArchive.signals.filter(x => x.status === "LOSS").length
+            }));
+
             console.log("SIGNAL ARCHIVE:", JSON.stringify({
               total: signalArchive.signals.length,
               open: signalArchive.signals.filter(item => item.status === "OPEN").length,
@@ -1277,7 +1392,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/live-current.json data/live-latest.json data/live-history.jsonl data/live-history.json data/live-archive.json data/signal-archive.json
+          git add data/live-current.json data/live-latest.json data/live-history.jsonl data/live-history.json data/live-archive.json data/signal-archive.json data/btts-signal-archive.json
 
           if git diff --cached --quiet; then
             echo "Žiadne nové zmeny na uloženie."
