@@ -2969,7 +2969,6 @@
         renderMatchArchive(matchArchive);
         renderSystemStats(current, signalArchive, matchArchive);
         renderApiDataQuality(current, matchArchive, matchHistoryData);
-      renderFootballPerformanceCenter(signalArchive, bttsArchive);
         renderFootballPerformanceCenter(signalArchive, bttsArchive);
 
         signalEl.textContent =
@@ -3080,6 +3079,7 @@
       renderMatchArchive(matchArchive);
       renderSystemStats(current, signalArchive, matchArchive);
       renderApiDataQuality(current, matchArchive, matchHistoryData);
+      renderFootballPerformanceCenter(signalArchive, bttsArchive);
 
       signalEl.textContent =
         `Aktualizované: ${new Date().toLocaleTimeString("sk-SK")} | LIVE: ${matches.length}`;
