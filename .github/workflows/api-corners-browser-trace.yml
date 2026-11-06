@@ -72,7 +72,7 @@ jobs:
                   row.preview=clean(text);
                 }catch{}
               }
-              if(/api\\.thesports01\\.com\\/api\\/(p\\/uc|v3\\/f\\/g)/i.test(u)){
+              if(/api\.thesports01\.com\/api\/(p\/uc|v3\/f\/g)/i.test(u)){
                 try{
                   const bytes=await r.body();
                   row.bodyBytes=bytes.length;
@@ -98,7 +98,8 @@ jobs:
               ['# Tracker browser network trace','Fixture: '+fx.home+' - '+fx.away,
               'HTTP requests: '+out.requests.length,'Responses: '+out.responses.length,
               'WebSockets: '+out.websockets.length,
-              'Corner-bearing JSON responses: '+out.responses.filter(x=>x.cornerPaths?.length).length,\n              'Opaque API bodies captured: '+out.responses.filter(x=>x.bodyBytes!==undefined).length,
+              'Corner-bearing JSON responses: '+out.responses.filter(x=>x.cornerPaths?.length).length,
+              'Opaque API bodies captured: '+out.responses.filter(x=>x.bodyBytes!==undefined).length,
               'See artifact for redacted request paths and relevant frames.'].join('\n')+'\n');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
