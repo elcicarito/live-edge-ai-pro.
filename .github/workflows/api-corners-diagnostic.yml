@@ -10,47 +10,46 @@ jobs:
   diagnostic:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe match endpoints on Tracker data hosts
+      - name: Probe Tracker match widget with real URL slug
         run: |
           mkdir -p diagnostic
           node <<'NODE'
           const fs=require('fs');
           const repoData='https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./main/data/live-current.json';
-          const hosts=['https://live-widgets-api.leisu.com','https://api.live-widgets.com','https://api.thesports01.com','https://sportscore.com'];
+          const hosts=['https://sportscore.com','https://widgets-v2.thesports01.com','https://live-widgets-api.leisu.com','https://api.live-widgets.com','https://api.thesports01.com'];
           const report={checked_at:new Date().toISOString(),fixtures:[],results:[]};
-          const get=async(url)=>{try{const r=await fetch(url,{headers:{accept:'application/json','user-agent':'Mozilla/5.0','referer':'https://widgets-v2.thesports01.com/'}});
-            const t=await r.text();let j;try{j=JSON.parse(t)}catch{}return {url,status:r.status,type:r.headers.get('content-type'),body:j??t.slice(0,10000)}}
+          const get=async(url)=>{try{const r=await fetch(url,{headers:{accept:'application/json,text/html,*/*','user-agent':'Mozilla/5.0','referer':'https://sportscore.com/'}});
+            const t=await r.text();let j;try{j=JSON.parse(t)}catch{}return {url,status:r.status,type:r.headers.get('content-type'),body:j??t.slice(0,16000)}}
             catch(e){return {url,error:String(e)}}};
           (async()=>{
             const raw=await get(repoData);const records=raw.body?.records||[];
-            report.fixtures=records.filter(x=>x.match?.status==='live').slice(0,8).map(x=>({home:x.match.home,away:x.match.away,minute:x.match.live_minute,id:x.match.tracker?.id||x.match.url?.split('/').filter(Boolean).pop(),slug:x.match.url?.split('/').filter(Boolean).pop()}));
+            report.fixtures=records.filter(x=>x.match?.status==='live').slice(0,10).map(x=>{
+              const url=x.match.url||'';const parts=url.split('/').filter(Boolean);
+              return {home:x.match.home,away:x.match.away,minute:x.match.live_minute,id:x.match.tracker?.id,slug:parts.length>=3?parts[2]:null,url};
+            }).filter(x=>x.id&&x.slug);
             const paths=[
-              id=>'/api/widget/match/?sport=football&id='+id,
-              id=>'/api/widget/tracker/?sport=football&id='+id,
-              id=>'/api/widget/match/?id='+id,
-              id=>'/api/widget/tracker/?id='+id,
-              id=>'/api/v1/match/?sport=football&id='+id,
-              id=>'/api/v1/match/?sport=football&slug='+id,
-              id=>'/api/v1/fixtures/?sport=football&status=live&limit=10'
+              (fx)=>'/api/widget/match/?sport=football&slug='+encodeURIComponent(fx.slug),
+              (fx)=>'/api/widget/match/?slug='+encodeURIComponent(fx.slug),
+              (fx)=>'/api/v1/match/?sport=football&slug='+encodeURIComponent(fx.slug),
+              (fx)=>'/api/v1/match/?slug='+encodeURIComponent(fx.slug),
+              (fx)=>'/api/widget/tracker/?sport=football&id='+encodeURIComponent(fx.id),
+              (fx)=>'/api/widget/match/?sport=football&slug='+encodeURIComponent(fx.slug)+'&id='+encodeURIComponent(fx.id)
             ];
-            for(const fx of report.fixtures){
-              const ids=[...new Set([fx.id,fx.slug].filter(Boolean))];
-              for(const host of hosts) for(const id of ids) for(const path of paths.slice(0,6)){
-                const x=await get(host+path(encodeURIComponent(id)));
-                report.results.push({fixture:fx,host,id,path:path(id),status:x.status,type:x.type,body:x.body});
-              }
+            for(const fx of report.fixtures) for(const host of hosts) for(const path of paths){
+              const x=await get(host+path(fx));
+              report.results.push({fixture:fx,host,path:path(fx),status:x.status,type:x.type,body:x.body});
             }
-            for(const host of hosts){const x=await get(host+'/api/v1/fixtures/?sport=football&status=live&limit=10');report.results.push({host,path:'/api/v1/fixtures/',status:x.status,type:x.type,body:x.body});}
-            fs.writeFileSync('diagnostic/corner-endpoint-probes.json',JSON.stringify(report,null,2));
-            const summary=['# Match endpoint probe','LIVE fixtures: '+report.fixtures.length,'Requests: '+report.results.length,
-              ...report.results.filter(x=>x.status===200).slice(0,40).map(x=>x.host+x.path+' => 200'),
-              'Full response bodies saved as artifact.'].join('\n');
+            fs.writeFileSync('diagnostic/corner-real-slug-probes.json',JSON.stringify(report,null,2));
+            const successful=report.results.filter(x=>x.status===200);
+            const summary=['# Tracker real-slug probe','LIVE fixtures with real slug: '+report.fixtures.length,'Requests: '+report.results.length,'HTTP 200: '+successful.length,
+              ...successful.slice(0,60).map(x=>x.host+x.path+' => 200'),
+              'Full responses saved as artifact.'].join('\n');
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,summary+'\n');console.log(summary);
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-      - name: Upload endpoint probe
+      - name: Upload real slug probe
         uses: actions/upload-artifact@v4
         with:
-          name: sportscore-corner-endpoint-probes
+          name: sportscore-corner-real-slug-probes
           path: diagnostic/
           if-no-files-found: error
