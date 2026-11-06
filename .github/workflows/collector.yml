@@ -1257,13 +1257,14 @@ jobs:
             }
 
             if (archiveSafe) {
-              // Vytvor najviac jeden záznam na zápas. Pri 1:0 sa uloží
-              // najsilnejší dosiahnutý prah, aby sa zápas nepočítal 3-krát.
+              // Každý prah 1:0 je samostatný testovací variant.
+              // Jeden zápas môže patriť do viacerých tierov, ale každý tier
+              // sa uloží iba raz. Tak vieme porovnať 8 / 10 / 12 striel.
               for (const record of records) {
                 const match = record?.match;
                 if (!match || !isLive(match)) continue;
                 const id = frontendMatchId(match);
-                if (!id || bttsArchive.signals.some(x => String(x.matchId) === id)) continue;
+                if (!id) continue;
 
                 const minute = Number(match.live_minute);
                 const homeScore = Number(match.home_score);
@@ -1279,36 +1280,55 @@ jobs:
                 const combinedSot = sot.home + sot.away;
                 const combinedShots = combinedSot + off.home + off.away;
 
-                let tier = null;
-                let predictedSide = null;
+                const candidates = [];
                 if (homeScore === 1 && awayScore === 0 && combinedSot >= 5) {
-                  if (combinedShots >= 12) tier = "1:0 · SOT ≥5 · strely ≥12";
-                  else if (combinedShots >= 10) tier = "1:0 · SOT ≥5 · strely ≥10";
-                  else if (combinedShots >= 8) tier = "1:0 · SOT ≥5 · strely ≥8";
-                  predictedSide = "away";
+                  if (combinedShots >= 8) candidates.push({
+                    tier: "1:0 · SOT ≥5 · strely ≥8",
+                    tierKey: "10_sot5_shots8",
+                    predictedSide: "away"
+                  });
+                  if (combinedShots >= 10) candidates.push({
+                    tier: "1:0 · SOT ≥5 · strely ≥10",
+                    tierKey: "10_sot5_shots10",
+                    predictedSide: "away"
+                  });
+                  if (combinedShots >= 12) candidates.push({
+                    tier: "1:0 · SOT ≥5 · strely ≥12",
+                    tierKey: "10_sot5_shots12",
+                    predictedSide: "away"
+                  });
                 } else if (homeScore === 0 && awayScore === 1 &&
                            combinedSot >= 6 && combinedShots >= 8) {
-                  tier = "0:1 · SOT ≥6 · strely ≥8";
-                  predictedSide = "home";
+                  candidates.push({
+                    tier: "0:1 · SOT ≥6 · strely ≥8",
+                    tierKey: "01_sot6_shots8",
+                    predictedSide: "home"
+                  });
                 }
-                if (!tier || !predictedSide) continue;
 
-                bttsArchive.signals.push({
-                  signalId: "btts_" + id + "_" + record.collected_at,
-                  model: "BTTS",
-                  matchId: id,
-                  home: match.home,
-                  away: match.away,
-                  predictedSide,
-                  predictedTeam: predictedSide === "home" ? match.home : match.away,
-                  startMinute: minute,
-                  startScore: homeScore + ":" + awayScore,
-                  combinedSot,
-                  combinedShots,
-                  tier,
-                  createdAt: record.collected_at,
-                  status: "OPEN"
-                });
+                for (const candidate of candidates) {
+                  const exists = bttsArchive.signals.some(x =>
+                    String(x.matchId) === id && x.tierKey === candidate.tierKey
+                  );
+                  if (exists) continue;
+                  bttsArchive.signals.push({
+                    signalId: "btts_" + id + "_" + candidate.tierKey,
+                    model: "BTTS",
+                    matchId: id,
+                    home: match.home,
+                    away: match.away,
+                    predictedSide: candidate.predictedSide,
+                    predictedTeam: candidate.predictedSide === "home" ? match.home : match.away,
+                    startMinute: minute,
+                    startScore: homeScore + ":" + awayScore,
+                    combinedSot,
+                    combinedShots,
+                    tier: candidate.tier,
+                    tierKey: candidate.tierKey,
+                    createdAt: record.collected_at,
+                    status: "OPEN"
+                  });
+                }
               }
             }
 
