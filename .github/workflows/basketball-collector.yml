@@ -200,6 +200,7 @@ jobs:
                   const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
                     ? Math.min(retryAfter * 1000, 20000)
                     : (status === 429 ? 10000 : 5000);
+                  collectorMetrics.retry_count++;
                   console.log("Match page HTTP " + status + "; opakujem pokus po " + Math.round(waitMs / 1000) + " s.");
                   await sleep(waitMs);
                 } catch (error) {
