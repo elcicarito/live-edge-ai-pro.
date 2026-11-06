@@ -1,0 +1,101 @@
+name: API corners browser trace
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Install browser runtime
+        run: |
+          npm init -y
+          npm install playwright
+          npx playwright install --with-deps chromium
+      - name: Capture Tracker runtime network
+        run: |
+          mkdir -p trace
+          node <<'NODE'
+          const fs=require('fs');
+          const {chromium}=require('playwright');
+          const base='https://widgets-v2.thesports01.com';
+          const source='https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./main/data/live-current.json';
+          const redactUrl=(raw)=>{
+            try{
+              const u=new URL(raw);
+              const q=[...u.searchParams.keys()].map(k=>k+'=[redacted]').join('&');
+              return u.origin+u.pathname+(q?'?'+q:'');
+            }catch{return String(raw).slice(0,300)}
+          };
+          const clean=(value)=>{
+            let s=typeof value==='string'?value:JSON.stringify(value);
+            if(!s)return '';
+            s=s.replace(/(token|password|secret|authorization|access[_-]?key|api[_-]?key)(["'=: ]+)[^,"'& }]+/gi,'$1$2[redacted]');
+            return s.slice(0,1600);
+          };
+          (async()=>{
+            const live=await fetch(source);const j=await live.json();
+            const fx=(j.records||[]).find(x=>x.match?.tracker?.id)?.match;
+            if(!fx)throw new Error('No live fixture with tracker id');
+            const id=fx.tracker.id,profile=fx.tracker.profile;
+            const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+            const page=await browser.newPage({viewport:{width:1280,height:900}});
+            const out={fixture:{home:fx.home,away:fx.away,id,profile},requests:[],responses:[],websockets:[],console:[]};
+            page.on('request',r=>{
+              const u=r.url();
+              if(/thesports01|leisu|live-widgets/i.test(u))out.requests.push({method:r.method(),url:redactUrl(u),resource:r.resourceType()});
+            });
+            page.on('response',async r=>{
+              const u=r.url();
+              if(!/thesports01|leisu|live-widgets/i.test(u))return;
+              const row={status:r.status(),url:redactUrl(u),type:r.headers()['content-type']||''};
+              if(/json/i.test(row.type)){
+                try{
+                  const body=await r.json();
+                  const text=JSON.stringify(body);
+                  row.keys=body&&typeof body==='object'?Object.keys(body).slice(0,80):[];
+                  const cornerPaths=[];
+                  const walk=(v,p='')=>{
+                    if(!v||typeof v!=='object')return;
+                    for(const [k,val] of Object.entries(v)){
+                      const path=p?p+'.'+k:k;
+                      if(/corner/i.test(k))cornerPaths.push({path,value:val});
+                      if(val&&typeof val==='object')walk(val,path);
+                    }
+                  };
+                  walk(body);if(cornerPaths.length)row.cornerPaths=cornerPaths.slice(0,30);
+                  row.preview=clean(text);
+                }catch{}
+              }
+              out.responses.push(row);
+            });
+            page.on('websocket',ws=>{
+              const row={url:redactUrl(ws.url()),sent:[],received:[]};out.websockets.push(row);
+              ws.on('framereceived',f=>{const v=clean(f.payload);if(/corner|subscribe|match|score|topic/i.test(v))row.received.push(v)});
+              ws.on('framesent',f=>{const v=clean(f.payload);if(/corner|subscribe|match|score|topic/i.test(v))row.sent.push(v)});
+            });
+            page.on('console',m=>{if(m.type()==='error')out.console.push(clean(m.text()))});
+            const target=base+'/en/pro/football?profile='+encodeURIComponent(profile)+'&uuid='+encodeURIComponent(id);
+            await page.goto(target,{waitUntil:'domcontentloaded',timeout:60000});
+            await page.waitForTimeout(25000);
+            await page.screenshot({path:'trace/tracker.png',fullPage:true}).catch(()=>{});
+            await browser.close();
+            fs.writeFileSync('trace/runtime-network.json',JSON.stringify(out,null,2));
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              ['# Tracker browser network trace','Fixture: '+fx.home+' - '+fx.away,
+              'HTTP requests: '+out.requests.length,'Responses: '+out.responses.length,
+              'WebSockets: '+out.websockets.length,
+              'Corner-bearing JSON responses: '+out.responses.filter(x=>x.cornerPaths?.length).length,
+              'See artifact for redacted request paths and relevant frames.'].join('\n')+'\n');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Upload browser trace
+        uses: actions/upload-artifact@v4
+        with:
+          name: sportscore-tracker-browser-network
+          path: trace/
+          if-no-files-found: error
