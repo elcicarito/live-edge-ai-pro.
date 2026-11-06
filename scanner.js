@@ -2094,6 +2094,107 @@
     addGridStat("Čaká na konečný výsledok", pendingMatches === null ? "Nedostupné" : pendingMatches);
     addGridStat("Potvrdené ukončené zápasy", confirmedMatches === null ? "Nedostupné" : confirmedMatches);
 
+    // Analytika na úrovni zápasov: zachováva archív a oddeľuje opakované signály.
+    const matchGroups = new Map();
+    if (signals) {
+      signals.forEach((item, index) => {
+        const rawId = item?.matchId;
+        const key = rawId !== null && rawId !== undefined && String(rawId).trim()
+          ? String(rawId)
+          : "__missing_match_id__" + index;
+        if (!matchGroups.has(key)) matchGroups.set(key, []);
+        matchGroups.get(key).push({ item, index });
+      });
+    }
+
+    const uniqueMatchCount = signals ? matchGroups.size : null;
+    const repeatedMatchGroups = signals
+      ? [...matchGroups.values()].filter(group => group.length > 1)
+      : [];
+    const repeatedMatchCount = signals ? repeatedMatchGroups.length : null;
+    const extraRepeatedSignals = signals
+      ? repeatedMatchGroups.reduce((total, group) => total + group.length - 1, 0)
+      : null;
+
+    const firstSignalOutcomes = signals
+      ? [...matchGroups.values()].map(group => {
+          const ordered = group.slice().sort((a, b) => {
+            const timeA = Date.parse(a.item?.createdAt || "");
+            const timeB = Date.parse(b.item?.createdAt || "");
+            if (Number.isFinite(timeA) && Number.isFinite(timeB) && timeA !== timeB) {
+              return timeA - timeB;
+            }
+            if (Number.isFinite(timeA) && !Number.isFinite(timeB)) return -1;
+            if (!Number.isFinite(timeA) && Number.isFinite(timeB)) return 1;
+            return a.index - b.index;
+          });
+          return ordered[0]?.item?.status;
+        }).filter(status => status === "WIN" || status === "LOSS")
+      : [];
+    const firstMatchWins = firstSignalOutcomes.filter(status => status === "WIN").length;
+    const firstMatchLosses = firstSignalOutcomes.filter(status => status === "LOSS").length;
+    const firstMatchSettled = firstMatchWins + firstMatchLosses;
+    const firstMatchWinRate = firstMatchSettled
+      ? Math.round(firstMatchWins / firstMatchSettled * 100) + "%"
+      : "Zatiaľ bez vyhodnotenia";
+
+    const matchAnalyticsHeading = document.createElement("div");
+    matchAnalyticsHeading.textContent = "ANALYTIKA PODĽA UNIKÁTNYCH ZÁPASOV";
+    matchAnalyticsHeading.style.cssText = "font-size:13px;font-weight:900;margin:18px 0 9px;color:#dbeafe;";
+    systemStatsEl.appendChild(matchAnalyticsHeading);
+
+    const matchAnalyticsGrid = document.createElement("div");
+    matchAnalyticsGrid.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;";
+    systemStatsEl.appendChild(matchAnalyticsGrid);
+
+    const addMatchAnalyticsStat = (label, value, detail, color) => {
+      const card = document.createElement("div");
+      card.style.cssText = "padding:11px;border:1px solid #35465e;border-radius:10px;background:#101b2b;min-width:0;";
+      const name = document.createElement("div");
+      name.textContent = label;
+      name.style.cssText = "font-size:10px;color:#9baabe;margin-bottom:5px;font-weight:800;";
+      const number = document.createElement("div");
+      number.textContent = String(value);
+      number.style.cssText = "font-size:18px;font-weight:900;color:" + (color || "#e2e8f0") + ";overflow-wrap:anywhere;";
+      const note = document.createElement("div");
+      note.textContent = detail;
+      note.style.cssText = "font-size:10px;color:#94a3b8;margin-top:4px;line-height:1.4;";
+      card.append(name, number, note);
+      matchAnalyticsGrid.appendChild(card);
+    };
+
+    addMatchAnalyticsStat(
+      "UNIKÁTNE ZÁPASY",
+      uniqueMatchCount === null ? "Nedostupné" : uniqueMatchCount,
+      "Zápasy zastúpené v archíve signálov"
+    );
+    addMatchAnalyticsStat(
+      "ZÁPASY S OPAKOVANÍM",
+      repeatedMatchCount === null ? "Nedostupné" : repeatedMatchCount,
+      "Zápasy s viac než jedným signálom",
+      repeatedMatchCount > 0 ? "#fbbf24" : "#39e6a5"
+    );
+    addMatchAnalyticsStat(
+      "NADBYTOČNÉ SIGNÁLY",
+      extraRepeatedSignals === null ? "Nedostupné" : extraRepeatedSignals,
+      "Ďalšie signály nad prvý signál zápasu"
+    );
+    addMatchAnalyticsStat(
+      "ÚSPEŠNOSŤ PRVÉHO SIGNÁLU",
+      signals ? firstMatchWinRate : "Nedostupné",
+      firstMatchSettled
+        ? firstMatchWins + " WIN / " + firstMatchLosses + " LOSS · iba vyhodnotené prvé signály"
+        : "Zatiaľ nie sú vyhodnotené prvé signály",
+      firstMatchSettled && firstMatchWinRate !== "Zatiaľ bez vyhodnotenia"
+        ? (firstMatchWins / firstMatchSettled >= 0.5 ? "#39e6a5" : "#fbbf24")
+        : "#e2e8f0"
+    );
+
+    addText(
+      systemStatsEl,
+      "Táto analytika nemení ani nemaže historické záznamy. Prvý signál každého zápasu sa určuje podľa času vytvorenia; pri chýbajúcom čase sa zachová pôvodné poradie archívu. Do úspešnosti sa počítajú iba prvé signály so stavom WIN alebo LOSS. UNRESOLVED a OPEN sa vynechávajú. Ide o úspešnosť, nie ROI."
+    );
+
     addText(systemStatsEl, "Posledný kompletný zber: " +
       (complete ? fmt(collectedAt) : "aktuálny snapshot nie je potvrdený"));
     addText(systemStatsEl, "Vek posledných dát: " + ageLabel + " | Dĺžka posledného behu: " + runDuration);
