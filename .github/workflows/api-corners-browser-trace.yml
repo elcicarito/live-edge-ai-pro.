@@ -22,7 +22,7 @@ jobs:
           node <<'NODE'
           const fs=require('fs');
           const {chromium}=require('playwright');
-          const base='https://widgets-v2.thesports01.com';
+          const parent='https://sportscore.com';
           const source='https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./main/data/live-current.json';
           const redactUrl=(raw)=>{
             try{
@@ -44,7 +44,7 @@ jobs:
             const id=fx.tracker.id,profile=fx.tracker.profile;
             const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
             const page=await browser.newPage({viewport:{width:1280,height:900}});
-            const out={fixture:{home:fx.home,away:fx.away,id,profile},requests:[],responses:[],websockets:[],console:[]};
+            const out={fixture:{home:fx.home,away:fx.away,id,profile,matchUrl:fx.url},requests:[],responses:[],websockets:[],console:[],frames:[],iframes:[]};
             page.on('request',r=>{
               const u=r.url();
               if(/thesports01|leisu|live-widgets/i.test(u))out.requests.push({method:r.method(),url:redactUrl(u),resource:r.resourceType()});
@@ -88,16 +88,18 @@ jobs:
               ws.on('framesent',f=>{const v=clean(f.payload);if(/corner|subscribe|match|score|topic/i.test(v))row.sent.push(v)});
             });
             page.on('console',m=>{if(m.type()==='error')out.console.push(clean(m.text()))});
-            const target=base+'/en/pro/football?profile='+encodeURIComponent(profile)+'&uuid='+encodeURIComponent(id);
+            const target=parent+fx.url;
             await page.goto(target,{waitUntil:'domcontentloaded',timeout:60000});
             await page.waitForTimeout(25000);
+            out.frames=page.frames().map(f=>({url:redactUrl(f.url())}));
+            out.iframes=await page.locator('iframe').evaluateAll(nodes=>nodes.map(n=>({src:(()=>{try{const u=new URL(n.src);return u.origin+u.pathname}catch{return n.src}})(),title:n.title||'',width:n.width||'',height:n.height||''}))).catch(()=>[]);
             await page.screenshot({path:'trace/tracker.png',fullPage:true}).catch(()=>{});
             await browser.close();
             fs.writeFileSync('trace/runtime-network.json',JSON.stringify(out,null,2));
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
               ['# Tracker browser network trace','Fixture: '+fx.home+' - '+fx.away,
               'HTTP requests: '+out.requests.length,'Responses: '+out.responses.length,
-              'WebSockets: '+out.websockets.length,
+              'WebSockets: '+out.websockets.length,'Frames: '+out.frames.length,'Iframes: '+out.iframes.length,
               'Corner-bearing JSON responses: '+out.responses.filter(x=>x.cornerPaths?.length).length,
               'Opaque API bodies captured: '+out.responses.filter(x=>x.bodyBytes!==undefined).length,
               'See artifact for redacted request paths and relevant frames.'].join('\n')+'\n');
