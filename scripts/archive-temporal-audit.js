@@ -287,7 +287,7 @@ for (const [id, x] of matches) {
     if (futureGoal) { positives++; labelCounts.positive++; }
     else { negatives++; labelCounts.negative++; }
   }
-  if (nonMonotonic) nonMonotonicMatches++;
+  if (hasMinuteRegression) nonMonotonicMatches++;
   if (timelineComplete && agreementCount > 0) matchesWithScoreTimelineAgreement++;
   matchRows.push({
     match_id: id, archived_at: x.archived_at || "", final_score: x.final_score || "",
@@ -295,7 +295,7 @@ for (const [id, x] of matches) {
     goal_event_count: goals.length, goal_times_all_valid: allGoalTimesValid,
     goal_count_matches_final: goalCountAgrees, timeline_complete_candidate: timelineComplete,
     snapshot_count: snaps.length, parsed_minute_count: snaps.filter(s => parseMinute(s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute) !== null).length,
-    non_monotonic_minutes: nonMonotonic, minute_regression_count: regressionCount,
+    non_monotonic_minutes: hasMinuteRegression, minute_regression_count: regressionCount,
     eligible_10m_examples: eligible,
     positive_10m: positives, negative_10m: negatives, ambiguous_10m: ambiguous
   });
