@@ -3173,7 +3173,115 @@
           };
         });
         const timedSnapshots = usableSnapshots.filter(snapshot => snapshot.minute !== null);
+        // Celý zápasový graf používa rovnaký princíp ako LIVE graf:
+        // 45 % relatívny tlak + 55 % tempo nových SOT/nebezpečných útokov v intervale.
         summaryLine("Konečný výsledok", item.final_score || "nepotvrdený");
+        const graphTitle = document.createElement("div");
+        graphTitle.textContent = "VÝVOJ MOMENTA · CELÝ ZÁPAS";
+        graphTitle.style.cssText = "font-size:12px;font-weight:900;color:#a5d8ff;margin:12px 0 3px;";
+        summaryBody.appendChild(graphTitle);
+        const graphPoints = [];
+        for (let index = 1; index < usableSnapshots.length; index++) {
+          const previous = usableSnapshots[index - 1];
+          const current = usableSnapshots[index];
+          if (previous.minute === null || current.minute === null || current.minute <= previous.minute) continue;
+          const statsAtCurrent = orderedSnapshots[index]?.raw_stats ||
+            orderedSnapshots[index]?.raw_match?.stats || orderedSnapshots[index]?.stats || [];
+          const pressureParts = [
+            {value:current.possession,weight:0.10},
+            {value:current.sot,weight:0.40},
+            {value:current.dangerous,weight:0.50}
+          ].filter(part => part.value);
+          if (!pressureParts.length) continue;
+          const pressureWeight = pressureParts.reduce((sum,part)=>sum+part.weight,0);
+          const homePressure = pressureParts.reduce((sum,part) =>
+            sum + (part.value.home + part.value.away > 0
+              ? part.value.home / (part.value.home + part.value.away) : 0.5) * part.weight, 0
+          ) / pressureWeight * 100;
+          const deltas = ["sot","dangerous"].map(key => {
+            const before = previous[key], after = current[key];
+            if (!before || !after) return null;
+            const home = after.home - before.home, away = after.away - before.away;
+            return home >= 0 && away >= 0 ? {home,away} : null;
+          }).filter(Boolean);
+          if (!deltas.length) continue;
+          const minutes = current.minute - previous.minute;
+          const homeRate = deltas.reduce((sum,pair)=>sum+pair.home,0) / minutes * 10;
+          const awayRate = deltas.reduce((sum,pair)=>sum+pair.away,0) / minutes * 10;
+          graphPoints.push({
+            minute:current.minute,
+            home:Math.min(100,Math.round(homePressure*0.45+Math.min(homeRate*3,40)*0.55)),
+            away:Math.min(100,Math.round((100-homePressure)*0.45+Math.min(awayRate*3,40)*0.55))
+          });
+        }
+        if (graphPoints.length >= 2) {
+          const svgNS = "http://www.w3.org/2000/svg";
+          const svg = document.createElementNS(svgNS,"svg");
+          svg.setAttribute("viewBox","0 0 340 166");
+          svg.setAttribute("width","100%");
+          svg.setAttribute("role","img");
+          svg.setAttribute("aria-label","Vývoj momenta domácich a hostí počas celého zápasu");
+          svg.style.cssText = "display:block;width:100%;max-width:100%;margin:4px 0;";
+          const maxMinute = Math.max(90, ...graphPoints.map(point=>point.minute));
+          const x = minute => 38 + Math.max(0,Math.min(maxMinute,minute))/maxMinute*286;
+          const y = value => 126 - Math.max(0,Math.min(100,value))*1.02;
+          [0,50,100].forEach(value => {
+            const yy=y(value);
+            const line=document.createElementNS(svgNS,"line");
+            line.setAttribute("x1","38");line.setAttribute("x2","324");
+            line.setAttribute("y1",String(yy));line.setAttribute("y2",String(yy));
+            line.setAttribute("stroke","#64748b");line.setAttribute("opacity",".3");
+            line.setAttribute("stroke-dasharray","3 4");svg.appendChild(line);
+            const label=document.createElementNS(svgNS,"text");
+            label.setAttribute("x","30");label.setAttribute("y",String(yy+3));
+            label.setAttribute("text-anchor","end");label.setAttribute("fill","#94a3b8");
+            label.setAttribute("font-size","9");label.textContent=String(value);
+            svg.appendChild(label);
+          });
+          const ticks=[0,45,90].filter(value=>value<=maxMinute);
+          if(maxMinute>90)ticks.push(Math.round(maxMinute));
+          [...new Set(ticks)].forEach(value=>{
+            const xx=x(value);
+            const tick=document.createElementNS(svgNS,"line");
+            tick.setAttribute("x1",String(xx));tick.setAttribute("x2",String(xx));
+            tick.setAttribute("y1","128");tick.setAttribute("y2","132");
+            tick.setAttribute("stroke","#94a3b8");svg.appendChild(tick);
+            const label=document.createElementNS(svgNS,"text");
+            label.setAttribute("x",String(xx));label.setAttribute("y","146");
+            label.setAttribute("text-anchor","middle");label.setAttribute("fill","#94a3b8");
+            label.setAttribute("font-size","9");label.textContent=value+"'";svg.appendChild(label);
+          });
+          const drawArchiveLine=(key,color)=>{
+            const line=document.createElementNS(svgNS,"polyline");
+            line.setAttribute("points",graphPoints.map(point=>x(point.minute).toFixed(1)+","+y(point[key]).toFixed(1)).join(" "));
+            line.setAttribute("fill","none");line.setAttribute("stroke",color);
+            line.setAttribute("stroke-width","3");line.setAttribute("stroke-linecap","round");
+            line.setAttribute("stroke-linejoin","round");svg.appendChild(line);
+            graphPoints.forEach(point=>{
+              const dot=document.createElementNS(svgNS,"circle");
+              dot.setAttribute("cx",x(point.minute).toFixed(1));
+              dot.setAttribute("cy",y(point[key]).toFixed(1));
+              dot.setAttribute("r","2.7");dot.setAttribute("fill",color);svg.appendChild(dot);
+            });
+          };
+          drawArchiveLine("home","#22c55e");
+          drawArchiveLine("away","#94a3b8");
+          summaryBody.appendChild(svg);
+          const legend=document.createElement("div");
+          legend.style.cssText="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#cbd5e1;margin:0 0 8px;";
+          legend.textContent="🟢 "+(match.home||"Domáci")+"   ·   ⚪ "+(match.away||"Hostia");
+          summaryBody.appendChild(legend);
+          const averageHome=graphPoints.reduce((sum,p)=>sum+p.home,0)/graphPoints.length;
+          const averageAway=graphPoints.reduce((sum,p)=>sum+p.away,0)/graphPoints.length;
+          const graphCaption=document.createElement("div");
+          graphCaption.style.cssText="font-size:10px;color:#aebed0;margin-bottom:8px;";
+          graphCaption.textContent="Priemerné skóre momenta v zachytených intervaloch: "+
+            (match.home||"Domáci")+" "+Math.round(averageHome)+"/100 · "+
+            (match.away||"Hostia")+" "+Math.round(averageAway)+"/100. Osa X = minúty zápasu, os Y = index momenta 0–100.";
+          summaryBody.appendChild(graphCaption);
+        } else {
+          summaryLine("Graf momenta","Na vykreslenie sú potrebné aspoň dve po sebe idúce platné LIVE merania so štatistikami.");
+        }
         summaryLine("Časová os", usableSnapshots.length
           ? usableSnapshots.length + " uložených LIVE snímok" +
             (timedSnapshots.length ? " · " + timedSnapshots[0].minute + ". až " + timedSnapshots[timedSnapshots.length-1].minute + ". min" : "")
