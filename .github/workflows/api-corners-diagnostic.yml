@@ -28,7 +28,7 @@ jobs:
             fs.writeFileSync('diagnostic/tracker-page.html',page.text);
             const assets=[...new Set([...page.text.matchAll(/(?:src|href)=["']([^"']+\.js(?:\?[^"']*)?)["']/g)].map(m=>new URL(m[1],base).href))];
             const bundles=[];
-            for(const url of assets){const x=await get(url);const name=url.split('/').pop();fs.writeFileSync('diagnostic/'+name,x.text);
+            for(const url of assets){const x=await get(url);const name=new URL(url).pathname.split('/').pop()||'asset.js';fs.writeFileSync('diagnostic/'+name.replace(/[^a-zA-Z0-9._-]/g,'_'),x.text);
               const s=x.text;const terms=['mqtt','subscribe','homeScores','corner','matchDetailData','api/widget','api/v1','/match/','tracker','profile','uuid','WebSocket'];
               const contexts={};for(const t of terms){let p=0,a=[];while((p=s.toLowerCase().indexOf(t.toLowerCase(),p))>=0&&a.length<15){a.push(s.slice(Math.max(0,p-450),Math.min(s.length,p+1100)));p+=t.length;}contexts[t]=a;}
               bundles.push({url,status:x.status,bytes:s.length,contexts});
