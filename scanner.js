@@ -1175,7 +1175,60 @@
     };
   }
 
-  function renderMomentumOverview(target, pressure, snapshot, threat, trend, reliability, acceleration) {
+  // Diagnostické skóre kvality príležitosti; nie je to pravdepodobnosť gólu.
+  // Chýbajúce komponenty sa vynechajú a váhy sa prepočítajú iba z dostupných dát.
+  function calculateSignalQuality(threat, snapshot, reliability, acceleration, collectedAt) {
+    if (!threat || !snapshot?.ready || !reliability || reliability.count < 3) {
+      return { ready: false, reason: "Zbieram aspoň tri úplné merania na spoľahlivejšie hodnotenie." };
+    }
+
+    const age = Date.now() - Date.parse(collectedAt || "");
+    if (!Number.isFinite(age) || age < 0 || age > MAX_DATA_AGE_MS) {
+      return { ready: false, reason: "Aktuálne meranie je neplatné alebo zastarané." };
+    }
+
+    const freshness = age <= 2 * 60000 ? 100
+      : age <= 4 * 60000 ? 80
+      : age <= 7 * 60000 ? 50 : 0;
+    const sampleDepth = Math.min(100, reliability.count / 5 * 100);
+    const dataQuality = Math.round(reliability.momentumCoverage * 0.7 + sampleDepth * 0.3);
+    const sides = {};
+
+    ["home", "away"].forEach(side => {
+      const activityRate = snapshot[side + "ActivityRate"];
+      const activityScore = Math.max(0, Math.min(100, activityRate * 10));
+      const components = [
+        { value: dataQuality, weight: 25 },
+        { value: freshness, weight: 20 },
+        { value: threat[side], weight: 20 },
+        { value: activityScore, weight: 20 }
+      ];
+
+      if (acceleration?.ready) {
+        const delta = acceleration[side + "Delta"];
+        const accelerationScore = Math.max(0, Math.min(100, 50 + delta * 5));
+        components.push({ value: accelerationScore, weight: 15 });
+      }
+
+      const totalWeight = components.reduce((sum, item) => sum + item.weight, 0);
+      const score = Math.round(
+        components.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight
+      );
+      sides[side] = {
+        score,
+        label: score >= 80 ? "VYSOKÁ KVALITA"
+          : score >= 65 ? "STREDNÁ KVALITA" : "NÍZKA KVALITA",
+        dataQuality,
+        freshness,
+        activityScore,
+        accelerationIncluded: Boolean(acceleration?.ready)
+      };
+    });
+
+    return { ready: true, sides };
+  }
+
+  function renderMomentumOverview(target, pressure, snapshot, threat, trend, reliability, acceleration, collectedAt) {
     const panel = document.createElement("div");
     panel.style.cssText = "margin:12px 0;padding:12px;background:#0c1929;border:1px solid #344b65;border-radius:10px;";
     const heading = document.createElement("div");
@@ -1314,6 +1367,53 @@
       accelerationPanel.appendChild(waiting);
     }
     panel.appendChild(accelerationPanel);
+
+    const qualityScores = calculateSignalQuality(threat, snapshot, reliability, acceleration, collectedAt);
+    const qualityPanel = document.createElement("div");
+    qualityPanel.style.cssText = "margin-top:10px;padding:11px;background:#142338;border:1px solid #38516e;border-radius:9px;";
+    const qualityHeading = document.createElement("div");
+    qualityHeading.textContent = "AI QUALITY SCORE · 0–100";
+    qualityHeading.style.cssText = "font-size:11px;font-weight:900;color:#e2e8f0;margin-bottom:7px;";
+    qualityPanel.appendChild(qualityHeading);
+
+    if (qualityScores.ready) {
+      ["home", "away"].forEach(side => {
+        const item = qualityScores.sides[side];
+        const label = side === "home" ? "DOMÁCI" : "HOSTIA";
+        const color = item.score >= 80 ? "#39e6a5" : item.score >= 65 ? "#fbbf24" : "#cbd5e1";
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:8px;margin:7px 0;font-size:11px;";
+        const name = document.createElement("strong");
+        name.textContent = label;
+        name.style.color = "#cbd5e1";
+        const value = document.createElement("strong");
+        value.textContent = item.score + "/100 · " + item.label;
+        value.style.color = color;
+        row.append(name, value);
+        qualityPanel.appendChild(row);
+        const track = document.createElement("div");
+        track.style.cssText = "height:7px;background:#26384d;border-radius:8px;overflow:hidden;";
+        const fill = document.createElement("div");
+        fill.style.cssText = "height:100%;width:" + item.score + "%;background:" + color + ";border-radius:8px;";
+        track.appendChild(fill);
+        qualityPanel.appendChild(track);
+      });
+      const method = document.createElement("div");
+      method.textContent = "Váhy: kvalita dát 25 %, čerstvosť 20 %, GOAL THREAT 20 %, aktivita 20 %" +
+        (qualityScores.sides.home.accelerationIncluded ? ", zrýchlenie 15 %." : ". Zrýchlenie zatiaľ chýba; jeho váha sa rozdelila medzi dostupné zložky.");
+      method.style.cssText = "font-size:10px;color:#94a3b8;margin-top:7px;line-height:1.45;";
+      qualityPanel.appendChild(method);
+    } else {
+      const waiting = document.createElement("div");
+      waiting.textContent = qualityScores.reason;
+      waiting.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.45;";
+      qualityPanel.appendChild(waiting);
+    }
+    const qualityWarning = document.createElement("div");
+    qualityWarning.textContent = "Interné hodnotenie kvality dát a hernej aktivity – nie percentuálna šanca na gól ani potvrdený zisk.";
+    qualityWarning.style.cssText = "font-size:10px;color:#94a3b8;margin-top:7px;line-height:1.4;";
+    qualityPanel.appendChild(qualityWarning);
+    panel.appendChild(qualityPanel);
 
     const disclaimer = document.createElement("div");
     disclaimer.textContent = "Informačný prehľad, nie samostatný predikčný ani stávkový signál.";
@@ -2926,7 +3026,7 @@
     const momentumTrend = renderMomentumTrend(momentumSection, match, historyData, collectedAt, threat);
     const momentumReliability = getMatchReliability(match, historyData, collectedAt);
     const pressureAcceleration = calculatePressureAcceleration(match, historyData, collectedAt);
-    renderMomentumOverview(momentumSection, pressure, snapshot, threat, momentumTrend, momentumReliability, pressureAcceleration);
+    renderMomentumOverview(momentumSection, pressure, snapshot, threat, momentumTrend, momentumReliability, pressureAcceleration, collectedAt);
 
     if (!allowSignals) {
       addSignalPanel(signalSection, {
