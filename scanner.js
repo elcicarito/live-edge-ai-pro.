@@ -1675,19 +1675,19 @@
     const bttsSignals = Array.isArray(bttsArchive?.signals)
       ? bttsArchive.signals.filter(item => String(item.matchId) === matchId(match))
       : [];
-    const bttsOpen = bttsSignals.find(item => item.status === "OPEN");
+    const bttsOpenSignals = bttsSignals.filter(item => item.status === "OPEN");
     const bttsLatest = bttsSignals.slice().sort((a, b) =>
       Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)
     )[0];
-    if (bttsOpen) {
-      addSignalPanel(detail, {
-        heading: "🔵 BTTS – POTVRDENÝ SIGNÁL",
-        title: bttsOpen.predictedTeam || (bttsOpen.predictedSide === "home" ? match.home : match.away),
-        detail: `Podmienky: ${bttsOpen.tier} | ${bttsOpen.combinedSot} SOT spolu | ${bttsOpen.combinedShots} striel spolu | vstup ${bttsOpen.startMinute}'. Skóre pri signále: ${bttsOpen.startScore}. Cieľ: predikovaný tím skóruje do konca zápasu.`,
+    if (bttsOpenSignals.length) {
+      bttsOpenSignals.forEach((signal, index) => addSignalPanel(detail, {
+        heading: "🔵 BTTS – " + (signal.tier || "PODMIENKA"),
+        title: signal.predictedTeam || (signal.predictedSide === "home" ? match.home : match.away),
+        detail: `Podmienky: ${signal.tier} | ${signal.combinedSot} SOT spolu | ${signal.combinedShots} striel spolu | vstup ${signal.startMinute}'. Skóre pri signále: ${signal.startScore}. Cieľ: predikovaný tím skóruje do konca zápasu.`,
         background: "#102d4a",
         border: "#38bdf8",
         titleColor: "#7dd3fc"
-      });
+      }));
     } else if (bttsLatest) {
       addSignalPanel(detail, {
         heading: "🔵 BTTS – HISTÓRIA",
@@ -1701,7 +1701,7 @@
       addSignalPanel(detail, {
         heading: "🔵 BTTS",
         title: "Bez potvrdeného signálu",
-        detail: "Sleduje sa 46.–50. minúta, skóre 1:0 alebo 0:1 a kombinácia SOT + celkových striel oboch tímov.",
+        detail: "Sledujú sa samostatne všetky tri prahy pri 1:0 a samostatná podmienka pri 0:1.",
         background: "#102d4a",
         border: "#2563eb",
         titleColor: "#93c5fd"
@@ -2031,14 +2031,24 @@
       else addText(engine, "Trvalý archív signálov sa nepodarilo načítať.");
 
       const bttsRows = Array.isArray(bttsArchive?.signals) ? bttsArchive.signals : [];
-      const bttsWins = bttsRows.filter(x => x.status === "WIN").length;
-      const bttsLosses = bttsRows.filter(x => x.status === "LOSS").length;
-      const bttsOpenCount = bttsRows.filter(x => x.status === "OPEN").length;
-      const bttsUnresolved = bttsRows.filter(x => x.status === "UNRESOLVED").length;
-      const bttsEvaluated = bttsWins + bttsLosses;
-      addText(engine, "SAMOSTATNÝ BTTS MODEL", "16px");
-      addText(engine, `Signály: ${bttsRows.length} | WIN: ${bttsWins} | LOSS: ${bttsLosses} | OPEN: ${bttsOpenCount} | NEVYRIEŠENÉ: ${bttsUnresolved}`);
-      addText(engine, `Úspešnosť vyhodnotených BTTS: ${bttsEvaluated ? Math.round(bttsWins / bttsEvaluated * 100) + "%" : "zatiaľ bez vyhodnotených zápasov"}`);
+      addText(engine, "SAMOSTATNÝ BTTS MODEL – VÝSLEDKY PODĽA PODMIENKY", "16px");
+      const bttsTiers = [
+        ["10_sot5_shots8", "1:0 | SOT ≥5 | strely ≥8"],
+        ["10_sot5_shots10", "1:0 | SOT ≥5 | strely ≥10"],
+        ["10_sot5_shots12", "1:0 | SOT ≥5 | strely ≥12"],
+        ["01_sot6_shots8", "0:1 | SOT ≥6 | strely ≥8"]
+      ];
+      bttsTiers.forEach(([key, label]) => {
+        const rows = bttsRows.filter(x => x.tierKey === key);
+        const wins = rows.filter(x => x.status === "WIN").length;
+        const losses = rows.filter(x => x.status === "LOSS").length;
+        const open = rows.filter(x => x.status === "OPEN").length;
+        const unresolved = rows.filter(x => x.status === "UNRESOLVED").length;
+        const evaluated = wins + losses;
+        addText(engine, label, "14px");
+        addText(engine, `Vzorka: ${rows.length} | WIN: ${wins} | LOSS: ${losses} | OPEN: ${open} | neoverené: ${unresolved} | úspešnosť: ${evaluated ? Math.round(wins / evaluated * 100) + "%" : "zatiaľ bez výsledkov"}`);
+      });
+      addText(engine, "Varianty 1:0 sa vyhodnocujú samostatne. Jeden zápas môže patriť do viacerých prahov, preto sa ich vzorky nesčítavajú ako nezávislé zápasy.");
       addText(engine, "BTTS archív a štatistiky sú oddelené od modelu Gól do 15 min.");
       renderMatchArchive(matchArchive);
       renderSystemStats(current, signalArchive, matchArchive);
