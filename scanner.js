@@ -1664,6 +1664,85 @@
     add("BTTS · ÚSPEŠNOSŤ",b.p,b.w+" WIN / "+b.l+" LOSS · N="+b.n);
     add("CELKOM ULOŽENÉ SIGNÁLY",String(green.length+btts.length),"Zelené "+green.length+" · BTTS "+btts.length);
     const note=document.createElement("p");note.textContent="Otvorené: zelené "+g.open+", BTTS "+b.open+" · Neoverené: zelené "+g.u+", BTTS "+b.u+". WIN rate počíta iba potvrdené WIN a LOSS. Čas do gólu je orientačný podľa prvého zachytenia v LIVE dátach.";note.style.cssText="font-size:10px;line-height:1.5;color:#aebed0;margin:9px 0;";el.appendChild(note);
+    // Incidentná analýza používa výhradne snapshot zachytený v okamihu signálu.
+    // Konečné incidenty zápasu sa sem nikdy nedosadzujú (ochrana pred look-ahead bias).
+    const incidentSignals = green.filter(item =>
+      item?.sourceSnapshot?.raw_match &&
+      Array.isArray(item.sourceSnapshot.raw_match.incidents) &&
+      Number.isFinite(Number(item.sourceSnapshot.minute ?? item.startMinute))
+    );
+    const parseIncidentMinute = value => {
+      const match = String(value ?? "").trim().match(/^(\\d+)(?:\\+(\\d+))?$/);
+      return match ? Number(match[1]) + Number(match[2] || 0) : null;
+    };
+    const incidentRows = incidentSignals.map(item => {
+      const minute = Number(item.sourceSnapshot.minute ?? item.startMinute);
+      const incidents = item.sourceSnapshot.raw_match.incidents;
+      const beforeSignal = incidents.filter(event => {
+        const eventMinute = parseIncidentMinute(event?.time ?? event?.minute);
+        return eventMinute !== null && eventMinute <= minute;
+      });
+      const redCard = beforeSignal.some(event =>
+        /red.?card|červená karta/i.test(String(event?.type || event?.name || "")) ||
+        Number(event?.type_id) === 4
+      );
+      const yellowCard = beforeSignal.some(event =>
+        /yellow.?card|žltá karta/i.test(String(event?.type || event?.name || "")) ||
+        Number(event?.type_id) === 3
+      );
+      return { item, redCard, yellowCard };
+    });
+    const settledRate = rows => {
+      const wins = rows.filter(row => row.item.status === "WIN").length;
+      const losses = rows.filter(row => row.item.status === "LOSS").length;
+      const n = wins + losses;
+      return { wins, losses, n, rate: n ? Math.round(wins / n * 100) + "%" : "—" };
+    };
+    const redRows = incidentRows.filter(row => row.redCard);
+    const noRedRows = incidentRows.filter(row => !row.redCard);
+    const redStats = settledRate(redRows);
+    const noRedStats = settledRate(noRedRows);
+    const incidentTitle = document.createElement("div");
+    incidentTitle.textContent = "🟥 INCIDENTY V ČASE ZELENÉHO SIGNÁLU";
+    incidentTitle.style.cssText = "font-size:13px;font-weight:900;color:#e2e8f0;margin:14px 0 7px;";
+    el.appendChild(incidentTitle);
+    const incidentGrid = document.createElement("div");
+    incidentGrid.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;";
+    el.appendChild(incidentGrid);
+    const incidentCard = (label, value, detail) => {
+      const card = document.createElement("div");
+      card.style.cssText = "padding:10px;border:1px solid #344b65;border-radius:9px;background:#101b2b;min-width:0;";
+      const v = document.createElement("div");
+      v.textContent = value;
+      v.style.cssText = "font-size:18px;font-weight:900;color:#e2e8f0;";
+      const l = document.createElement("div");
+      l.textContent = label;
+      l.style.cssText = "font-size:10px;font-weight:800;color:#aebed0;margin-top:3px;";
+      const d = document.createElement("div");
+      d.textContent = detail;
+      d.style.cssText = "font-size:10px;color:#94a3b8;margin-top:4px;line-height:1.4;";
+      card.append(v, l, d);
+      incidentGrid.appendChild(card);
+    };
+    incidentCard("SIGNÁLY SO SNAPSHOTOM INCIDENTOV", incidentSignals.length + " / " + green.length,
+      "Použiteľné záznamy s incidentmi zachytenými priamo pri signále");
+    incidentCard("ČERVENÁ KARTA PRED SIGNÁLOM", redRows.length,
+      "Len udalosti s potvrdenou minútou najneskôr v čase signálu");
+    incidentCard("WIN RATE · ČERVENÁ KARTA", redStats.rate,
+      redStats.wins + " WIN / " + redStats.losses + " LOSS · N=" + redStats.n);
+    incidentCard("WIN RATE · BEZ ČERVENEJ KARTY", noRedStats.rate,
+      noRedStats.wins + " WIN / " + noRedStats.losses + " LOSS · N=" + noRedStats.n);
+    const incidentNote = document.createElement("p");
+    incidentNote.textContent = "Žltá karta bola prítomná pred signálom v " +
+      incidentRows.filter(row => row.yellowCard).length + " záznamoch. Do porovnania WIN rate vstupujú iba potvrdené WIN/LOSS; OPEN a UNRESOLVED sú vynechané. Aktuálne staršie signály bez sourceSnapshot sa nepočítajú. Malá vzorka nie je dôkazom vplyvu červenej karty.";
+    incidentNote.style.cssText = "font-size:10px;line-height:1.5;color:#aebed0;margin:8px 0;";
+    el.appendChild(incidentNote);
+    if (!incidentSignals.length) {
+      const waiting = document.createElement("p");
+      waiting.textContent = "Čakám na nové zelené signály so snapshotom. Staršie záznamy bez presného stavu v okamihu signálu zámerne spätne nedopĺňam z konečných štatistík.";
+      waiting.style.cssText = "font-size:10px;line-height:1.5;color:#fbbf24;";
+      el.appendChild(waiting);
+    }
     const warning=document.createElement("p");warning.textContent="Vzorka pod 10 je veľmi malá; pod 30 iba orientačná. Rozbory podľa minúty, skóre, ligy a štatistík sa aktivujú po doplnení týchto údajov do archívu.";warning.style.cssText="font-size:10px;line-height:1.5;color:#fbbf24;";el.appendChild(warning);
   }
   function renderApiDataQuality(current, matchArchive, permanentHistory) {
