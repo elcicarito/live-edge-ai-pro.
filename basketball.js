@@ -8,6 +8,7 @@
   const archiveMeta = document.getElementById("basketball-archive-meta");
   const predictorMeta = document.getElementById("basketball-predictor-meta");
   const predictorList = document.getElementById("basketball-predictor-list");
+  const performanceContent = document.getElementById("basketball-model-performance-content");
   const livePanel = document.getElementById("basketball-live-panel");
   const archivePanel = document.getElementById("basketball-archive-panel");
   const liveTab = document.getElementById("basketball-live-tab");
@@ -301,18 +302,96 @@
       });
     } catch(e) { archiveMeta.textContent="Archív zatiaľ čaká na prvý úspešný zber."; archiveList.textContent="Archív sa nepodarilo načítať: "+e.message; }
   }
+  function renderModelPerformance(archiveData, rows, settled) {
+    if (!performanceContent) return;
+    performanceContent.replaceChildren();
+    const matches = Array.isArray(archiveData?.matches) ? archiveData.matches : [];
+    const completeMatches = matches.filter(m => [0,1,2,3].every(q => {
+      const h = m?.period_scores?.home?.[q], a = m?.period_scores?.away?.[q];
+      return h !== null && h !== undefined && a !== null && a !== undefined &&
+        Number.isFinite(Number(h)) && Number.isFinite(Number(a)) && Number(h) + Number(a) > 0;
+    }));
+    const leagueCounts = new Map();
+    completeMatches.forEach(m => {
+      const league = leagueOf(m).trim() || "Liga neznáma";
+      leagueCounts.set(league, (leagueCounts.get(league) || 0) + 1);
+    });
+    const eligibleLeagues = [...leagueCounts.values()].filter(n => n >= 10).length;
+    const mae = settled.length ? settled.reduce((sum,p) => sum + Number(p.absolute_error),0) / settled.length : null;
+    const covered = settled.filter(p => Number.isFinite(Number(p.actual_total)) &&
+      Number.isFinite(Number(p.range_low)) && Number.isFinite(Number(p.range_high)) &&
+      Number(p.actual_total) >= Number(p.range_low) && Number(p.actual_total) <= Number(p.range_high)).length;
+    const coverage = settled.length ? covered / settled.length * 100 : null;
+    const metrics = [
+      ["Kompletné zápasy v archíve", completeMatches.length],
+      ["Ligy s min. 10 zápasmi", eligibleLeagues],
+      ["Vyhodnotené predikcie", settled.length],
+      ["Priemerná absolútna chyba", mae === null ? "—" : mae.toFixed(1) + " b."]
+    ];
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0";
+    metrics.forEach(([label,value]) => {
+      const cell=document.createElement("div");
+      cell.style.cssText="background:#0d1929;border:1px solid #263b55;border-radius:9px;padding:11px";
+      const v=document.createElement("div"); v.textContent=String(value);
+      v.style.cssText="font-size:20px;font-weight:900;color:#39e6a5";
+      const l=document.createElement("div"); l.textContent=label;
+      l.style.cssText="font-size:10px;color:#a9bdd4;margin-top:5px;line-height:1.35";
+      cell.append(v,l); grid.appendChild(cell);
+    });
+    performanceContent.appendChild(grid);
+    const coverageNote=document.createElement("p");
+    coverageNote.textContent="Pokrytie rozpätia ±5 bodov: "+(coverage===null?"zatiaľ bez vzorky":coverage.toFixed(1)+" % ("+covered+"/"+settled.length+")")+".";
+    coverageNote.style.cssText="font-size:12px;color:#d7e3f1;margin:8px 0";
+    performanceContent.appendChild(coverageNote);
+    const qTitle=document.createElement("div");
+    qTitle.textContent="PRESNOSŤ PODĽA ŠTVRTINY";
+    qTitle.style.cssText="font-size:11px;font-weight:900;color:#39e6a5;margin:15px 0 7px";
+    performanceContent.appendChild(qTitle);
+    [1,2,3,4].forEach(q => {
+      const group=settled.filter(p=>Number(p.target_quarter)===q);
+      const qMae=group.length?group.reduce((sum,p)=>sum+Number(p.absolute_error),0)/group.length:null;
+      const row=document.createElement("div");
+      row.style.cssText="display:flex;justify-content:space-between;gap:10px;padding:8px 2px;border-bottom:1px solid #263b55;font-size:11px";
+      const left=document.createElement("span"); left.textContent="Q"+q;
+      const right=document.createElement("strong"); right.textContent=group.length?(qMae.toFixed(1)+" b. · n="+group.length):"Čaká sa na výsledky";
+      right.style.color=group.length>=10?"#39e6a5":"#a9bdd4";
+      row.append(left,right); performanceContent.appendChild(row);
+    });
+    const leagueTitle=document.createElement("div");
+    leagueTitle.textContent="HISTORICKÁ VZORKA PODĽA LÍG";
+    leagueTitle.style.cssText="font-size:11px;font-weight:900;color:#39e6a5;margin:15px 0 7px";
+    performanceContent.appendChild(leagueTitle);
+    [...leagueCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8).forEach(([league,count])=>{
+      const row=document.createElement("div");
+      row.style.cssText="display:flex;justify-content:space-between;gap:10px;padding:7px 2px;border-bottom:1px solid #263b55;font-size:11px";
+      const name=document.createElement("span"); name.textContent=league; name.style.cssText="color:#c8d5e5;min-width:0";
+      const n=document.createElement("strong"); n.textContent="n="+count+(count>=10?" · vhodná na LIVE tréning":" · malá vzorka");
+      n.style.cssText="white-space:nowrap;color:"+(count>=10?"#39e6a5":"#f2c66d");
+      row.append(name,n); performanceContent.appendChild(row);
+    });
+    const note=document.createElement("p");
+    note.textContent="Model v3 zostáva nezmenený. MAE a pokrytie rozpätia sa počítajú iba zo skutočne vyhodnotených LIVE predikcií. Historický archív slúži na kontrolu dostupnosti dát; zatiaľ z neho nevyvodzujeme víťaza medzi alternatívnymi modelmi. Pri malej vzorke sú výsledky iba orientačné.";
+    note.style.cssText="font-size:10px;color:#8296ad;line-height:1.5;margin-top:12px";
+    performanceContent.appendChild(note);
+  }
   async function loadPredictions() {
     if (!predictorMeta || !predictorList) return;
     try {
-      const response = await fetch("./data/basketball-predictions.json?t=" + Date.now(), { cache: "no-store" });
+      const [response, archiveResponse] = await Promise.all([
+        fetch("./data/basketball-predictions.json?t=" + Date.now(), { cache: "no-store" }),
+        fetch(ARCHIVE_URL + "?t=" + Date.now(), { cache: "no-store" })
+      ]);
       if (!response.ok) throw new Error("HTTP " + response.status);
       const data = await response.json();
+      const archiveData = archiveResponse.ok ? await archiveResponse.json() : { matches: [] };
       const rows = Array.isArray(data.predictions) ? data.predictions : [];
       const open = rows.filter(p => p.actual_total === null || p.actual_total === undefined)
         .sort((a,b) => String(b.observed_at).localeCompare(String(a.observed_at)));
       const settled = rows.filter(p => Number.isFinite(Number(p.absolute_error)))
         .sort((a,b) => String(b.settled_at).localeCompare(String(a.settled_at)));
       const mae = settled.length ? settled.reduce((sum,p) => sum + Number(p.absolute_error),0) / settled.length : null;
+      renderModelPerformance(archiveData, rows, settled);
       predictorMeta.textContent = "Predikcie sú oddelené od ligových štatistík · História iba z rovnakej ligy · Vyhodnotené predikcie: " + settled.length + (mae === null ? "" : " · Priemerná odchýlka: " + mae.toFixed(1) + " bodu");
       predictorList.replaceChildren();
       if (!rows.length) {
