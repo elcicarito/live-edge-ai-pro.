@@ -41,6 +41,17 @@ function scorePair(s) {
   }
   return null;
 }
+function goalSide(e, match) {
+  const homeName = norm(match?.home || match?.final_match?.home || "");
+  const awayName = norm(match?.away || match?.final_match?.away || "");
+  for (const raw of [e?.side, e?.team, e?.team_name, e?.participant, e?.competitor]) {
+    if (raw === null || raw === undefined || raw === "") continue;
+    const v = norm(raw);
+    if (["home", "h", "1", "hometeam"].includes(v) || (homeName && v === homeName)) return "home";
+    if (["away", "a", "2", "awayteam"].includes(v) || (awayName && v === awayName)) return "away";
+  }
+  return null;
+}
 function finalPair(x) {
   const m = String(x.final_score ?? "").match(/^\s*(\d+)\s*[:\-]\s*(\d+)\s*$/);
   if (m) return [Number(m[1]), Number(m[2])];
@@ -195,12 +206,27 @@ for (const [id, x] of matches) {
     });
   }
   totalSnapshots += snaps.length;
-  const minuteSequence = snaps.map(s => parseMinute(s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute)).filter(m => m !== null);
-  const hasMinuteRegression = minuteSequence.some((m, i) => i > 0 && m < minuteSequence[i - 1]);
+  // Mark only the regressing snapshot and the uncertain interval until the
+  // match minute catches up with the previous high-water mark.
+  const minuteAmbiguous = new Array(snaps.length).fill(false);
+  let minuteHighWater = null, inRegressionWindow = false, regressionCount = 0;
+  for (let i = 0; i < snaps.length; i++) {
+    const m = parseMinute(snaps[i]?.minute ?? snaps[i]?.live_minute ?? snaps[i]?.raw_match?.live_minute ?? snaps[i]?.match?.live_minute);
+    if (m === null) { minuteAmbiguous[i] = inRegressionWindow; continue; }
+    if (minuteHighWater !== null && m < minuteHighWater) {
+      inRegressionWindow = true;
+      regressionCount++;
+    }
+    minuteAmbiguous[i] = inRegressionWindow;
+    if (inRegressionWindow && m >= minuteHighWater) inRegressionWindow = false;
+    minuteHighWater = Math.max(minuteHighWater ?? m, m);
+  }
+  const hasMinuteRegression = regressionCount > 0;
 
-  let previousMinute = null, nonMonotonic = hasMinuteRegression, eligible = 0, positives = 0, negatives = 0, ambiguous = 0;
-  let agreementCount = 0;
-  for (const s of snaps) {
+  let eligible = 0, positives = 0, negatives = 0, ambiguous = 0;
+  let agreementCount = 0, sideScoreAgreementCount = 0, sideScoreUnverifiable = 0;
+  for (let snapshotIndex = 0; snapshotIndex < snaps.length; snapshotIndex++) {
+    const s = snaps[snapshotIndex];
     const rawMinute = s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute;
     const minute = parseMinute(rawMinute);
     bump(minuteTypes, rawMinute === null || rawMinute === undefined ? "missing" : typeof rawMinute);
@@ -210,10 +236,16 @@ for (const [id, x] of matches) {
     previousMinute = minute;
     const score = scorePair(s);
     if (!score) snapshotScoreMissing++;
-    if (timelineComplete && score && !nonMonotonic) {
-      const goalsBefore = goalRecords.filter(g => g.minute < minute).length;
+    if (timelineComplete && score && !minuteAmbiguous[snapshotIndex]) {
+      const beforeEvents = goalRecords.filter(g => g.minute < minute);
       const sameAtMinute = goalRecords.some(g => g.minute === minute);
+      const goalsBefore = beforeEvents.length;
       if (!sameAtMinute && score[0] + score[1] === goalsBefore) agreementCount++;
+      const sides = beforeEvents.map(g => goalSide(g.event, x));
+      if (!sameAtMinute && sides.every(Boolean)) {
+        const expected = [sides.filter(v => v === "home").length, sides.filter(v => v === "away").length];
+        if (score[0] === expected[0] && score[1] === expected[1]) sideScoreAgreementCount++;
+      } else if (!sameAtMinute) sideScoreUnverifiable++;
     }
 
     if (!events.length) { labelCounts.no_event_list++; continue; }
@@ -223,16 +255,23 @@ for (const [id, x] of matches) {
       bump(reasonCounts, !allGoalTimesValid ? "gólová udalosť bez čitateľnej minúty" : !goalCountAgrees ? "počet gólov v udalostiach nesúhlasí s konečným skóre" : "neúplná časová os");
       continue;
     }
-    if (nonMonotonic) { labelCounts.ambiguous++; ambiguous++; bump(reasonCounts, "minúty LIVE snímok nie sú monotónne"); continue; }
+    if (minuteAmbiguous[snapshotIndex]) { labelCounts.ambiguous++; ambiguous++; bump(reasonCounts, "snímka v nejednoznačnom úseku po poklese minúty"); continue; }
     if (!score) { labelCounts.ambiguous++; ambiguous++; bump(reasonCounts, "chýba skóre v LIVE snímke"); continue; }
     if (goalRecords.some(g => g.minute === minute)) {
       sameMinuteGoalAmbiguities++; labelCounts.ambiguous++; ambiguous++;
       bump(reasonCounts, "gól v rovnakej minúte ako LIVE snímka"); continue;
     }
     const goalsBefore = goalRecords.filter(g => g.minute < minute).length;
-    if (score[0] + score[1] !== goalsBefore) {
+    const beforeEvents = goalRecords.filter(g => g.minute < minute);
+    const sides = beforeEvents.map(g => goalSide(g.event, x));
+    if (score[0] + score[1] !== goalsBefore || !sides.every(Boolean) ||
+        score[0] !== sides.filter(v => v === "home").length ||
+        score[1] !== sides.filter(v => v === "away").length) {
       labelCounts.ambiguous++; ambiguous++;
-      bump(reasonCounts, "LIVE skóre nesúhlasí s udalosťami pred snímkou"); continue;
+      bump(reasonCounts, !sides.every(Boolean)
+        ? "nemožno určiť stranu všetkých gólových udalostí pred snímkou"
+        : "LIVE skóre domácich/hostí nesúhlasí s gólovými udalosťami");
+      continue;
     }
     if (minute > 80 || minute + 10 > 90) {
       labelCounts.ambiguous++; ambiguous++;
@@ -258,7 +297,8 @@ for (const [id, x] of matches) {
     goal_event_count: goals.length, goal_times_all_valid: allGoalTimesValid,
     goal_count_matches_final: goalCountAgrees, timeline_complete_candidate: timelineComplete,
     snapshot_count: snaps.length, parsed_minute_count: snaps.filter(s => parseMinute(s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute) !== null).length,
-    non_monotonic_minutes: nonMonotonic, eligible_10m_examples: eligible,
+    non_monotonic_minutes: nonMonotonic, minute_regression_count: regressionCount,
+    eligible_10m_examples: eligible,
     positive_10m: positives, negative_10m: negatives, ambiguous_10m: ambiguous
   });
 }
@@ -310,7 +350,10 @@ const report = {
     matches_with_valid_final_score: matchesWithValidFinal,
     matches_with_complete_goal_timeline_candidate: matchesWithCompleteGoalTimeline,
     matches_with_at_least_one_snapshot_score_timeline_agreement: matchesWithScoreTimelineAgreement,
+    snapshots_with_home_away_score_and_event_side_agreement: sideScoreAgreementCount,
+    snapshots_with_unverifiable_goal_event_sides: sideScoreUnverifiable,
     matches_with_non_monotonic_snapshot_minutes: nonMonotonicMatches,
+    note: "A minute regression now excludes only the ambiguous interval until the minute catches up; earlier safe snapshots remain eligible. Training labels require independently resolved home/away goal sides.",
     duplicate_collected_at_snapshots: duplicateCollectedAt, snapshots_missing_score: snapshotScoreMissing
   },
   ten_minute_labels: {
