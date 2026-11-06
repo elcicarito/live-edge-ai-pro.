@@ -56,7 +56,10 @@ jobs:
                     const hits = [...scriptBody.matchAll(/.{0,160}(?:corner|corners|corner.?kick).{0,240}/gi)].slice(0, 25).map(m => m[0]);
                     const apiRefs = [...new Set(scriptBody.match(/["'`](?:\/[^"'` ]{2,}|https?:\/\/[^"'` ]+)["'`]/gi) || [])].map(x => x.slice(1, -1)).filter(x => /api|tracker|match|live|event|stat|score|socket|mqtt/i.test(x)).slice(0, 80);
                     const transportHits = [...scriptBody.matchAll(/.{0,220}(?:axios|XMLHttpRequest|WebSocket|mqtt|subscribe|baseURL|matchDetailData|homeScores|fetch\s*\().{0,300}/gi)].slice(0, 80).map(m => m[0]);
-                    report.tracker_scripts.push({ url: scriptUrl, status: scriptResponse.status, bytes: scriptBody.length, corner_hits: hits, api_refs: apiRefs, transport_hits: transportHits });
+                    const focusedHits = scriptUrl.includes('/assets/index.')
+                      ? [...scriptBody.matchAll(/.{0,500}(?:MQTT_API|HTTP_API|mqttInstance|mqtt\.connect|\.subscribe\(|subscribeId|match_id|matchId|topic|FBT_CORNER_KICK|homeScores|awayScores).{0,700}/gi)].slice(0, 100).map(m => m[0])
+                      : [];
+                    report.tracker_scripts.push({ url: scriptUrl, status: scriptResponse.status, bytes: scriptBody.length, corner_hits: hits, api_refs: apiRefs, transport_hits: transportHits, focused_hits: focusedHits });
                   } catch (error) {
                     report.tracker_scripts.push({ url: scriptUrl, error: String(error) });
                   }
@@ -88,6 +91,7 @@ jobs:
               ...(s.corner_hits || []).map(hit => ' - **' + s.url + '** corner: `' + hit.slice(0, 500) + '`'),
               ...(s.api_refs || []).map(hit => ' - **' + s.url + '** API ref: `' + hit.slice(0, 300) + '`'),
               ...(s.transport_hits || []).map(hit => ' - **' + s.url + '** transport: `' + hit.slice(0, 500) + '`'),
+              ...(s.focused_hits || []).map(hit => ' - **' + s.url + '** FOCUSED: `' + hit.slice(0, 1000) + '`'),
             ]);
             const summary = [
               '# SportScore API – diagnostika rohov',
