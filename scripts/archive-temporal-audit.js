@@ -120,7 +120,7 @@ for (const line of raw.split(/\r?\n/)) {
 }
 
 const minuteTypes = new Map(), eventTimeTypes = new Map(), reasonCounts = new Map();
-const minuteValues = [], eventMinuteValues = [], goalEventsSamples = [], matchRows = [], allLabeled = [];
+const minuteValues = [], eventMinuteValues = [], goalEventsSamples = [], matchRows = [], allLabeled = [], goalEventAuditRows = [];
 const labelCounts = { positive: 0, negative: 0, ambiguous: 0, no_event_list: 0, invalid_final_score: 0 };
 let totalSnapshots = 0, parsedSnapshotMinutes = 0, parsedGoalTimes = 0, totalGoals = 0;
 let matchesWithEvents = 0, matchesWithCompleteGoalTimeline = 0, matchesWithScoreTimelineAgreement = 0;
@@ -158,6 +158,42 @@ for (const [id, x] of matches) {
     seen.add(key); snaps.push(s);
   }
   snaps.sort((a,b) => String(a?.collected_at || "").localeCompare(String(b?.collected_at || "")));
+  for (const g of goalRecords) {
+    const before = [...snaps].reverse().find(s => {
+      const m = parseMinute(s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute);
+      return m !== null && g.minute !== null && m <= g.minute;
+    });
+    const after = snaps.find(s => {
+      const m = parseMinute(s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute);
+      return m !== null && g.minute !== null && m >= g.minute;
+    });
+    const snapFields = s => {
+      if (!s) return {};
+      const m = parseMinute(s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute);
+      const sc = scorePair(s);
+      const st = extractFeatures(s);
+      return { minute: m, collected_at: s.collected_at || "", home_score: sc?.[0] ?? "", away_score: sc?.[1] ?? "",
+        shots_on_target_home: st.shots_on_target_home ?? "", shots_on_target_away: st.shots_on_target_away ?? "",
+        dangerous_attacks_home: st.dangerous_attacks_home ?? "", dangerous_attacks_away: st.dangerous_attacks_away ?? "" };
+    };
+    const b = snapFields(before), a = snapFields(after);
+    goalEventAuditRows.push({
+      match_id: id, home: x.home || fm.home || "", away: x.away || fm.away || "",
+      competition: x.competition || "", event_type: g.event?.type || g.event?.event || g.event?.name || "",
+      event_minute_raw: g.raw ?? "", event_minute_parsed: g.minute ?? "", event_minute_field: g.field || "",
+      event_team: g.event?.team || g.event?.team_name || g.event?.participant || "",
+      event_player: g.event?.player || g.event?.player_name || "",
+      snapshot_before_minute: b.minute ?? "", snapshot_before_collected_at: b.collected_at || "",
+      snapshot_before_score: b.minute === undefined ? "" : String(b.home_score) + "-" + String(b.away_score),
+      snapshot_before_sot_home: b.shots_on_target_home ?? "", snapshot_before_sot_away: b.shots_on_target_away ?? "",
+      snapshot_before_dangerous_home: b.dangerous_attacks_home ?? "", snapshot_before_dangerous_away: b.dangerous_attacks_away ?? "",
+      snapshot_after_minute: a.minute ?? "", snapshot_after_collected_at: a.collected_at || "",
+      snapshot_after_score: a.minute === undefined ? "" : String(a.home_score) + "-" + String(a.away_score),
+      snapshot_after_sot_home: a.shots_on_target_home ?? "", snapshot_after_sot_away: a.shots_on_target_away ?? "",
+      snapshot_after_dangerous_home: a.dangerous_attacks_home ?? "", snapshot_after_dangerous_away: a.dangerous_attacks_away ?? "",
+      event_json: JSON.stringify(g.event || {})
+    });
+  }
   totalSnapshots += snaps.length;
   const minuteSequence = snaps.map(s => parseMinute(s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute)).filter(m => m !== null);
   const hasMinuteRegression = minuteSequence.some((m, i) => i > 0 && m < minuteSequence[i - 1]);
@@ -300,6 +336,12 @@ fs.writeFileSync(path.join(OUT, "live-edge-temporal-audit.json"), JSON.stringify
 const cols = Object.keys(matchRows[0] || { match_id: "", archived_at: "", final_score: "" });
 const csv = [cols.join(","), ...matchRows.map(r => cols.map(k => '"' + String(r[k] ?? "").replace(/"/g,'""') + '"').join(","))].join("\n") + "\n";
 fs.writeFileSync(path.join(OUT, "live-edge-temporal-match-coverage.csv"), csv);
+
+const goalAuditCols = Object.keys(goalEventAuditRows[0] || { match_id: "", event_minute_parsed: "" });
+const goalAuditCsv = [goalAuditCols.join(","), ...goalEventAuditRows.map(r =>
+  goalAuditCols.map(k => '"' + String(r[k] ?? "").replace(/"/g,'""') + '"').join(",")
+)].join("\\n") + "\\n";
+fs.writeFileSync(path.join(OUT, "live-edge-goal-event-timing-audit.csv"), goalAuditCsv);
 
 // Sample-level, feature-enriched dataset for offline analysis only.
 const featureKeys = ["shots_home","shots_away","shots_on_target_home","shots_on_target_away",
