@@ -103,7 +103,139 @@ small{
   border-radius:9px;
   font-size:12px;
 }
-.sport-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.sport-tab{background:#1b2a3e;color:#d6e2f0;border:1px solid #3a4d67;padding:13px 8px;border-radius:10px;font-weight:800}.sport-tab.active{background:#39e6a5;color:#07120f;border-color:#39e6a5}.basketball-view-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.basketball-view-tab{background:#1b2a3e;color:#d6e2f0;border:1px solid #3a4d67;padding:12px 8px;border-radius:10px;font-weight:800}.basketball-view-tab.active{background:#39e6a5;color:#07120f;border-color:#39e6a5}#basketball-view .card{border:1px solid #263b55}</style>
+.sport-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.sport-tab{background:#1b2a3e;color:#d6e2f0;border:1px solid #3a4d67;padding:13px 8px;border-radius:10px;font-weight:800}.sport-tab.active{background:#39e6a5;color:#07120f;border-color:#39e6a5}.basketball-view-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.basketball-view-tab{background:#1b2a3e;color:#d6e2f0;border:1px solid #3a4d67;padding:12px 8px;border-radius:10px;font-weight:800}.basketball-view-tab.active{background:#39e6a5;color:#07120f;border-color:#39e6a5}#basketball-view .card{border:1px solid #263b55}
+/* LIVE EDGE compact dashboard – vizuálna vrstva bez zásahu do analytiky */
+#matches > section{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px 9px!important;
+  margin:8px 0 12px!important;
+  padding:8px!important;
+}
+#matches > section > div:first-child{
+  grid-column:1/-1;
+  margin:0 0 2px!important;
+  padding:2px 2px 7px!important;
+  font-size:12px!important;
+}
+#matches > section > div:not(:first-child){
+  min-width:0;
+  margin:0!important;
+  padding:9px!important;
+  border-radius:10px!important;
+}
+#matches > section > div:not(:first-child) > div:first-child{
+  gap:5px!important;
+  margin-bottom:5px!important;
+}
+#matches > section > div:not(:first-child) > div:first-child > div:first-child{
+  gap:5px!important;
+}
+#matches > section > div:not(:first-child) > div:first-child > div:first-child > div{
+  font-size:12px!important;
+  line-height:1.2!important;
+}
+#matches > section > div:not(:first-child) > div:first-child > div:first-child > div:nth-child(2){
+  font-size:19px!important;
+  padding:3px 8px!important;
+  border-radius:8px!important;
+}
+#matches > section > div:not(:first-child) > div:first-child > span{
+  padding:4px 7px!important;
+  margin:2px 0!important;
+  font-size:10px!important;
+}
+#matches > section > div:not(:first-child) > div:nth-child(2){
+  margin:1px 0 6px!important;
+  font-size:10px!important;
+}
+#matches > section > div:not(:first-child) > div:nth-child(3){
+  gap:4px!important;
+  margin-bottom:6px!important;
+}
+#matches > section > div:not(:first-child) > div:nth-child(3) span{
+  padding:4px 6px!important;
+  border-radius:6px!important;
+  font-size:10px!important;
+}
+#matches > section > div:not(:first-child) > div:nth-child(4){
+  margin-bottom:6px!important;
+  padding:4px 7px!important;
+  font-size:9px!important;
+}
+#matches > section > div:not(:first-child) > div:nth-child(5){
+  gap:4px!important;
+  margin-bottom:6px!important;
+}
+#matches > section > div:not(:first-child) > div:nth-child(5) span{
+  padding:3px 6px!important;
+  font-size:10px!important;
+}
+#matches > section > div:not(:first-child) details{
+  padding-top:6px!important;
+}
+#matches > section > div:not(:first-child) details > summary{
+  padding:5px 2px!important;
+  font-size:11px!important;
+}
+#matches > section > div:not(:first-child) details details{
+  margin:6px 0!important;
+  padding:7px!important;
+}
+#matches > section > div:not(:first-child) details details > summary{
+  font-size:11px!important;
+}
+#matches > section > div:not(:first-child) details p{
+  margin:5px 0!important;
+  font-size:11px!important;
+  line-height:1.4!important;
+}
+#basketball-matches > div{
+  padding:9px!important;
+  margin:7px 0!important;
+  border-radius:10px!important;
+}
+#basketball-matches > div > div:first-child{
+  margin-bottom:6px!important;
+  font-size:10px!important;
+}
+#basketball-matches > div > div:nth-child(2){
+  gap:7px!important;
+  margin:3px 0!important;
+}
+#basketball-matches > div > div:nth-child(2) > div:first-child{
+  font-size:12px!important;
+  line-height:1.35!important;
+}
+#basketball-matches > div > div:nth-child(2) > div:last-child{
+  font-size:17px!important;
+  line-height:1.35!important;
+}
+@media(max-width:700px){
+  body{padding:8px}
+  .app-header{gap:7px;padding:6px 1px 9px}
+  .live-indicator{padding:6px 8px;font-size:9px}
+  .sport-switch{gap:6px;margin:9px 0}
+  .sport-tab{padding:10px 6px;font-size:12px}
+  .dashboard-grid{gap:6px;margin:6px 0 9px}
+  .metric{padding:9px}
+  .metric-value{font-size:19px}
+  .metric-label{font-size:9px;margin-top:4px}
+  #dashboard-updated{margin-bottom:8px;font-size:10px}
+  .section-kicker{margin:12px 2px 6px;font-size:10px}
+  #matches > section{grid-template-columns:minmax(0,1fr);gap:6px!important;padding:6px!important}
+  #matches > section > div:first-child{grid-column:1}
+  #matches > section > div:not(:first-child){padding:8px!important}
+}
+@media(max-width:380px){
+  .brand h1{font-size:17px}
+  .brand small{font-size:9px;letter-spacing:.6px}
+  .live-indicator{font-size:8px;gap:5px}
+  #matches > section > div:not(:first-child) > div:first-child > div:first-child > div{font-size:11px!important}
+  #matches > section > div:not(:first-child) > div:first-child > div:first-child > div:nth-child(2){font-size:17px!important}
+}
+
+</style>
 </head>
 
 <body>
