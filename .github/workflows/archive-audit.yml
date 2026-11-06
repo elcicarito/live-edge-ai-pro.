@@ -1,0 +1,66 @@
+name: LIVE EDGE ARCHIVE AUDIT
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read-only archive coverage audit
+        shell: bash
+        run: |
+          mkdir -p audit-output
+          node <<'NODE'
+          const fs=require("fs"), path=require("path");
+          const H="data/live-match-history.jsonl", A="data/live-archive.json", O="audit-output";
+          const valid=v=>v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v));
+          const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+          const cat=l=>{const s=norm(l);if(s.includes("shotsontarget")||s==="sot"||s.includes("ontarget"))return"shots_on_target";if(s.includes("shot"))return"shots";if(s.includes("dangerousattack"))return"dangerous_attacks";if(s.includes("attack"))return"attacks";if(s.includes("possession"))return"possession";if(s.includes("corner"))return"corners";if(s.includes("card"))return"cards";return null;};
+          const statsOf=s=>Array.isArray(s.stats)&&s.stats.length?s.stats:Array.isArray(s.raw_stats)&&s.raw_stats.length?s.raw_stats:Array.isArray((s.raw_match||s.match||{}).stats)?(s.raw_match||s.match).stats:[];
+          const eventsOf=m=>{for(const k of ["events","incidents","timeline","match_events"])if(Array.isArray(m?.[k]))return m[k];return[];};
+          const rows=[], ids=new Map(), labels=new Map(), eventKeys=new Map(), eventTypes=new Map(), catsMatches=new Map(), catsEntries=new Map(), samples=[];
+          let bad=0, duplicates=0, totalSnaps=0, minuteSnaps=0, scoreSnaps=0, statSnaps=0, finalValid=0, eventMatches=0;
+          const raw=fs.existsSync(H)?fs.readFileSync(H,"utf8"):"";
+          for(const line of raw.split(/\r?\n/)){if(!line.trim())continue;try{const x=JSON.parse(line);if(!x||x.match_id==null){bad++;continue;}const id=String(x.match_id);if(ids.has(id)){duplicates++;if((x.snapshots||[]).length>(ids.get(id).snapshots||[]).length)ids.set(id,x);}else ids.set(id,x);}catch{bad++;}}
+          let archive={};if(fs.existsSync(A))archive=JSON.parse(fs.readFileSync(A,"utf8"));
+          const archiveIds=new Set((archive.archived_matches||[]).filter(x=>x?.id!=null).map(x=>String(x.id)));
+          for(const [id,x] of ids){
+            const sm=new Map();for(const s of Array.isArray(x.snapshots)?x.snapshots:[])if(s&&typeof s==="object")sm.set(String(s.collected_at||"missing-"+sm.size),s);
+            const snaps=[...sm.values()].sort((a,b)=>String(a.collected_at||"").localeCompare(String(b.collected_at||"")));
+            totalSnaps+=snaps.length;let mc=0,sc=0,stc=0;const localCats=new Set();
+            for(const s of snaps){const m=s.raw_match||s.match||{};const minute=valid(s.minute)?s.minute:m.live_minute;const score=valid(s.home_score)&&valid(s.away_score)||valid(m.home_score)&&valid(m.away_score);if(valid(minute))mc++;if(score)sc++;let has=false;
+              for(const st of statsOf(s)){if(!st||!st.label)continue;const l=String(st.label).trim();labels.set(l,(labels.get(l)||0)+1);const c=cat(l);if(c){has=true;localCats.add(c);catsEntries.set(c,(catsEntries.get(c)||0)+1);}}
+              if(has)stc++;
+            }
+            minuteSnaps+=mc;scoreSnaps+=sc;statSnaps+=stc;for(const c of localCats)catsMatches.set(c,(catsMatches.get(c)||0)+1);
+            const fm=x.final_match||{}, events=eventsOf(fm);if(events.length)eventMatches++;
+            for(const e of events){if(!e||typeof e!=="object")continue;for(const k of Object.keys(e))eventKeys.set(k,(eventKeys.get(k)||0)+1);const t=e.type||e.event||e.name||e.incident_type;if(t)eventTypes.set(String(t),(eventTypes.get(String(t))||0)+1);if(samples.length<5)samples.push(e);}
+            const fscr=String(x.final_score||""), scoreOK=/^\s*\d+\s*[:\-]\s*\d+\s*$/.test(fscr);if(scoreOK)finalValid++;
+            rows.push({match_id:id,home:x.home||fm.home||"",away:x.away||fm.away||"",competition:x.competition||"",final_score:fscr,final_score_valid:scoreOK,snapshot_count:snaps.length,snapshots_with_minute:mc,snapshots_with_score:sc,snapshots_with_any_stats:stc,first_snapshot:snaps[0]?.collected_at||"",last_snapshot:snaps[snaps.length-1]?.collected_at||"",stats_categories:[...localCats].sort().join(","),has_event_list:events.length>0});
+          }
+          const counts=rows.map(r=>r.snapshot_count).sort((a,b)=>a-b),sum=counts.reduce((a,b)=>a+b,0),median=counts.length?(counts.length%2?counts[(counts.length-1)/2]:(counts[counts.length/2-1]+counts[counts.length/2])/2):0;
+          const thresholds=Object.fromEntries([1,5,10,20,30].map(n=>[n,counts.filter(v=>v>=n).length]));
+          const top=m=>[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,50);
+          const categories=Object.fromEntries([...catsMatches.keys()].sort().map(k=>[k,{matches:catsMatches.get(k),stat_entries_across_snapshots:catsEntries.get(k)||0}]));
+          const now=new Date().toISOString();
+          const report={generated_at_utc:now,read_only:true,permanent_history:{valid_records:raw.split(/\r?\n/).filter(x=>x.trim()).length-bad,unique_match_ids:ids.size,duplicate_ids:duplicates,invalid_jsonl_lines:bad,archive_json_unique_ids:archiveIds.size,ids_in_both:[...ids.keys()].filter(id=>archiveIds.has(id)).length,history_only_ids:[...ids.keys()].filter(id=>!archiveIds.has(id)).length,archive_only_ids:[...archiveIds].filter(id=>!ids.has(id)).length},snapshots:{matches_with_snapshots:counts.filter(x=>x>0).length,matches_without_snapshots:counts.filter(x=>x===0).length,total_snapshots:sum,average_per_match:counts.length?Number((sum/counts.length).toFixed(2)):0,median_per_match:median,min_per_match:counts.length?counts[0]:0,max_per_match:counts.length?counts[counts.length-1]:0,matches_at_least_threshold:thresholds,snapshots_with_valid_minute:minuteSnaps,snapshots_with_valid_score:scoreSnaps,snapshots_with_any_recognized_stats:statSnaps},final_results:{valid_final_scores:finalValid,missing_or_invalid_final_scores:ids.size-finalValid},stat_categories:categories,raw_stat_labels_top_50:top(labels),event_structure:{matches_with_event_list:eventMatches,event_key_frequency:top(eventKeys),event_type_frequency:top(eventTypes),sample_events:samples,note:"Predikčné štítky gólu do 10 minút vyžadujú overenie časovej značky a významu gólových udalostí."},model_readiness:{next_10_minute_goal_labels:"NOT_VALIDATED",reason:"Audit meria pokrytie a štruktúru udalostí; nepredpokladá bezpečné časovanie cieľových udalostí.",snapshot_thresholds_are_coverage_indicators_only:true}};
+          fs.mkdirSync(O,{recursive:true});fs.writeFileSync(path.join(O,"live-edge-archive-audit.json"),JSON.stringify(report,null,2)+"\n");
+          const cols=Object.keys(rows[0]||{match_id:"",home:"",away:"",competition:"",final_score:"",final_score_valid:"",snapshot_count:"",snapshots_with_minute:"",snapshots_with_score:"",snapshots_with_any_stats:"",first_snapshot:"",last_snapshot:"",stats_categories:"",has_event_list:""});
+          const csv=[cols.join(","),...rows.map(r=>cols.map(k=>'"'+String(r[k]??"").replace(/"/g,'""')+'"').join(","))].join("\n")+"\n";fs.writeFileSync(path.join(O,"live-edge-match-coverage.csv"),csv);
+          const md=["# LIVE EDGE – audit archívu","",`Vygenerované UTC: ${now}`,"Režim: iba čítanie; zdrojové dáta sa nemenia.","",`- Jedinečné zápasy: **${ids.size}**`,`- Duplicitné ID: **${duplicates}**`,`- Chybné riadky: **${bad}**`,`- Zápasy so snímkami: **${counts.filter(x=>x>0).length}**`,`- Zápasy bez snímok: **${counts.filter(x=>x===0).length}**`,`- Celkom LIVE snímok: **${sum}**`,`- Priemer / medián: **${counts.length?(sum/counts.length).toFixed(2):0} / ${median}**`,"","## Prahy snímok","",...Object.entries(thresholds).map(([n,v])=>`- Aspoň ${n}: **${v}** zápasov`),"","## Kvalita","",`- Platná minúta: **${minuteSnaps}** snímok`,`- Platné skóre: **${scoreSnaps}** snímok`,`- Štatistiky: **${statSnaps}** snímok`,`- Platné konečné skóre: **${finalValid}** zápasov`,"","## Kategórie štatistík","",...Object.entries(categories).map(([k,v])=>`- ${k}: ${v.matches} zápasov`),"","## Gól do 10 minút","**Zatiaľ nevalidovaný.** Najprv treba overiť štruktúru a časovanie gólových udalostí.",""].join("\n");
+          fs.writeFileSync(path.join(O,"live-edge-archive-audit.md"),md);
+          console.log("LIVE EDGE ARCHIVE AUDIT",JSON.stringify({matches:ids.size,snapshots:report.snapshots,final_results:report.final_results,stat_categories:categories},null,2));
+          NODE
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-edge-archive-audit
+          path: audit-output/
+          if-no-files-found: error
+          retention-days: 14
