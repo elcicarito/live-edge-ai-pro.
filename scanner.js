@@ -2458,16 +2458,52 @@
       const unresolvedInBand = group.filter(item => item.status === "UNRESOLVED").length;
       const settledInBand = winsInBand + lossesInBand;
       const rate = settledInBand ? Math.round(winsInBand / settledInBand * 100) + "%" : "Zatiaľ bez vyhodnotenia";
+
+      // Jeden zápas môže vytvoriť viac signálov. Pre nezávislejší pohľad
+      // započítaj v každom pásme iba jeho najskorší signál so skóre.
+      const matchGroups = new Map();
+      group.forEach((item, index) => {
+        const rawId = item?.matchId;
+        const key = rawId !== null && rawId !== undefined && String(rawId).trim()
+          ? String(rawId)
+          : "__missing_quality_match_id__" + index;
+        if (!matchGroups.has(key)) matchGroups.set(key, []);
+        matchGroups.get(key).push({ item, index });
+      });
+      const firstPerMatch = [...matchGroups.values()].map(entries =>
+        entries.slice().sort((a, b) => {
+          const ta = Date.parse(a.item?.createdAt || "");
+          const tb = Date.parse(b.item?.createdAt || "");
+          if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return ta - tb;
+          if (Number.isFinite(ta) && !Number.isFinite(tb)) return -1;
+          if (!Number.isFinite(ta) && Number.isFinite(tb)) return 1;
+          return a.index - b.index;
+        })[0]?.item
+      ).filter(Boolean);
+      const uniqueWins = firstPerMatch.filter(item => item.status === "WIN").length;
+      const uniqueLosses = firstPerMatch.filter(item => item.status === "LOSS").length;
+      const uniqueOpen = firstPerMatch.filter(item => item.status === "OPEN").length;
+      const uniqueUnresolved = firstPerMatch.filter(item => item.status === "UNRESOLVED").length;
+      const uniqueSettled = uniqueWins + uniqueLosses;
+      const uniqueRate = uniqueSettled
+        ? Math.round(uniqueWins / uniqueSettled * 100) + "%"
+        : "Zatiaľ bez vyhodnotenia";
+
       const row = document.createElement("div");
       row.style.cssText = "padding:10px;border:1px solid #35465e;border-radius:9px;background:#101b2b;";
       const title = document.createElement("div");
       title.textContent = band.label + " bodov · " + group.length + " signálov";
       title.style.cssText = "font-size:12px;font-weight:900;color:#fff;";
       const detail = document.createElement("div");
-      detail.textContent = "WIN " + winsInBand + " / LOSS " + lossesInBand +
+      detail.textContent = "Všetky signály: WIN " + winsInBand + " / LOSS " + lossesInBand +
         " · úspešnosť " + rate + " · OPEN " + openInBand + " · UNRESOLVED " + unresolvedInBand;
       detail.style.cssText = "font-size:11px;color:#b7c5d6;margin-top:5px;line-height:1.45;";
-      row.append(title, detail);
+      const uniqueDetail = document.createElement("div");
+      uniqueDetail.textContent = "Prvý signál v zápase: " + firstPerMatch.length +
+        " záp. · WIN " + uniqueWins + " / LOSS " + uniqueLosses +
+        " · úspešnosť " + uniqueRate + " · OPEN " + uniqueOpen + " · UNRESOLVED " + uniqueUnresolved;
+      uniqueDetail.style.cssText = "font-size:10px;color:#94a3b8;margin-top:5px;line-height:1.45;";
+      row.append(title, detail, uniqueDetail);
       qualityGrid.appendChild(row);
     });
     const qualityNote = document.createElement("div");
