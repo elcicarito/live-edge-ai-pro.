@@ -3523,11 +3523,13 @@
     return found ? found.flag : "🌍";
   }
 
-  function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false, signalArchive = null, bttsArchive = null, target = matchesEl) {
+  function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false, signalArchive = null, bttsArchive = null, target = matchesEl, compact = false) {
     const card = document.createElement("div");
+    if (compact) card.classList.add("compact-match-card");
 
-    card.style.cssText =
-      "background:#0d1929;padding:12px;margin:12px 0;border-radius:12px;border:1px solid #31445c;";
+    card.style.cssText = compact
+      ? "background:#0d1929;padding:7px;margin:5px 0;border-radius:9px;border:1px solid #293d55;"
+      : "background:#0d1929;padding:12px;margin:12px 0;border-radius:12px;border:1px solid #31445c;";
 
     const minute = staleMode
       ? String(match.live_minute ?? "?").trim() || "?"
@@ -3958,54 +3960,71 @@
   }
 
   function renderMatchesGrouped(items, historyData, allowSignals, staleMode, signalArchive, bttsArchive) {
-    const groups = new Map();
-
-    items.forEach(item => {
-      const name = String(item.match?.competition || item.match?.league || "Neznáma súťaž").trim() || "Neznáma súťaž";
-      if (!groups.has(name)) groups.set(name, []);
-      groups.get(name).push(item);
-    });
-
     const priorityByItem = new Map(items.map(item => [
       item,
       getMatchPriority(item.match, historyData, item.collectedAt, allowSignals, staleMode, signalArchive, bttsArchive)
     ]));
     const getPriority = item => priorityByItem.get(item) || { rank: 0, score: 0 };
-    const rankedGroups = [...groups.entries()].map(([league, leagueItems]) => {
-      leagueItems.sort((a, b) => {
-        const pa = getPriority(a);
-        const pb = getPriority(b);
-        return pb.rank - pa.rank || pb.score - pa.score;
+    const confirmedItems = items.filter(item => getPriority(item).rank === 2);
+    const otherItems = items.filter(item => getPriority(item).rank !== 2);
+
+    const renderCategory = (categoryItems, title, compact) => {
+      if (!categoryItems.length) return;
+
+      const categoryHeading = document.createElement("div");
+      categoryHeading.textContent = title + " · " + categoryItems.length;
+      categoryHeading.style.cssText = compact
+        ? "font-size:11px;font-weight:900;letter-spacing:.6px;color:#9fb0c5;margin:16px 2px 5px;padding:2px 1px;"
+        : "font-size:12px;font-weight:900;letter-spacing:.7px;color:#39e6a5;margin:8px 2px 6px;padding:3px 1px;";
+      matchesEl.appendChild(categoryHeading);
+
+      const groups = new Map();
+      categoryItems.forEach(item => {
+        const name = String(item.match?.competition || item.match?.league || "Neznáma súťaž").trim() || "Neznáma súťaž";
+        if (!groups.has(name)) groups.set(name, []);
+        groups.get(name).push(item);
       });
-      const top = leagueItems.length ? getPriority(leagueItems[0]) : { rank: 0, score: 0 };
-      return { league, leagueItems, rank: top.rank, score: top.score };
-    });
 
-    rankedGroups
-      .sort((a, b) => b.rank - a.rank || b.score - a.score || a.league.localeCompare(b.league, "sk"))
-      .forEach(({ league, leagueItems }) => {
-        const section = document.createElement("section");
-        section.style.cssText = "margin:16px 0 20px;padding:10px;background:#0a1422;border:1px solid #263a52;border-radius:12px;";
-
-        const heading = document.createElement("div");
-        const flag = getCompetitionFlag(leagueItems[0].match);
-        heading.textContent = `${flag} ${league} · ${leagueItems.length} ${leagueItems.length === 1 ? "zápas" : leagueItems.length < 5 ? "zápasy" : "zápasov"}`;
-        heading.style.cssText = "font-size:14px;font-weight:800;color:#e2e8f0;padding:3px 2px 8px;border-bottom:1px solid #31445c;margin-bottom:8px;";
-        section.appendChild(heading);
-
-        leagueItems.forEach(item => renderMatch(
-          item.match,
-          historyData,
-          item.collectedAt,
-          allowSignals,
-          staleMode,
-          signalArchive,
-          bttsArchive,
-          section
-        ));
-
-        matchesEl.appendChild(section);
+      const rankedGroups = [...groups.entries()].map(([league, leagueItems]) => {
+        leagueItems.sort((a, b) => {
+          const pa = getPriority(a);
+          const pb = getPriority(b);
+          return pb.rank - pa.rank || pb.score - pa.score;
+        });
+        const top = leagueItems.length ? getPriority(leagueItems[0]) : { rank: 0, score: 0 };
+        return { league, leagueItems, rank: top.rank, score: top.score };
       });
+
+      rankedGroups
+        .sort((a, b) => b.rank - a.rank || b.score - a.score || a.league.localeCompare(b.league, "sk"))
+        .forEach(({ league, leagueItems }) => {
+          const section = document.createElement("section");
+          section.style.cssText = "margin:7px 0 10px;padding:8px;background:#0a1422;border:1px solid #263a52;border-radius:12px;";
+
+          const heading = document.createElement("div");
+          const flag = getCompetitionFlag(leagueItems[0].match);
+          heading.textContent = `${flag} ${league} · ${leagueItems.length} ${leagueItems.length === 1 ? "zápas" : leagueItems.length < 5 ? "zápasy" : "zápasov"}`;
+          heading.style.cssText = "font-size:12px;font-weight:800;color:#e2e8f0;padding:2px 2px 6px;border-bottom:1px solid #31445c;margin-bottom:6px;";
+          section.appendChild(heading);
+
+          leagueItems.forEach(item => renderMatch(
+            item.match,
+            historyData,
+            item.collectedAt,
+            allowSignals,
+            staleMode,
+            signalArchive,
+            bttsArchive,
+            section,
+            compact
+          ));
+
+          matchesEl.appendChild(section);
+        });
+    };
+
+    renderCategory(confirmedItems, "⚡ POTVRDENÉ SIGNÁLY", false);
+    renderCategory(otherItems, "👀 OSTATNÉ LIVE ZÁPASY", true);
   }
 
   function updateDashboard(current, liveCount, signalArchive, bttsArchive, fresh, complete) {
