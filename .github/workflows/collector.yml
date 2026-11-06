@@ -54,6 +54,7 @@ jobs:
             http_5xx_count: 0,
             retry_count: 0,
             network_error_count: 0,
+            parse_error_count: 0,
             endpoint_counts: {}
           };
 
@@ -82,6 +83,7 @@ jobs:
 
             for (let i = 1; i <= attempts; i++) {
               let retryAfterMs = 0;
+              let responseReceived = false;
 
               try {
                 const separator = url.includes("?") ? "&" : "?";
@@ -100,6 +102,7 @@ jobs:
                   signal: AbortSignal.timeout(20000),
                   cache: "no-store"
                 });
+                responseReceived = true;
 
                 if (response.ok) {
                   collectorMetrics.success_count++;
@@ -133,8 +136,12 @@ jobs:
                 lastError = error;
                 if (!error.status) {
                   collectorMetrics.failure_count++;
-                  collectorMetrics.network_error_count++;
                   countMetric(endpoint, "failures");
+                  if (responseReceived) {
+                    collectorMetrics.parse_error_count++;
+                  } else {
+                    collectorMetrics.network_error_count++;
+                  }
                 }
                 console.log(`Pokus ${i}/${attempts}: ${error.message}`);
 
