@@ -307,13 +307,13 @@ const featureCols = ["match_id","archived_at","collected_at","home","away","comp
   "attacks_label","possession_label","xg_label","corners_label","raw_stats_json"];
 const featureCsv = [featureCols.join(","), ...allLabeled.map(r =>
   featureCols.map(k => '"' + String(r[k] ?? "").replace(/"/g,'""') + '"').join(",")
-)].join("\\n") + "\\n";
+)].join("\n") + "\n";
 fs.writeFileSync(path.join(OUT, "live-edge-goal-10m-feature-dataset.csv"), featureCsv);
 fs.writeFileSync(path.join(OUT, "live-edge-goal-10m-feature-coverage.json"), JSON.stringify({
   generated_at_utc: report.generated_at_utc, read_only: true,
   rows: allLabeled.length, feature_coverage: featureCoverage,
   note: "Sample-level candidate labels; raw stats retained for manual schema review. Not a trained model."
-}, null, 2) + "\\n");
+}, null, 2) + "\n");
 
 const summary = [
   "# LIVE EDGE – časový audit predikcie gólu", "",
