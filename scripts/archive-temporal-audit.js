@@ -46,6 +46,48 @@ function finalPair(x) {
   if (m) return [Number(m[1]), Number(m[2])];
   return scorePair(x.final_match);
 }
+function statsOf(s) {
+  if (Array.isArray(s?.stats) && s.stats.length) return s.stats;
+  if (Array.isArray(s?.raw_stats) && s.raw_stats.length) return s.raw_stats;
+  const nested = s?.raw_match || s?.match || {};
+  return Array.isArray(nested.stats) ? nested.stats : [];
+}
+function statFeature(stats, keys) {
+  const wanted = keys.map(norm);
+  const item = (stats || []).find(st => {
+    const label = norm(st?.label || st?.name || st?.type || "");
+    return wanted.some(k => label === k || label.includes(k));
+  });
+  if (!item) return { home: null, away: null, label: "" };
+  const h = Number(item.home), a = Number(item.away);
+  return {
+    home: Number.isFinite(h) ? h : null,
+    away: Number.isFinite(a) ? a : null,
+    label: String(item.label || item.name || item.type || "")
+  };
+}
+function extractFeatures(s) {
+  const stats = statsOf(s);
+  const defs = {
+    shots: ["shots", "total shots", "shots total"],
+    shots_on_target: ["shots on target", "on target"],
+    shots_off_target: ["shots off target", "off target"],
+    dangerous_attacks: ["dangerous attacks"],
+    attacks: ["attacks", "total attacks"],
+    possession: ["possession"],
+    xg: ["expected goals", "xg"],
+    corners: ["corners", "corner kicks"]
+  };
+  const out = {};
+  for (const [key, labels] of Object.entries(defs)) {
+    const v = statFeature(stats, labels);
+    out[key + "_home"] = v.home;
+    out[key + "_away"] = v.away;
+    out[key + "_label"] = v.label;
+  }
+  out.raw_stats_json = JSON.stringify(stats);
+  return out;
+}
 function ts(v) { const n = Date.parse(v); return Number.isFinite(n) ? n : null; }
 function median(a) {
   if (!a.length) return null;
@@ -155,9 +197,12 @@ for (const [id, x] of matches) {
       bump(reasonCounts, "nedostatočný priestor na celý 10-minútový horizont"); continue;
     }
     const futureGoal = goalRecords.some(g => g.minute > minute && g.minute <= minute + 10);
+    const features = extractFeatures(s);
     allLabeled.push({
       match_id: id, archived_at: x.archived_at || "", collected_at: s.collected_at || "",
-      minute, home_score: score[0], away_score: score[1], goal_next_10m: futureGoal ? 1 : 0
+      home: x.home || fm.home || "", away: x.away || fm.away || "",
+      competition: x.competition || "", minute, home_score: score[0], away_score: score[1],
+      goal_next_10m: futureGoal ? 1 : 0, ...features
     });
     eligible++;
     if (futureGoal) { positives++; labelCounts.positive++; }
@@ -249,6 +294,27 @@ fs.writeFileSync(path.join(OUT, "live-edge-temporal-audit.json"), JSON.stringify
 const cols = Object.keys(matchRows[0] || { match_id: "", archived_at: "", final_score: "" });
 const csv = [cols.join(","), ...matchRows.map(r => cols.map(k => '"' + String(r[k] ?? "").replace(/"/g,'""') + '"').join(","))].join("\n") + "\n";
 fs.writeFileSync(path.join(OUT, "live-edge-temporal-match-coverage.csv"), csv);
+
+// Sample-level, feature-enriched dataset for offline analysis only.
+const featureKeys = ["shots_home","shots_away","shots_on_target_home","shots_on_target_away",
+  "shots_off_target_home","shots_off_target_away","dangerous_attacks_home","dangerous_attacks_away",
+  "attacks_home","attacks_away","possession_home","possession_away","xg_home","xg_away",
+  "corners_home","corners_away"];
+const featureCoverage = Object.fromEntries(featureKeys.map(k => [k, allLabeled.filter(r => finite(r[k])).length]));
+const featureCols = ["match_id","archived_at","collected_at","home","away","competition","minute",
+  "home_score","away_score","goal_next_10m", ...featureKeys,
+  "shots_label","shots_on_target_label","shots_off_target_label","dangerous_attacks_label",
+  "attacks_label","possession_label","xg_label","corners_label","raw_stats_json"];
+const featureCsv = [featureCols.join(","), ...allLabeled.map(r =>
+  featureCols.map(k => '"' + String(r[k] ?? "").replace(/"/g,'""') + '"').join(",")
+)].join("\\n") + "\\n";
+fs.writeFileSync(path.join(OUT, "live-edge-goal-10m-feature-dataset.csv"), featureCsv);
+fs.writeFileSync(path.join(OUT, "live-edge-goal-10m-feature-coverage.json"), JSON.stringify({
+  generated_at_utc: report.generated_at_utc, read_only: true,
+  rows: allLabeled.length, feature_coverage: featureCoverage,
+  note: "Sample-level candidate labels; raw stats retained for manual schema review. Not a trained model."
+}, null, 2) + "\\n");
+
 const summary = [
   "# LIVE EDGE – časový audit predikcie gólu", "",
   "Vygenerované UTC: " + report.generated_at_utc,
@@ -266,6 +332,8 @@ const summary = [
   "- Nejednoznačné/vylúčené: **" + labelCounts.ambiguous + "**",
   "- Použiteľné kandidátske príklady: **" + allLabeled.length + "**",
   "- Podiel pozitívnych: **" + (report.ten_minute_labels.positive_rate_percent ?? "N/A") + " %**", "",
+  "## Pokrytie štatistík v označených LIVE snímkach", "",
+  ...Object.entries(featureCoverage).map(([k,v]) => "- " + k + ": **" + v + " / " + allLabeled.length + "**"), "",
   "## Časové rozdelenie po zápasoch", "",
   "- Tréning: **" + split.train_labeled_snapshots + "** snímok z " + split.proposed_train_matches + " zápasov",
   "- Test: **" + split.test_labeled_snapshots + "** snímok z " + split.proposed_test_matches + " zápasov",
