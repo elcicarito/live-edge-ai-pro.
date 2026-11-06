@@ -37,6 +37,7 @@ jobs:
             http_5xx_count: 0,
             retry_count: 0,
             network_error_count: 0,
+            parse_error_count: 0,
             endpoint_counts: {}
           };
 
@@ -66,6 +67,7 @@ jobs:
               const endpoint = metricEndpoint(url);
               collectorMetrics.request_count++;
               countMetric(endpoint, "requests");
+              let responseReceived = false;
               try {
                 const response = await fetch(url + (url.includes("?") ? "&" : "?") + "_ts=" + Date.now(), {
                   headers: {
@@ -76,6 +78,7 @@ jobs:
                   cache: "no-store",
                   signal: AbortSignal.timeout(20000)
                 });
+                responseReceived = true;
                 if (!response.ok) {
                   collectorMetrics.failure_count++;
                   countMetric(endpoint, "failures");
@@ -92,8 +95,12 @@ jobs:
                 lastError = error;
                 if (!error.status) {
                   collectorMetrics.failure_count++;
-                  collectorMetrics.network_error_count++;
                   countMetric(endpoint, "failures");
+                  if (responseReceived) {
+                    collectorMetrics.parse_error_count++;
+                  } else {
+                    collectorMetrics.network_error_count++;
+                  }
                 }
                 console.log("Pokus " + i + "/" + attempts + ": " + error.message);
                 if (i < attempts) {
