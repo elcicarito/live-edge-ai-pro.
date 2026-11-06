@@ -1907,17 +1907,21 @@
     `;
 
     const teams = document.createElement("div");
+    teams.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;width:100%;";
 
-    teams.textContent =
-      `${match.home} ${Number(match.home_score || 0)} : ${Number(match.away_score || 0)} ${match.away}`;
+    const homeName = document.createElement("div");
+    homeName.textContent = match.home || "Domáci";
+    homeName.style.cssText = "min-width:0;overflow-wrap:anywhere;font-size:14px;font-weight:800;line-height:1.25;color:#f1f5f9;";
 
-    teams.style.cssText = `
-      font-size:16px;
-      font-weight:800;
-      line-height:1.5;
-      flex:1 1 180px;
-    `;
+    const score = document.createElement("div");
+    score.textContent = `${Number(match.home_score || 0)} : ${Number(match.away_score || 0)}`;
+    score.style.cssText = "white-space:nowrap;font-size:23px;font-weight:900;letter-spacing:.5px;color:#fff;font-variant-numeric:tabular-nums;padding:4px 10px;background:#17283d;border:1px solid #38516e;border-radius:10px;";
 
+    const awayName = document.createElement("div");
+    awayName.textContent = match.away || "Hostia";
+    awayName.style.cssText = "min-width:0;overflow-wrap:anywhere;text-align:right;font-size:14px;font-weight:800;line-height:1.25;color:#f1f5f9;";
+
+    teams.append(homeName, score, awayName);
     header.appendChild(teams);
 
     const statusBadge = staleMode
@@ -1937,6 +1941,30 @@
     leagueLine.textContent = `${getCompetitionFlag(match)} ${match.competition || "Neznáma súťaž"}`;
     leagueLine.style.cssText = "font-size:12px;color:#a8b8cc;margin:2px 0 9px;";
     card.appendChild(leagueLine);
+
+    // Rýchly prehľad kľúčových štatistík priamo v karte zápasu.
+    const quickStats = document.createElement("div");
+    quickStats.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;";
+    const addQuickStat = (label, value) => {
+      if (!value) return;
+      const chip = document.createElement("span");
+      chip.textContent = `${label} ${value.home} : ${value.away}`;
+      chip.style.cssText = "font-size:11px;font-weight:800;color:#cbd5e1;background:#142338;border:1px solid #2b4059;border-radius:8px;padding:6px 8px;font-variant-numeric:tabular-nums;";
+      quickStats.appendChild(chip);
+    };
+    const quickSot = statValue(match.stats || [], "shots on target");
+    const quickOff = statValue(match.stats || [], "shots off target");
+    let quickTotal = statValue(match.stats || [], "total shots");
+    if (!quickTotal && quickSot && quickOff) {
+      quickTotal = {
+        home: quickSot.home + quickOff.home,
+        away: quickSot.away + quickOff.away
+      };
+    }
+    addQuickStat("SOT", quickSot);
+    addQuickStat("STRELY", quickTotal);
+    addQuickStat("NEB. ÚTOKY", statValue(match.stats || [], "dangerous attacks"));
+    if (quickStats.childElementCount) card.appendChild(quickStats);
 
     const relatedSignals = Array.isArray(signalArchive?.signals)
       ? signalArchive.signals.filter(item => String(item.matchId) === matchId(match))
