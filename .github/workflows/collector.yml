@@ -1393,6 +1393,9 @@ jobs:
                   // they do not change the green signal trigger conditions.
                   pressureHome: candidate.pressureHome,
                   pressureAway: candidate.pressureAway,
+                  competition: match.competition || match.league || null,
+                  combinedSot: (() => { const v = frontendStatValue(match.stats || [], "shots on target"); return v ? v.home + v.away : null; })(),
+                  combinedShots: (() => { const a = frontendStatValue(match.stats || [], "shots on target"); const b = frontendStatValue(match.stats || [], "shots off target"); return a && b ? a.home + a.away + b.home + b.away : null; })(),
                   activityHome: candidate.activityHome,
                   activityAway: candidate.activityAway,
                   threatHome: candidate.threatHome,
@@ -1557,6 +1560,7 @@ jobs:
                     startScore: homeScore + ":" + awayScore,
                     combinedSot,
                     combinedShots,
+                    competition: match.competition || match.league || null,
                     tier: candidate.tier,
                     tierKey: candidate.tierKey,
                     createdAt: record.collected_at,
