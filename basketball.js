@@ -73,6 +73,13 @@
   const periodLabel = (m, i) => formatOf(m) === "halves"
     ? (i < 2 ? "H" + (i + 1) : "OT" + (i - 1))
     : (i < 4 ? "Q" + (i + 1) : "OT" + (i - 3));
+  const periodStatusLabel = match => {
+    const raw = textOf(match?.status_text, match?.period?.name, match?.period, match?.quarter, match?.period_name, match?.clock, match?.time_remaining);
+    if (formatOf(match) !== "halves") return raw;
+    if (/half.?time|halftime|break/i.test(raw)) return "Prestávka · polčas";
+    const m = raw.match(/([1-2])(?:st|nd)?\\s*(?:quarter|period|q)/i);
+    return m ? (Number(m[1]) === 1 ? "1. polčas" : "2. polčas") : raw;
+  };
   const flagOf = league => {
     const s = String(league || "").toLowerCase();
     if (/ncaa|national collegiate|usa|united states|nba|wnba/.test(s)) return "🇺🇸";
@@ -144,7 +151,7 @@
     const league=leagueOf(match);
     const header=document.createElement("div");
     header.style.cssText="color:#39e6a5;font-size:12px;font-weight:bold;margin-bottom:10px";
-    header.textContent=flagOf(league)+" "+(league||"Liga neznáma")+" · "+(archived?"UKONČENÝ ZÁPAS":textOf(statusOf(match),"LIVE"))+" · "+(archived?dateOf(match):textOf(match?.status_text,match?.period?.name,match?.period,match?.quarter,match?.period_name,match?.clock,match?.time_remaining));
+    header.textContent=flagOf(league)+" "+(league||"Liga neznáma")+" · "+(archived?"UKONČENÝ ZÁPAS":textOf(statusOf(match),"LIVE"))+" · "+(archived?dateOf(match):periodStatusLabel(match));
     const row=document.createElement("div");
     row.style.cssText="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;margin:6px 0";
     const names=document.createElement("div"); names.style.cssText="font-weight:700;line-height:1.5;white-space:pre-line"; names.textContent=teamName(match,"home")+"\n"+teamName(match,"away");
