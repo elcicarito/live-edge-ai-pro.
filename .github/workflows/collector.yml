@@ -1035,6 +1035,9 @@ jobs:
             // Zápas sa uloží iba raz podľa stabilného ID.
             // =========================================
             const PERMANENT_MATCH_HISTORY_PATH = "data/live-match-history.jsonl";
+            if (!fs.existsSync(PERMANENT_MATCH_HISTORY_PATH)) {
+              fs.writeFileSync(PERMANENT_MATCH_HISTORY_PATH, "");
+            }
             const permanentIds = new Set();
 
             if (fs.existsSync(PERMANENT_MATCH_HISTORY_PATH)) {
