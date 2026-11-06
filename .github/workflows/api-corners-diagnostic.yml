@@ -1,0 +1,54 @@
+name: API corners diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compare match and tracker endpoints
+        run: |
+          mkdir -p diagnostic
+          node <<'NODE'
+          const fs = require('fs');
+          const urls = {
+            v1_match: 'https://sportscore.com/api/v1/match/?sport=football&slug=cs-herediano-vs-deportivo-saprissa',
+            widget_match: 'https://sportscore.com/api/widget/match/?sport=football&slug=cs-herediano-vs-deportivo-saprissa',
+            widget_tracker: 'https://sportscore.com/api/widget/tracker/?sport=football&id=n54qllhnyzd6qvy'
+          };
+          (async () => {
+            const report = {};
+            for (const [name, url] of Object.entries(urls)) {
+              try {
+                const response = await fetch(url, { headers: { accept: 'application/json' } });
+                const body = await response.text();
+                let parsed;
+                try { parsed = JSON.parse(body); } catch { parsed = null; }
+                report[name] = {
+                  url,
+                  status: response.status,
+                  content_type: response.headers.get('content-type'),
+                  body: parsed ?? body.slice(0, 20000)
+                };
+              } catch (error) {
+                report[name] = { url, error: String(error) };
+              }
+            }
+            fs.writeFileSync('diagnostic/endpoints.json', JSON.stringify(report, null, 2));
+            for (const [name, result] of Object.entries(report)) {
+              console.log(name, 'status=', result.status ?? 'ERROR');
+              const text = JSON.stringify(result.body ?? result.error ?? '');
+              console.log('body preview:', text.slice(0, 1800));
+            }
+          })();
+          NODE
+      - name: Upload raw diagnostic responses
+        uses: actions/upload-artifact@v4
+        with:
+          name: sportscore-api-diagnostic
+          path: diagnostic/endpoints.json
+          if-no-files-found: error
