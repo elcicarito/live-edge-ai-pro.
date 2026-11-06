@@ -5,6 +5,7 @@
   const SIGNAL_ARCHIVE_URL = "./data/signal-archive.json";
   const BTTS_ARCHIVE_URL = "./data/btts-signal-archive.json";
   const MATCH_ARCHIVE_URL = "./data/live-archive.json";
+  const MATCH_HISTORY_URL = "./data/live-match-history.jsonl";
   const SIGNAL_KEY = "live_edge_signals_v6";
 
   const MIN_GAP_MINUTES = 3;
@@ -26,6 +27,8 @@
   const bttsSignalArchiveEl = document.getElementById("btts-signal-archive");
   const bttsSignalArchiveCountEl = document.getElementById("btts-signal-archive-count");
   let matchArchiveData = null;
+  let matchHistoryData = [];
+  let matchHistoryPromise = null;
   let archiveLeagueFilter = "";
   let archiveDateFilter = "";
 
@@ -191,6 +194,25 @@
     }
 
     return response.json();
+  }
+
+  async function loadPermanentMatchHistory() {
+    if (!matchHistoryPromise) {
+      matchHistoryPromise = fetch(MATCH_HISTORY_URL + "?t=" + Date.now(), {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" }
+      }).then(async response => {
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        const content = await response.text();
+        return content.split("\n").filter(Boolean).map(line => {
+          try { return JSON.parse(line); } catch { return null; }
+        }).filter(Boolean);
+      }).catch(error => {
+        console.warn("Trvalá história zápasov nie je dostupná:", error);
+        return [];
+      });
+    }
+    return matchHistoryPromise;
   }
 
   function getStatus(match) {
@@ -1885,6 +1907,72 @@
           "#39e6a5",
           match.competition || match.league || "KONEČNÝ VÝSLEDOK POTVRDENÝ"
         );
+
+        const archivedDetail = matchHistoryData.find(entry =>
+          String(entry.match_id || "") === String(item.id || "") ||
+          (entry.final_match && matchId(entry.final_match) === matchId(match))
+        );
+        const snapshots = Array.isArray(archivedDetail?.snapshots)
+          ? archivedDetail.snapshots
+          : [];
+        const rawFinalStats = Array.isArray(archivedDetail?.final_match?.stats)
+          ? archivedDetail.final_match.stats
+          : Array.isArray(match.stats) ? match.stats : [];
+
+        const details = document.createElement("details");
+        details.style.cssText = "margin:0 0 12px 0;padding:10px 12px;background:#0c1726;border:1px solid #2b3c52;border-radius:10px;";
+        const summary = document.createElement("summary");
+        summary.textContent = `📊 KOMPLETNÉ API ŠTATISTIKY · ${snapshots.length} LIVE snímok`;
+        summary.style.cssText = "cursor:pointer;color:#8fd8ff;font-size:12px;font-weight:800;";
+        details.appendChild(summary);
+
+        const intro = document.createElement("p");
+        intro.textContent = snapshots.length
+          ? "Časová os zachytáva dostupné údaje približne každých 5 minút. Chýbajúce údaje zostávajú prázdne – nie sú nahradené nulou."
+          : "Pre tento starší zápas nie sú v trvalom archíve dostupné LIVE snímky.";
+        intro.style.cssText = "font-size:11px;color:#9baabe;line-height:1.45;";
+        details.appendChild(intro);
+
+        function appendRawStats(container, stats, heading) {
+          const title = document.createElement("div");
+          title.textContent = heading;
+          title.style.cssText = "margin:10px 0 6px;color:#dce8f5;font-size:12px;font-weight:800;";
+          container.appendChild(title);
+          if (!Array.isArray(stats) || !stats.length) {
+            const empty = document.createElement("p");
+            empty.textContent = "API v tomto meraní neposkytlo štatistiky.";
+            empty.style.cssText = "font-size:11px;color:#9baabe;";
+            container.appendChild(empty);
+            return;
+          }
+          stats.forEach(stat => {
+            const line = document.createElement("div");
+            const label = stat?.label || stat?.name || "Štatistika";
+            const home = stat?.home ?? "—";
+            const away = stat?.away ?? "—";
+            const extras = Object.entries(stat || {})
+              .filter(([key]) => !["label", "name", "home", "away"].includes(key))
+              .map(([key, value]) => key + ": " + (typeof value === "object" ? JSON.stringify(value) : String(value)));
+            line.textContent = `${label}: ${home} – ${away}${extras.length ? " | " + extras.join(" | ") : ""}`;
+            line.style.cssText = "padding:5px 0;border-bottom:1px solid #1d2b3d;font-size:11px;color:#d1dbea;overflow-wrap:anywhere;";
+            container.appendChild(line);
+          });
+        }
+
+        snapshots.forEach((snapshot, index) => {
+          const block = document.createElement("details");
+          block.style.cssText = "margin:7px 0;padding:8px;background:#111f31;border-radius:8px;";
+          const snapSummary = document.createElement("summary");
+          const stamp = snapshot.collected_at ? new Date(snapshot.collected_at).toLocaleString("sk-SK") : "čas neznámy";
+          snapSummary.textContent = `${stamp} · ${snapshot.minute ?? "?"}' · ${snapshot.home_score ?? "?"}:${snapshot.away_score ?? "?"} · ${(snapshot.raw_stats || snapshot.raw_match?.stats || snapshot.stats || []).length} štatistík`;
+          snapSummary.style.cssText = "cursor:pointer;font-size:11px;color:#c9d8e9;";
+          block.appendChild(snapSummary);
+          appendRawStats(block, snapshot.raw_stats || snapshot.raw_match?.stats || snapshot.stats || [], "ÚDAJE Z API");
+          details.appendChild(block);
+        });
+
+        appendRawStats(details, rawFinalStats, "KONEČNÉ ŠTATISTIKY Z API");
+        matchArchiveEl.appendChild(details);
       });
     } else if (confirmed.length) {
       addText(matchArchiveEl, "Pre zvolenú ligu a dátum sa nenašli žiadne zápasy.");
@@ -2488,7 +2576,7 @@
     scanning = true;
 
     try {
-      const [current, historyData, signalArchive, bttsArchive, matchArchive] = await Promise.all([
+      const [current, historyData, signalArchive, bttsArchive, matchArchive, permanentMatchHistory] = await Promise.all([
         getJSON(CURRENT_URL),
         getJSON(HISTORY_URL).catch(error => {
           console.warn("História zberu nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
@@ -2505,8 +2593,11 @@
         getJSON(MATCH_ARCHIVE_URL).catch(error => {
           console.warn("Archív zápasov nie je dostupný:", error);
           return null;
-        })
+        }),
+        loadPermanentMatchHistory()
       ]);
+
+      matchHistoryData = Array.isArray(permanentMatchHistory) ? permanentMatchHistory : [];
 
       const collectedTime = Date.parse(current.collected_at || "");
       const age = Date.now() - collectedTime;
