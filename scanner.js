@@ -1699,19 +1699,56 @@
       }
       return found;
     };
+    // Zjednotenie ID naprieč LIVE feedom a archívmi:
+    // SportScore tracker.id je preferované; pri starších záznamoch ho vieme
+    // obnoviť z poslednej časti URL zápasu. Tým sa ten istý zápas nesčíta
+    // samostatne len preto, že ho zdroje uložili v inom obale.
+    const findCanonicalMatchId = (value, depth = 0) => {
+      if (!value || typeof value !== "object" || depth > 7) return "";
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const found = findCanonicalMatchId(item, depth + 1);
+          if (found) return found;
+        }
+        return "";
+      }
+      if (value.tracker?.id) return String(value.tracker.id);
+      if (typeof value.url === "string") {
+        const path = value.url.split(/[?#]/)[0];
+        const last = path.split("/").filter(Boolean).pop() || "";
+        if (/^[a-z0-9_-]{10,}$/i.test(last)) return last;
+      }
+      if (value.match && typeof value.match === "object") {
+        const found = findCanonicalMatchId(value.match, depth + 1);
+        if (found) return found;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (key === "stats" || key === "incidents") continue;
+        if (child && typeof child === "object") {
+          const found = findCanonicalMatchId(child, depth + 1);
+          if (found) return found;
+        }
+      }
+      return "";
+    };
 
     for (const record of (Array.isArray(current?.records) ? current.records : [])) {
       const match = record?.match || {};
-      const id = match.tracker?.id || match.id || match.url || (match.home + "_" + match.away);
+      const id = findCanonicalMatchId(match) ||
+        (match.home && match.away ? [match.home, match.away, match.time || ""].join("_") : "");
       addMatch(id, collectNestedStats(match));
     }
     for (const item of (Array.isArray(matchArchive?.archived_matches) ? matchArchive.archived_matches : [])) {
-      const id = item?.id || item?.final_match?.url || item?.last_snapshot?.match?.url;
+      const id = findCanonicalMatchId(item) || item?.id ||
+        (item?.final_match?.home && item?.final_match?.away
+          ? [item.final_match.home, item.final_match.away, item.final_match.time || ""].join("_")
+          : "");
       addMatch(id, collectNestedStats(item));
     }
     for (const item of (Array.isArray(permanentHistory) ? permanentHistory : [])) {
       const match = item?.final_match || item?.last_snapshot?.match || item?.match || {};
-      const id = item?.id || match.tracker?.id || match.id || match.url;
+      const id = findCanonicalMatchId(item) || item?.id ||
+        (match.home && match.away ? [match.home, match.away, match.time || ""].join("_") : "");
       addMatch(id, collectNestedStats(item));
     }
 
