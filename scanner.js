@@ -1423,7 +1423,7 @@
   }
 
 
-  function makeSignal(match, threat, snapshot, collectedAt) {
+  function makeSignal(match, threat, snapshot, collectedAt, qualityScores = null) {
     const minute = Number(match.live_minute);
 
     if (!threat || !snapshot.ready) return null;
@@ -1445,14 +1445,16 @@
         team: match.home,
         score: threat.home,
         activity: snapshot.homeActivityRate,
-        difference: threat.home - threat.away
+        difference: threat.home - threat.away,
+        qualityScore: qualityScores?.ready ? qualityScores.sides.home.score : null
       },
       {
         side: "away",
         team: match.away,
         score: threat.away,
         activity: snapshot.awayActivityRate,
-        difference: threat.away - threat.home
+        difference: threat.away - threat.home,
+        qualityScore: qualityScores?.ready ? qualityScores.sides.away.score : null
       }
     ];
 
@@ -1488,7 +1490,11 @@
       startMinute: minute,
       deadlineMinute: Math.min(90, minute + 15),
       createdAt: new Date().toISOString(),
-      status: "OPEN"
+      status: "OPEN",
+      ...(Number.isFinite(signal.qualityScore) ? {
+        qualityScore: signal.qualityScore,
+        qualityScoreVersion: "ai-quality-v1"
+      } : {})
     });
 
     saveSignals();
@@ -2408,6 +2414,58 @@
       "Táto analytika nemení ani nemaže historické záznamy. Prvý signál každého zápasu sa určuje podľa času vytvorenia; pri chýbajúcom čase sa zachová pôvodné poradie archívu. Do úspešnosti sa počítajú iba prvé signály so stavom WIN alebo LOSS. UNRESOLVED a OPEN sa vynechávajú. Ide o úspešnosť, nie ROI."
     );
 
+    // Quality Score analytika používa výhradne skóre uložené v okamihu vzniku signálu.
+    // Staršie záznamy bez qualityScore sa nikdy spätne neprepočítavajú.
+    const qualitySignals = (signals || []).filter(item =>
+      item?.qualityScoreVersion === "ai-quality-v1" &&
+      Number.isFinite(Number(item.qualityScore)) &&
+      Number(item.qualityScore) >= 0 &&
+      Number(item.qualityScore) <= 100
+    );
+    const qualityBands = [
+      { label: "POD 50", test: score => score < 50 },
+      { label: "50–64", test: score => score >= 50 && score <= 64 },
+      { label: "65–79", test: score => score >= 65 && score <= 79 },
+      { label: "80–100", test: score => score >= 80 && score <= 100 }
+    ];
+    const qualityHeading = document.createElement("div");
+    qualityHeading.textContent = "VÝSLEDKY PODĽA AI QUALITY SCORE";
+    qualityHeading.style.cssText = "font-size:13px;font-weight:900;margin:18px 0 8px;color:#dbeafe;";
+    systemStatsEl.appendChild(qualityHeading);
+    const qualityMeta = document.createElement("div");
+    qualityMeta.textContent = "Skóre uložené pri vzniku signálu: " + qualitySignals.length +
+      " / " + (signals ? signals.length : 0) +
+      " · bez historického spätného prepočtu: " + ((signals || []).length - qualitySignals.length);
+    qualityMeta.style.cssText = "font-size:11px;color:#a8b8cc;margin-bottom:9px;line-height:1.45;";
+    systemStatsEl.appendChild(qualityMeta);
+    const qualityGrid = document.createElement("div");
+    qualityGrid.style.cssText = "display:grid;grid-template-columns:1fr;gap:7px;";
+    systemStatsEl.appendChild(qualityGrid);
+    qualityBands.forEach(band => {
+      const group = qualitySignals.filter(item => band.test(Number(item.qualityScore)));
+      const winsInBand = group.filter(item => item.status === "WIN").length;
+      const lossesInBand = group.filter(item => item.status === "LOSS").length;
+      const openInBand = group.filter(item => item.status === "OPEN").length;
+      const unresolvedInBand = group.filter(item => item.status === "UNRESOLVED").length;
+      const settledInBand = winsInBand + lossesInBand;
+      const rate = settledInBand ? Math.round(winsInBand / settledInBand * 100) + "%" : "Zatiaľ bez vyhodnotenia";
+      const row = document.createElement("div");
+      row.style.cssText = "padding:10px;border:1px solid #35465e;border-radius:9px;background:#101b2b;";
+      const title = document.createElement("div");
+      title.textContent = band.label + " bodov · " + group.length + " signálov";
+      title.style.cssText = "font-size:12px;font-weight:900;color:#fff;";
+      const detail = document.createElement("div");
+      detail.textContent = "WIN " + winsInBand + " / LOSS " + lossesInBand +
+        " · úspešnosť " + rate + " · OPEN " + openInBand + " · UNRESOLVED " + unresolvedInBand;
+      detail.style.cssText = "font-size:11px;color:#b7c5d6;margin-top:5px;line-height:1.45;";
+      row.append(title, detail);
+      qualityGrid.appendChild(row);
+    });
+    const qualityNote = document.createElement("div");
+    qualityNote.textContent = "Upozornenie: zatiaľ ide o malú priebežnú vzorku. OPEN a UNRESOLVED sa nezapočítavajú do úspešnosti. Staré signály bez uloženého skóre zostávajú mimo porovnania. Úspešnosť nie je ROI ani dôkaz ziskovosti.";
+    qualityNote.style.cssText = "font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.45;";
+    systemStatsEl.appendChild(qualityNote);
+
     addText(systemStatsEl, "Posledný kompletný zber: " +
       (complete ? fmt(collectedAt) : "aktuálny snapshot nie je potvrdený"));
     addText(systemStatsEl, "Vek posledných dát: " + ageLabel + " | Dĺžka posledného behu: " + runDuration);
@@ -3038,11 +3096,19 @@
         titleColor: "#d6d3d1"
       });
     } else {
+      const signalQuality = calculateSignalQuality(
+        threat,
+        snapshot,
+        momentumReliability,
+        pressureAcceleration,
+        collectedAt
+      );
       const signal = makeSignal(
         match,
         threat,
         snapshot,
-        collectedAt
+        collectedAt,
+        signalQuality
       );
 
       if (signal) {
