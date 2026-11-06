@@ -10,72 +10,60 @@ jobs:
   diagnostic:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe current LIVE tracker and extract data routes
+      - name: Probe tracker API hosts and vendor MQTT implementation
         run: |
           mkdir -p diagnostic
           node <<'NODE'
-          const fs = require('fs');
-          const mainUrl = 'https://widgets-v2.thesports01.com/assets/index.021b287c.js';
-          const repoData = 'https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./main/data/live-current.json';
-          const report = { checked_at: new Date().toISOString(), fixtures: [], probes: {}, bundle: {} };
-          const get = async (url, accept='*/*') => {
-            const r = await fetch(url, {headers:{accept, 'user-agent':'Mozilla/5.0 LIVE-EDGE-DIAGNOSTIC'}});
-            const body = await r.text(); let json=null; try { json=JSON.parse(body); } catch {}
-            return {status:r.status, content_type:r.headers.get('content-type'), body:json ?? body, text:body};
+          const fs=require('fs');
+          const base='https://widgets-v2.thesports01.com';
+          const repoData='https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./main/data/live-current.json';
+          const report={checked_at:new Date().toISOString(),fixtures:[],host_probes:[],bundle:{}};
+          const get=async(url,accept='*/*')=>{
+            try{const r=await fetch(url,{headers:{accept,'user-agent':'Mozilla/5.0 LIVE-EDGE-DIAGNOSTIC'}});
+            const body=await r.text();return {url,status:r.status,type:r.headers.get('content-type'),text:body};}
+            catch(e){return {url,error:String(e)};}
           };
           (async()=>{
-            const live = await get(repoData, 'application/json');
-            if (live.status===200 && live.body?.records) report.fixtures = live.body.records.filter(x=>x.match?.status==='live').map(x=>({
-              home:x.match.home, away:x.match.away, minute:x.match.live_minute,
-              slug:(x.match.url||'').split('/').filter(Boolean).pop(), tracker:x.match.tracker
+            const live=await get(repoData,'application/json');let data=null;try{data=JSON.parse(live.text)}catch{}
+            report.fixtures=(data?.records||[]).filter(x=>x.match?.status==='live').slice(0,8).map(x=>({
+              home:x.match.home,away:x.match.away,minute:x.match.live_minute,id:x.match.tracker?.id||x.match.url?.split('/').filter(Boolean).pop()
             }));
-            for (const fx of report.fixtures.slice(0,8)) {
-              const id=fx.tracker?.id || fx.slug;
-              const urls = {
-                tracker_widget:'https://sportscore.com/api/widget/tracker/?sport=football&id='+encodeURIComponent(id),
-                tracker_api:'https://api.thesports01.com/api/widget/tracker/?sport=football&id='+encodeURIComponent(id),
-                match_api:'https://api.thesports01.com/en/match/'+encodeURIComponent(id),
-                match_api2:'https://api.thesports01.com/en/match-'+encodeURIComponent(id)
-              };
-              const key=fx.home+' vs '+fx.away; report.probes[key]={fixture:fx,results:{}};
-              for (const [name,url] of Object.entries(urls)) {
-                try {
-                  const x=await get(url);
-                  report.probes[key].results[name]={url,status:x.status,content_type:x.content_type,body:x.text.slice(0,12000)};
-                  if(name==='tracker_widget' && x.status===200) {
-                    const m=x.text.match(/iframe[^>]+src=["']([^"']+)/i);
-                    if(m) {
-                      const iframe=new URL(m[1].replace(/&amp;/g,'&'),url).href;
-                      const page=await get(iframe,'text/html');
-                      report.probes[key].results.tracker_iframe={url:iframe,status:page.status,body:page.text.slice(0,5000)};
-                    }
-                  }
-                } catch(e) { report.probes[key].results[name]={url,error:String(e)}; }
+            for(const fx of report.fixtures){
+              const widget=await get('https://sportscore.com/api/widget/tracker/?sport=football&id='+fx.id);
+              const iframe=widget.text.match(/iframe[^>]+src=["']([^"']+)/i);
+              const page=iframe?await get(new URL(iframe[1].replace(/&amp;/g,'&'),widget.url).href,'text/html'):null;
+              const urls=[...((page?.text||'').matchAll(/(?:src|href)=["']([^"']+\.(?:js|json)(?:\?[^"']*)?)["']/gi))].map(m=>new URL(m[1],page.url).href);
+              report.host_probes.push({fixture:fx,widget_status:widget.status,iframe_status:page?.status,assets:urls});
+            }
+            const assets=[base+'/assets/index.021b287c.js',base+'/assets/vendor.df73b544.js'];
+            for(const u of assets){
+              const x=await get(u,'application/javascript');const key=u.includes('vendor.')?'vendor':'main';
+              fs.writeFileSync('diagnostic/'+key+'.js',x.text);
+              const s=x.text,terms=['live-widgets-api.leisu.com','api.live-widgets.com','live-widgets-mq.leisu.com','mq.live-widgets.com','api.thesports01.com','MQTT_API','HTTP_API','mqtt.connect','WebSocket','subscribe(','subscribeId','corner'];
+              const contexts={};
+              for(const term of terms){let p=0,a=[];while((p=s.toLowerCase().indexOf(term.toLowerCase(),p))>=0&&a.length<25){a.push(s.slice(Math.max(0,p-500),Math.min(s.length,p+1200)));p+=term.length;}contexts[term]=a;}
+              const strings=[...new Set((s.match(/["'`][^"'`]{2,180}["'`]/g)||[]).map(v=>v.slice(1,-1)).filter(v=>/https?:|\/api|mqtt|socket|subscribe|tracker|match|live|corner|stat/i.test(v)))].slice(0,1000);
+              report.bundle[key]={url:u,status:x.status,bytes:s.length,contexts,strings};
+            }
+            const apiHosts=['https://live-widgets-api.leisu.com','https://api.live-widgets.com','https://api.thesports01.com','https://live-widgets-mq.leisu.com','https://mq.live-widgets.com'];
+            for(const host of apiHosts){
+              for(const path of ['/','/api','/api/v1','/api/widget','/health','/healthz']){
+                const x=await get(host+path,'application/json');
+                report.host_probes.push({host,path,status:x.status,type:x.type,preview:x.text.slice(0,1200)});
               }
             }
-            const b=await get(mainUrl,'application/javascript'); const src=b.text;
-            report.bundle={url:mainUrl,status:b.status,bytes:src.length};
-            fs.writeFileSync('diagnostic/tracker-main.js',src);
-            const terms=['.subscribe(', 'subscribe(', 'mqttInstance', 'MQTT_API', 'HTTP_API', 'connect(', 'subscribeId', 'matchDetailData', 'homeScores', 'FBT_CORNER_KICK'];
-            report.bundle.contexts={};
-            for(const term of terms) {
-              let pos=0,arr=[];
-              while((pos=src.indexOf(term,pos))!==-1 && arr.length<35) {
-                arr.push(src.slice(Math.max(0,pos-450),Math.min(src.length,pos+900))); pos+=term.length;
-              }
-              report.bundle.contexts[term]=arr;
-            }
-            report.bundle.routes=[...new Set((src.match(/["'`](?:\/[^"'` ]{2,}|https?:\/\/[^"'` ]+)["'`]/g)||[]).map(x=>x.slice(1,-1)).filter(x=>/api|match|tracker|live|event|stat|score|config|profile/i.test(x)))].slice(0,500);
             fs.writeFileSync('diagnostic/report.json',JSON.stringify(report,null,2));
-            const summary=['# LIVE corners diagnostic','', 'LIVE fixtures probed: '+report.fixtures.length,
-              ...Object.entries(report.probes).map(([n,v])=>'- '+n+': '+Object.entries(v.results).map(([k,r])=>k+'='+(r.status??'ERR')).join(', ')),
-              '', 'Bundle HTTP '+b.status+', '+src.length+' bytes. MQTT/HTTP route contexts saved in artifact.'].join('\n');
-            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,summary+'\n'); console.log(summary);
+            const lines=['# Tracker HTTP/MQTT diagnostic','LIVE fixtures: '+report.fixtures.length,
+              ...report.host_probes.filter(x=>x.host).map(x=>x.host+x.path+' => '+(x.status??x.error)),
+              'Main bundle: '+report.bundle.main?.status+' ('+report.bundle.main?.bytes+')',
+              'Vendor bundle: '+report.bundle.vendor?.status+' ('+report.bundle.vendor?.bytes+')',
+              'Full contexts and strings are in artifact.'];
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,lines.join('\n')+'\n');console.log(lines.join('\n'));
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-      - name: Upload diagnostic bundle and report
+      - name: Upload tracker source and report
         uses: actions/upload-artifact@v4
         with:
-          name: sportscore-live-corners-diagnostic
+          name: sportscore-tracker-source-diagnostic
           path: diagnostic/
           if-no-files-found: error
