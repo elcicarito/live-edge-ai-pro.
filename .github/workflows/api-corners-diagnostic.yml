@@ -46,7 +46,8 @@ jobs:
                 const response = await fetch(iframeUrl, { headers: { accept: 'text/html,application/xhtml+xml' } });
                 const html = await response.text();
                 report.tracker_iframe = { url: iframeUrl, status: response.status, content_type: response.headers.get('content-type'), body: html.slice(0, 50000) };
-                const scriptUrls = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m => new URL(m[1], iframeUrl).href).slice(0, 15);
+                const assetRefs = [...html.matchAll(/<(?:script|link)[^>]+(?:src|href)=["']([^"']+\.js[^"']*)["']/gi)].map(m => new URL(m[1], iframeUrl).href);
+              const scriptUrls = [...new Set(assetRefs)].slice(0, 20);
                 report.tracker_scripts = [];
                 for (const scriptUrl of scriptUrls) {
                   try {
@@ -81,13 +82,20 @@ jobs:
               }
             }
             for (const [name, result] of Object.entries(report)) scan(result.body, name);
+            const scriptFindings = (report.tracker_scripts || []).flatMap(s => [
+              ...(s.corner_hits || []).map(hit => ' - **' + s.url + '** corner: `' + hit.slice(0, 500) + '`'),
+              ...(s.api_refs || []).map(hit => ' - **' + s.url + '** API ref: `' + hit.slice(0, 300) + '`')
+            ]);
             const summary = [
               '# SportScore API – diagnostika rohov',
               '',
               ...Object.entries(report).map(([name, result]) => '- **' + name + '**: HTTP ' + (result.status ?? 'ERROR') + (result.error ? ' – ' + result.error : '')),
               '',
               '## Nájdené polia súvisiace s rohmi',
-              ...(matches.length ? matches.map(x => '- `' + x + '`') : ['- Nenašli sa žiadne polia s názvom obsahujúcim corner/corners/corner kick.']),
+              ...(matches.length ? matches.map(x => '- `' + x + '`') : ['- Nenašli sa žiadne polia s názvom obsahujúcim corner/corners/corner kick v JSON odpovediach.']),
+              '',
+              '## Nálezy v JavaScript bundle',
+              ...(scriptFindings.length ? scriptFindings : ['- Bez zachytených corner výrazov alebo API referencií.']),
               '',
               'Kompletné odpovede sú uložené aj v artefakte `sportscore-api-diagnostic`.'
             ].join('\\n');
