@@ -340,7 +340,7 @@ fs.writeFileSync(path.join(OUT, "live-edge-temporal-match-coverage.csv"), csv);
 const goalAuditCols = Object.keys(goalEventAuditRows[0] || { match_id: "", event_minute_parsed: "" });
 const goalAuditCsv = [goalAuditCols.join(","), ...goalEventAuditRows.map(r =>
   goalAuditCols.map(k => '"' + String(r[k] ?? "").replace(/"/g,'""') + '"').join(",")
-)].join("\\n") + "\\n";
+)].join("\n") + "\n";
 fs.writeFileSync(path.join(OUT, "live-edge-goal-event-timing-audit.csv"), goalAuditCsv);
 
 // Sample-level, feature-enriched dataset for offline analysis only.
