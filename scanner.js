@@ -938,7 +938,7 @@
     const id = matchId(match);
     if (!id) {
       addText(target, "Graf momenta čaká na identifikátor zápasu.");
-      return;
+      return { count: 0, span: 0, label: "bez vzorky" };
     }
 
     const now = Date.parse(collectedAt || "");
@@ -995,7 +995,7 @@
 
     if (visible.length < 2) {
       addText(target, "Na graf potrebujeme aspoň dve platné historické merania. Zber pokračuje každých približne 5 minút.", "11px");
-      return;
+      return { count: visible.length, span: 0, label: "nedostatok meraní" };
     }
 
     const svgNS = "http://www.w3.org/2000/svg";
@@ -1050,12 +1050,114 @@
     target.appendChild(legend);
 
     const latest = visible[visible.length - 1];
+    const first = visible[0];
     const previous = visible[visible.length - 2];
     const delta = (latest.home - latest.away) - (previous.home - previous.away);
-    const trend = delta >= 5 ? "Rozdiel momenta rastie v prospech domácich."
-      : delta <= -5 ? "Rozdiel momenta rastie v prospech hostí."
-      : "Momentum je oproti predchádzajúcemu meraniu približne stabilné.";
-    addText(target, trend + " Zmena je informatívna a sama osebe nevytvára signál.", "11px");
+    const homeDelta = latest.home - first.home;
+    const awayDelta = latest.away - first.away;
+    const label = delta >= 5 ? "rozdiel sa posúva k domácim."
+      : delta <= -5 ? "rozdiel sa posúva k hosťom."
+      : "približne stabilný oproti predchádzajúcemu meraniu.";
+    addText(target, "Zmena oproti predchádzajúcemu meraniu: " +
+      (delta > 0 ? "+" : "") + delta + " bodov v rozdiele momenta. " +
+      "Celková zmena za zobrazené obdobie: domáci " +
+      (homeDelta > 0 ? "+" : "") + homeDelta + ", hostia " +
+      (awayDelta > 0 ? "+" : "") + awayDelta + " bodov. " +
+      "Tento trend sám osebe nevytvára signál.", "11px");
+    return {
+      count: visible.length,
+      span: Math.max(0, (maxTime - minTime) / 60000),
+      label
+    };
+  }
+
+  function renderMomentumOverview(target, pressure, snapshot, threat, trend, reliability) {
+    const panel = document.createElement("div");
+    panel.style.cssText = "margin:12px 0;padding:12px;background:#0c1929;border:1px solid #344b65;border-radius:10px;";
+    const heading = document.createElement("div");
+    heading.textContent = "PREHĽAD TLAKU A MOMENTA";
+    heading.style.cssText = "font-size:12px;font-weight:900;letter-spacing:.5px;color:#e2e8f0;margin-bottom:10px;";
+    panel.appendChild(heading);
+
+    const addMetric = (label, homeValue, awayValue, suffix, maxValue, homeColor, awayColor) => {
+      const row = document.createElement("div");
+      row.style.cssText = "margin:10px 0;";
+      const title = document.createElement("div");
+      title.style.cssText = "display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#cbd5e1;margin-bottom:5px;";
+      const left = document.createElement("strong");
+      left.textContent = "Domáci " + homeValue + suffix;
+      left.style.color = homeColor;
+      const middle = document.createElement("span");
+      middle.textContent = label;
+      middle.style.textAlign = "center";
+      const right = document.createElement("strong");
+      right.textContent = "Hostia " + awayValue + suffix;
+      right.style.color = awayColor;
+      title.append(left, middle, right);
+      row.appendChild(title);
+      const track = document.createElement("div");
+      track.style.cssText = "display:flex;width:100%;height:9px;overflow:hidden;background:#26384d;border-radius:8px;";
+      const total = Math.max(0, Number(homeValue)) + Math.max(0, Number(awayValue));
+      const homeWidth = total > 0 ? Math.max(0, Math.min(100, Number(homeValue) / total * 100)) : 50;
+      const homeBar = document.createElement("div");
+      homeBar.style.cssText = "height:100%;width:" + homeWidth + "%;background:" + homeColor + ";";
+      const awayBar = document.createElement("div");
+      awayBar.style.cssText = "height:100%;flex:1;background:" + awayColor + ";";
+      track.append(homeBar, awayBar);
+      row.appendChild(track);
+      panel.appendChild(row);
+    };
+
+    if (pressure) {
+      addMetric("Aktuálny tlak (podiel)", pressure.home, pressure.away, "/100", 100, "#22c55e", "#94a3b8");
+      const diff = pressure.home - pressure.away;
+      const diffText = diff === 0 ? "Tlak je vyrovnaný."
+        : "Rozdiel " + Math.abs(diff) + " bodov v prospech " + (diff > 0 ? "domácich." : "hostí.");
+      const note = document.createElement("div");
+      note.textContent = diffText + " Index vyjadruje relatívny podiel dostupných štatistík, nie pravdepodobnosť gólu.";
+      note.style.cssText = "font-size:11px;line-height:1.45;color:#cbd5e1;margin-top:6px;";
+      panel.appendChild(note);
+    } else {
+      addText(panel, "Aktuálny tlak nemožno vypočítať – chýbajú štatistiky.");
+    }
+
+    if (snapshot?.ready) {
+      addMetric("Aktivita / 10 min", snapshot.homeActivityRate.toFixed(1), snapshot.awayActivityRate.toFixed(1), "", 100, "#22c55e", "#94a3b8");
+      const note = document.createElement("div");
+      note.textContent = "Aktivita je vážený index z nových striel na bránu a nebezpečných útokov za 10 minút; nejde o samotný počet striel.";
+      note.style.cssText = "font-size:11px;line-height:1.45;color:#94a3b8;margin-top:5px;";
+      panel.appendChild(note);
+    } else {
+      addText(panel, "Aktivita za 10 min: čaká sa na dve platné merania.");
+    }
+
+    if (threat) {
+      addMetric("Goal threat", threat.home, threat.away, "/100", 100, "#22c55e", "#94a3b8");
+    } else {
+      addText(panel, "Goal threat sa zatiaľ nedá spoľahlivo vypočítať.");
+    }
+
+    const trendText = document.createElement("div");
+    trendText.style.cssText = "margin-top:10px;padding-top:9px;border-top:1px solid #293d55;font-size:12px;line-height:1.5;color:#e2e8f0;";
+    if (trend && trend.count >= 2) {
+      trendText.textContent = "TREND: " + trend.label + " Vzorka grafu: " + trend.count + " meraní za " + trend.span.toFixed(0) + " min.";
+    } else {
+      trendText.textContent = "TREND: zatiaľ bez dostatočnej historickej vzorky.";
+    }
+    panel.appendChild(trendText);
+
+    const quality = document.createElement("div");
+    quality.style.cssText = "font-size:11px;color:#94a3b8;margin-top:6px;";
+    quality.textContent = reliability
+      ? "Kvalita zberu: " + reliability.label + " · " + reliability.count + " meraní · úplnosť momentum dát " + reliability.momentumCoverage + "%."
+      : "Kvalita zberu: čaká sa na historické merania.";
+    panel.appendChild(quality);
+
+    const disclaimer = document.createElement("div");
+    disclaimer.textContent = "Informačný prehľad, nie samostatný predikčný ani stávkový signál.";
+    disclaimer.style.cssText = "font-size:10px;color:#94a3b8;margin-top:7px;";
+    panel.appendChild(disclaimer);
+    target.appendChild(panel);
   }
 
   function makeSignal(match, threat, snapshot, collectedAt) {
@@ -2062,7 +2164,9 @@
         "15px"
       );
     }
-    renderMomentumTrend(momentumSection, match, historyData, collectedAt, threat);
+    const momentumTrend = renderMomentumTrend(momentumSection, match, historyData, collectedAt, threat);
+    const momentumReliability = getMatchReliability(match, historyData, collectedAt);
+    renderMomentumOverview(momentumSection, pressure, snapshot, threat, momentumTrend, momentumReliability);
 
     if (!allowSignals) {
       addSignalPanel(signalSection, {
