@@ -181,58 +181,37 @@
     const note=document.createElement("div");note.textContent="Zápasov v lige: "+total+" · Kompletné "+periodText+": "+pct+"%. Mužské NCAA sa vyhodnocuje ako dva polčasy; neexistujúce Q3/Q4 sa nepovažujú za chýbajúce údaje.";
     note.style.cssText="font-size:11px;color:#9baabe;margin-top:9px;line-height:1.45";panel.appendChild(note);(target||archiveList).appendChild(panel);
   }
-  function renderArchiveStats(matches, target = archiveList, titleText = "📊 ŠTATISTIKY ŠTVRTÍ V ARCHÍVE", panelId = "basketball-quarter-stats") {
-    const existing = panelId ? document.getElementById(panelId) : null;
-    if (existing) existing.remove();
-    const stats = [0,1,2,3].map(q => {
-      const totals = matches.map(match => {
-        const home = periodValues(match, "home")[q];
-        const away = periodValues(match, "away")[q];
-        if (home === undefined || away === undefined || home === null || away === null || home === "–" || away === "–") return null;
-        const h = Number(home), a = Number(away);
-        const total = h + a;
-        // SportScore can return 0/0 placeholders for quarters that have not actually been played.
-        return Number.isFinite(h) && Number.isFinite(a) && total > 0 ? total : null;
-      }).filter(value => value !== null);
-      return { quarter: q + 1, count: totals.length, average: totals.length ? totals.reduce((sum, value) => sum + value, 0) / totals.length : null };
+  function renderArchiveStats(matches,target=archiveList,titleText="📊 ŠTATISTIKY OBDOBÍ V ARCHÍVE",panelId="basketball-quarter-stats"){
+    const existing=panelId?document.getElementById(panelId):null;if(existing)existing.remove();
+    const halves=matches.length>0&&matches.every(match=>formatOf(match)==="halves"),nPeriods=halves?2:4;
+    const stats=Array.from({length:nPeriods},(_,q)=>{
+      const totals=matches.map(match=>{
+        if(q>=periodCount(match))return null;
+        const home=periodValues(match,"home")[q],away=periodValues(match,"away")[q];
+        if(home===undefined||away===undefined||home===null||away===null||home==="–"||away==="–")return null;
+        const h=Number(home),a=Number(away),total=h+a;
+        return Number.isFinite(h)&&Number.isFinite(a)&&total>0?total:null;
+      }).filter(v=>v!==null);
+      return {label:halves?"H"+(q+1):"Q"+(q+1),count:totals.length,average:totals.length?totals.reduce((sum,v)=>sum+v,0)/totals.length:null};
     });
-    const available = stats.filter(item => item.count > 0);
-    if (!available.length) return;
-    const best = available.reduce((top, item) => item.average > top.average ? item : top);
-    const panel = document.createElement("section");
-    if (panelId) panel.id = panelId;
-    panel.style.cssText = "background:#132238;border:1px solid #354d69;border-radius:12px;padding:14px;margin:12px 0 16px";
-    const title = document.createElement("div");
-    title.textContent = titleText;
-    title.style.cssText = "font-weight:800;font-size:13px;margin-bottom:10px;color:#e7f0fb";
-    panel.appendChild(title);
-    const grid = document.createElement("div");
-    grid.style.cssText = "display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px";
-    stats.forEach(item => {
-      const cell = document.createElement("div");
-      cell.style.cssText = "background:#0d1929;border-radius:8px;padding:9px 5px;text-align:center;min-width:0";
-      const q = document.createElement("div");
-      q.textContent = "Q" + item.quarter;
-      q.style.cssText = "font-size:12px;color:#a9bdd4;font-weight:700";
-      const avg = document.createElement("div");
-      avg.textContent = item.average === null ? "–" : item.average.toFixed(1);
-      avg.style.cssText = "font-size:18px;font-weight:800;margin:4px 0;color:#fff";
-      const n = document.createElement("div");
-      n.textContent = "n=" + item.count;
-      n.style.cssText = "font-size:10px;color:#9baabe";
-      cell.append(q, avg, n);
-      grid.appendChild(cell);
+    const available=stats.filter(x=>x.count>0);if(!available.length)return;
+    const best=available.reduce((top,item)=>item.average>top.average?item:top);
+    const panel=document.createElement("section");if(panelId)panel.id=panelId;
+    panel.style.cssText="background:#132238;border:1px solid #354d69;border-radius:12px;padding:14px;margin:12px 0 16px";
+    const title=document.createElement("div");title.textContent=titleText;title.style.cssText="font-weight:800;font-size:13px;margin-bottom:10px;color:#e7f0fb";panel.appendChild(title);
+    const grid=document.createElement("div");grid.style.cssText="display:grid;grid-template-columns:repeat("+nPeriods+",minmax(0,1fr));gap:7px";
+    stats.forEach(item=>{
+      const cell=document.createElement("div");cell.style.cssText="background:#0d1929;border-radius:8px;padding:9px 5px;text-align:center;min-width:0";
+      const q=document.createElement("div");q.textContent=item.label;q.style.cssText="font-size:12px;color:#a9bdd4;font-weight:700";
+      const avg=document.createElement("div");avg.textContent=item.average===null?"–":item.average.toFixed(1);avg.style.cssText="font-size:18px;font-weight:800;margin:4px 0;color:#fff";
+      const n=document.createElement("div");n.textContent="n="+item.count;n.style.cssText="font-size:10px;color:#9baabe";
+      cell.append(q,avg,n);grid.appendChild(cell);
     });
     panel.appendChild(grid);
-    const note = document.createElement("div");
-    note.textContent = "Priemer celkového počtu bodov oboch tímov v jednej štvrtine; n = počet zápasov s platným skóre danej štvrtiny. Nulové 0–0 zástupné hodnoty sa nezapočítavajú.";
-    note.style.cssText = "font-size:11px;color:#9baabe;margin-top:9px;line-height:1.4";
-    panel.appendChild(note);
-    const leader = document.createElement("div");
-    leader.textContent = "Najviac bodov v priemere: Q" + best.quarter + " (" + best.average.toFixed(1) + " bodu; n=" + best.count + ").";
-    leader.style.cssText = "font-size:12px;color:#39e6a5;font-weight:700;margin-top:7px";
-    panel.appendChild(leader);
-    target.appendChild(panel);
+    const note=document.createElement("div");note.textContent="Priemer celkového počtu bodov oboch tímov v jednom "+(halves?"polčase":"štvrtine")+"; n = počet zápasov s platným skóre. Mužské NCAA používa H1/H2, ženské NCAA zostáva v Q1–Q4.";
+    note.style.cssText="font-size:11px;color:#9baabe;margin-top:9px;line-height:1.4";panel.appendChild(note);
+    const leader=document.createElement("div");leader.textContent="Najviac bodov v priemere: "+best.label+" ("+best.average.toFixed(1)+" bodu; n="+best.count+").";
+    leader.style.cssText="font-size:12px;color:#39e6a5;font-weight:700;margin-top:7px";panel.appendChild(leader);target.appendChild(panel);
   }
   function render(data) {
     if (!data || data.sport !== "basketball") { meta.textContent="Basketbalové dáta zatiaľ nie sú dostupné."; list.textContent="Zatiaľ sa nepodarilo načítať prvý zber."; return; }
