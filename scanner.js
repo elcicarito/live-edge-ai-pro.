@@ -933,6 +933,131 @@
     };
   }
 
+  // Graf je iba vizualizácia historických meraní; nemení pravidlá ani spúšťanie signálov.
+  function renderMomentumTrend(target, match, historyData, collectedAt, currentThreat) {
+    const id = matchId(match);
+    if (!id) {
+      addText(target, "Graf momenta čaká na identifikátor zápasu.");
+      return;
+    }
+
+    const now = Date.parse(collectedAt || "");
+    const records = historyRecords(historyData, id)
+      .filter(item => Number.isFinite(item.time) && item.match?.stats)
+      .sort((a, b) => a.time - b.time);
+
+    if (Number.isFinite(now) && !records.some(item => Math.abs(item.time - now) < 1000)) {
+      records.push({ time: now, match });
+      records.sort((a, b) => a.time - b.time);
+    }
+
+    const unique = records.filter((item, index) =>
+      index === 0 || item.time !== records[index - 1].time
+    );
+    const points = [];
+
+    for (let i = 1; i < unique.length; i++) {
+      const previous = unique[i - 1];
+      const current = unique[i];
+      const minutes = (current.time - previous.time) / 60000;
+      if (minutes <= 0 || minutes > MAX_GAP_MINUTES) continue;
+
+      const oldStats = previous.match.stats || [];
+      const stats = current.match.stats || [];
+      const oldShots = statValue(oldStats, "shots on target");
+      const shots = statValue(stats, "shots on target");
+      const oldAttacks = statValue(oldStats, "dangerous attacks");
+      const attacks = statValue(stats, "dangerous attacks");
+      if (!oldShots || !shots || !oldAttacks || !attacks) continue;
+
+      if (shots.home < oldShots.home || shots.away < oldShots.away ||
+          attacks.home < oldAttacks.home || attacks.away < oldAttacks.away) continue;
+
+      const pressure = calculatePressure(stats);
+      if (!pressure) continue;
+      const homeRate = ((shots.home - oldShots.home) * 3 + attacks.home - oldAttacks.home) / minutes * 10;
+      const awayRate = ((shots.away - oldShots.away) * 3 + attacks.away - oldAttacks.away) / minutes * 10;
+      const score = {
+        home: Math.min(100, Math.round(pressure.home * 0.45 + Math.min(homeRate * 3, 40) * 0.55)),
+        away: Math.min(100, Math.round(pressure.away * 0.45 + Math.min(awayRate * 3, 40) * 0.55))
+      };
+      points.push({ time: current.time, ...score });
+    }
+
+    if (currentThreat && Number.isFinite(now) &&
+        (!points.length || points[points.length - 1].time !== now)) {
+      points.push({ time: now, home: currentThreat.home, away: currentThreat.away });
+    }
+
+    const cutoff = Number.isFinite(now) ? now - 45 * 60000 : -Infinity;
+    const visible = points.filter(point => point.time >= cutoff).slice(-10);
+    addText(target, "VÝVOJ MOMENTA · POSLEDNÝCH 45 MINÚT", "12px");
+
+    if (visible.length < 2) {
+      addText(target, "Na graf potrebujeme aspoň dve platné historické merania. Zber pokračuje každých približne 5 minút.", "11px");
+      return;
+    }
+
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 320 142");
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Vývoj momenta domácich a hostí");
+    svg.style.cssText = "display:block;max-width:100%;margin:4px 0;";
+    [25, 55, 85, 115].forEach(y => {
+      const line = document.createElementNS(svgNS, "line");
+      line.setAttribute("x1", "26"); line.setAttribute("x2", "310");
+      line.setAttribute("y1", String(y)); line.setAttribute("y2", String(y));
+      line.setAttribute("stroke", "#64748b"); line.setAttribute("opacity", ".25");
+      line.setAttribute("stroke-dasharray", "3 4"); svg.appendChild(line);
+    });
+
+    const minTime = visible[0].time;
+    const maxTime = visible[visible.length - 1].time;
+    const x = time => maxTime === minTime ? 26 : 26 + (time - minTime) / (maxTime - minTime) * 284;
+    const y = value => 115 - Math.max(0, Math.min(100, value)) * 0.9;
+    const drawLine = (key, color) => {
+      const polyline = document.createElementNS(svgNS, "polyline");
+      polyline.setAttribute("points", visible.map(point => x(point.time).toFixed(1) + "," + y(point[key]).toFixed(1)).join(" "));
+      polyline.setAttribute("fill", "none"); polyline.setAttribute("stroke", color);
+      polyline.setAttribute("stroke-width", "3"); polyline.setAttribute("stroke-linecap", "round");
+      polyline.setAttribute("stroke-linejoin", "round"); svg.appendChild(polyline);
+      visible.forEach(point => {
+        const dot = document.createElementNS(svgNS, "circle");
+        dot.setAttribute("cx", x(point.time).toFixed(1)); dot.setAttribute("cy", y(point[key]).toFixed(1));
+        dot.setAttribute("r", "2.5"); dot.setAttribute("fill", color); svg.appendChild(dot);
+      });
+    };
+    drawLine("home", "#22c55e");
+    drawLine("away", "#94a3b8");
+    const firstLabel = document.createElementNS(svgNS, "text");
+    firstLabel.setAttribute("x", "26"); firstLabel.setAttribute("y", "136");
+    firstLabel.setAttribute("fill", "#94a3b8"); firstLabel.setAttribute("font-size", "9");
+    firstLabel.textContent = new Date(minTime).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" });
+    svg.appendChild(firstLabel);
+    const lastLabel = document.createElementNS(svgNS, "text");
+    lastLabel.setAttribute("x", "310"); lastLabel.setAttribute("y", "136");
+    lastLabel.setAttribute("text-anchor", "end"); lastLabel.setAttribute("fill", "#94a3b8");
+    lastLabel.setAttribute("font-size", "9");
+    lastLabel.textContent = new Date(maxTime).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" });
+    svg.appendChild(lastLabel);
+    target.appendChild(svg);
+
+    const legend = document.createElement("div");
+    legend.style.cssText = "display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px;color:#cbd5e1;";
+    legend.textContent = "🟢 Domáci  ·  ⚪ Hostia";
+    target.appendChild(legend);
+
+    const latest = visible[visible.length - 1];
+    const previous = visible[visible.length - 2];
+    const delta = (latest.home - latest.away) - (previous.home - previous.away);
+    const trend = delta >= 5 ? "Rozdiel momenta rastie v prospech domácich."
+      : delta <= -5 ? "Rozdiel momenta rastie v prospech hostí."
+      : "Momentum je oproti predchádzajúcemu meraniu približne stabilné.";
+    addText(target, trend + " Zmena je informatívna a sama osebe nevytvára signál.", "11px");
+  }
+
   function makeSignal(match, threat, snapshot, collectedAt) {
     const minute = Number(match.live_minute);
 
@@ -1937,6 +2062,7 @@
         "15px"
       );
     }
+    renderMomentumTrend(momentumSection, match, historyData, collectedAt, threat);
 
     if (!allowSignals) {
       addSignalPanel(signalSection, {
