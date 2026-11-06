@@ -37,6 +37,9 @@ jobs:
           const LATEST_PATH = "data/live-latest.json";
           const HISTORY_PATH = "data/live-history.jsonl";
           const HISTORY_JSON_PATH = "data/live-history.json";
+          const MATCH_TIMELINE_PATH = "data/live-match-timeline.json";
+          const HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+          const HISTORY_FRONTEND_LIMIT = 288;
           const SIGNAL_ARCHIVE_PATH = "data/signal-archive.json";
           const BTTS_ARCHIVE_PATH = "data/btts-signal-archive.json";
 
@@ -885,15 +888,13 @@ jobs:
             // HISTÓRIA
             // =========================================
 
-            fs.appendFileSync(
-              HISTORY_PATH,
-              JSON.stringify(output) + "\n"
-            );
-
+            // Uchovaj surovú históriu posledných 7 dní podľa času merania.
+            // Frontendový pracovný buffer ostáva na 288 záznamoch (približne 24 h),
+            // aby sa zbytočne nezväčšovalo každé načítanie skenera.
+            const historyCutoff = Date.now() - HISTORY_RETENTION_MS;
             const history = fs.readFileSync(HISTORY_PATH, "utf8")
               .split("\n")
               .filter(Boolean)
-              .slice(-288)
               .map(line => {
                 try {
                   return JSON.parse(line);
@@ -901,11 +902,127 @@ jobs:
                   return null;
                 }
               })
-              .filter(Boolean);
+              .filter(batch => {
+                if (!batch) return false;
+                const stamp = Date.parse(batch.collected_at || "");
+                return Number.isFinite(stamp) && stamp >= historyCutoff && stamp <= Date.now() + 5 * 60 * 1000;
+              });
+
+            history.push(output);
+            history.sort((a, b) =>
+              Date.parse(a.collected_at || "") - Date.parse(b.collected_at || "")
+            );
+
+            fs.writeFileSync(
+              HISTORY_PATH,
+              history.map(batch => JSON.stringify(batch)).join("\n") + "\n"
+            );
 
             fs.writeFileSync(
               HISTORY_JSON_PATH,
-              JSON.stringify(history)
+              JSON.stringify(history.slice(-HISTORY_FRONTEND_LIMIT))
+            );
+
+            // Samostatná kompaktná časová os každého zápasu za posledných 7 dní.
+            // Ukladá iba LIVE merania a štatistiky; nespúšťa ani nemení signály.
+            const timelineById = new Map();
+            const previousTimeline = readJson(MATCH_TIMELINE_PATH, {
+              schema_version: 1,
+              retention_days: 7,
+              updated_at: null,
+              matches: []
+            });
+
+            for (const item of Array.isArray(previousTimeline.matches) ? previousTimeline.matches : []) {
+              if (item?.id) timelineById.set(String(item.id), {
+                ...item,
+                snapshots: Array.isArray(item.snapshots)
+                  ? item.snapshots.filter(snapshot => {
+                      const stamp = Date.parse(snapshot.collected_at || "");
+                      return Number.isFinite(stamp) && stamp >= historyCutoff;
+                    })
+                  : []
+              });
+            }
+
+            for (const batch of history) {
+              if (!Array.isArray(batch.records)) continue;
+
+              for (const record of batch.records) {
+                const match = record?.match;
+                const id = getMatchId(record);
+                if (!match || !id || !isLive(match)) continue;
+
+                const collectedAt = record.collected_at || batch.collected_at || null;
+                const stamp = Date.parse(collectedAt || "");
+                if (!Number.isFinite(stamp) || stamp < historyCutoff) continue;
+
+                const stats = (Array.isArray(match.stats) ? match.stats : [])
+                  .filter(stat => stat && typeof stat.label === "string")
+                  .map(stat => ({
+                    label: stat.label,
+                    home: Number.isFinite(Number(stat.home)) ? Number(stat.home) : null,
+                    away: Number.isFinite(Number(stat.away)) ? Number(stat.away) : null,
+                    suffix: stat.suffix || ""
+                  }));
+
+                const item = timelineById.get(id) || {
+                  id,
+                  home: match.home || "",
+                  away: match.away || "",
+                  competition: match.competition || "",
+                  first_seen_at: collectedAt,
+                  last_seen_at: collectedAt,
+                  snapshots: []
+                };
+
+                item.home = match.home || item.home;
+                item.away = match.away || item.away;
+                item.competition = match.competition || item.competition;
+                item.first_seen_at = !item.first_seen_at || stamp < Date.parse(item.first_seen_at)
+                  ? collectedAt
+                  : item.first_seen_at;
+                item.last_seen_at = !item.last_seen_at || stamp > Date.parse(item.last_seen_at)
+                  ? collectedAt
+                  : item.last_seen_at;
+
+                const snapshot = {
+                  collected_at: collectedAt,
+                  minute: Number.isFinite(Number(match.live_minute)) ? Number(match.live_minute) : null,
+                  home_score: Number.isFinite(Number(match.home_score)) ? Number(match.home_score) : null,
+                  away_score: Number.isFinite(Number(match.away_score)) ? Number(match.away_score) : null,
+                  status: getStatus(match),
+                  collection_status: batch.data_status || "unknown",
+                  stats_count: stats.length,
+                  stats
+                };
+
+                const existingIndex = item.snapshots.findIndex(existing =>
+                  existing.collected_at === collectedAt
+                );
+                if (existingIndex >= 0) item.snapshots[existingIndex] = snapshot;
+                else item.snapshots.push(snapshot);
+
+                item.snapshots.sort((a, b) =>
+                  Date.parse(a.collected_at || "") - Date.parse(b.collected_at || "")
+                );
+                timelineById.set(id, item);
+              }
+            }
+
+            const matchTimeline = {
+              schema_version: 1,
+              retention_days: 7,
+              interval_minutes: 5,
+              updated_at: output.collected_at,
+              matches: [...timelineById.values()]
+                .filter(item => item.snapshots.length > 0)
+                .sort((a, b) => Date.parse(b.last_seen_at || 0) - Date.parse(a.last_seen_at || 0))
+            };
+
+            fs.writeFileSync(
+              MATCH_TIMELINE_PATH,
+              JSON.stringify(matchTimeline)
             );
 
             // =========================================
@@ -1438,7 +1555,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/live-current.json data/live-latest.json data/live-history.jsonl data/live-history.json data/live-archive.json data/signal-archive.json data/btts-signal-archive.json
+          git add data/live-current.json data/live-latest.json data/live-history.jsonl data/live-history.json data/live-match-timeline.json data/live-archive.json data/signal-archive.json data/btts-signal-archive.json
 
           if git diff --cached --quiet; then
             echo "Žiadne nové zmeny na uloženie."
