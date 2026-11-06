@@ -38,6 +38,30 @@ jobs:
                 report[name] = { url, error: String(error) };
               }
             }
+            const trackerHtml = String(report.widget_tracker?.body ?? '');
+            const iframeMatch = trackerHtml.match(/<iframe[^>]+src=["']([^"']+)/i);
+            if (iframeMatch) {
+              const iframeUrl = iframeMatch[1].replace(/&amp;/g, '&');
+              try {
+                const response = await fetch(iframeUrl, { headers: { accept: 'text/html,application/xhtml+xml' } });
+                const html = await response.text();
+                report.tracker_iframe = { url: iframeUrl, status: response.status, content_type: response.headers.get('content-type'), body: html.slice(0, 50000) };
+                const scriptUrls = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m => new URL(m[1], iframeUrl).href).slice(0, 15);
+                report.tracker_scripts = [];
+                for (const scriptUrl of scriptUrls) {
+                  try {
+                    const scriptResponse = await fetch(scriptUrl);
+                    const scriptBody = await scriptResponse.text();
+                    const hits = [...scriptBody.matchAll(/.{0,100}(?:corner|corners|corner.?kick).{0,180}/gi)].slice(0, 12).map(m => m[0]);
+                    report.tracker_scripts.push({ url: scriptUrl, status: scriptResponse.status, bytes: scriptBody.length, corner_hits: hits });
+                  } catch (error) {
+                    report.tracker_scripts.push({ url: scriptUrl, error: String(error) });
+                  }
+                }
+              } catch (error) {
+                report.tracker_iframe = { url: iframeUrl, error: String(error) };
+              }
+            }
             fs.writeFileSync('diagnostic/endpoints.json', JSON.stringify(report, null, 2));
             const matches = [];
             function scan(value, path, depth = 0) {
