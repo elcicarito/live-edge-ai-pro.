@@ -955,6 +955,81 @@
     };
   }
 
+  // Zrýchlenie tlaku porovnáva dve po sebe idúce platné intervalové merania.
+  // Je to diagnostika UI; nemení skóre GOAL THREAT ani pravidlá signálov.
+  function calculatePressureAcceleration(match, historyData, collectedAt) {
+    const id = matchId(match);
+    const now = Date.parse(collectedAt || "");
+    if (!id || !Number.isFinite(now)) {
+      return { ready: false, reason: "Chýba identifikátor zápasu alebo čas merania." };
+    }
+
+    const records = historyRecords(historyData, id)
+      .filter(item => Number.isFinite(item.time) && item.match?.stats)
+      .sort((a, b) => a.time - b.time);
+
+    if (!records.some(item => Math.abs(item.time - now) < 1000)) {
+      records.push({ time: now, match });
+      records.sort((a, b) => a.time - b.time);
+    }
+
+    const unique = records.filter((item, index) =>
+      index === 0 || item.time !== records[index - 1].time
+    );
+    if (unique.length < 3) {
+      return { ready: false, reason: "Potrebujeme aspoň tri merania na porovnanie dvoch intervalov." };
+    }
+
+    const intervals = [];
+    for (let i = 1; i < unique.length; i++) {
+      const previous = unique[i - 1];
+      const current = unique[i];
+      const minutes = (current.time - previous.time) / 60000;
+      if (!Number.isFinite(minutes) || minutes < MIN_GAP_MINUTES || minutes > MAX_GAP_MINUTES) continue;
+
+      const oldShots = statValue(previous.match.stats || [], "shots on target");
+      const shots = statValue(current.match.stats || [], "shots on target");
+      const oldAttacks = statValue(previous.match.stats || [], "dangerous attacks");
+      const attacks = statValue(current.match.stats || [], "dangerous attacks");
+      if (!oldShots || !shots || !oldAttacks || !attacks) continue;
+
+      if (shots.home < oldShots.home || shots.away < oldShots.away ||
+          attacks.home < oldAttacks.home || attacks.away < oldAttacks.away) continue;
+
+      intervals.push({
+        time: current.time,
+        minutes,
+        homeRate: ((shots.home - oldShots.home) * 3 + attacks.home - oldAttacks.home) / minutes * 10,
+        awayRate: ((shots.away - oldShots.away) * 3 + attacks.away - oldAttacks.away) / minutes * 10
+      });
+    }
+
+    if (intervals.length < 2) {
+      return { ready: false, reason: "Nie sú dostupné dva po sebe idúce platné intervaly bez resetu štatistík." };
+    }
+
+    const previous = intervals[intervals.length - 2];
+    const latest = intervals[intervals.length - 1];
+    const homeDelta = Number((latest.homeRate - previous.homeRate).toFixed(1));
+    const awayDelta = Number((latest.awayRate - previous.awayRate).toFixed(1));
+    const classify = delta => delta >= 2 ? "ZRÝCHĽUJE"
+      : delta <= -2 ? "SPOMAĽUJE" : "STABILNÉ";
+
+    return {
+      ready: true,
+      homePreviousRate: Number(previous.homeRate.toFixed(1)),
+      awayPreviousRate: Number(previous.awayRate.toFixed(1)),
+      homeLatestRate: Number(latest.homeRate.toFixed(1)),
+      awayLatestRate: Number(latest.awayRate.toFixed(1)),
+      homeDelta,
+      awayDelta,
+      homeState: classify(homeDelta),
+      awayState: classify(awayDelta),
+      previousMinutes: Number(previous.minutes.toFixed(1)),
+      latestMinutes: Number(latest.minutes.toFixed(1))
+    };
+  }
+
   // Graf je iba vizualizácia historických meraní; nemení pravidlá ani spúšťanie signálov.
   function renderMomentumTrend(target, match, historyData, collectedAt, currentThreat) {
     const id = matchId(match);
@@ -1100,7 +1175,7 @@
     };
   }
 
-  function renderMomentumOverview(target, pressure, snapshot, threat, trend, reliability) {
+  function renderMomentumOverview(target, pressure, snapshot, threat, trend, reliability, acceleration) {
     const panel = document.createElement("div");
     panel.style.cssText = "margin:12px 0;padding:12px;background:#0c1929;border:1px solid #344b65;border-radius:10px;";
     const heading = document.createElement("div");
@@ -1201,6 +1276,44 @@
       ? "Kvalita zberu: " + reliability.label + " · " + reliability.count + " meraní · úplnosť momentum dát " + reliability.momentumCoverage + "%."
       : "Kvalita zberu: čaká sa na historické merania.";
     panel.appendChild(quality);
+
+    const accelerationPanel = document.createElement("div");
+    accelerationPanel.style.cssText = "margin-top:10px;padding:10px;background:#142338;border:1px solid #293d55;border-radius:9px;";
+    const accelerationHeading = document.createElement("div");
+    accelerationHeading.textContent = "ZRÝCHLENIE / SPOMALENIE TLAKU";
+    accelerationHeading.style.cssText = "font-size:11px;font-weight:900;color:#e2e8f0;margin-bottom:6px;";
+    accelerationPanel.appendChild(accelerationHeading);
+
+    if (acceleration?.ready) {
+      const stateColor = state => state === "ZRÝCHĽUJE" ? "#39e6a5"
+        : state === "SPOMAĽUJE" ? "#fbbf24" : "#cbd5e1";
+      const accelerationText = document.createElement("div");
+      accelerationText.style.cssText = "font-size:11px;line-height:1.6;color:#cbd5e1;";
+      const homeLine = document.createElement("div");
+      homeLine.textContent = "Domáci: " + acceleration.homeState + " (" +
+        (acceleration.homeDelta > 0 ? "+" : "") + acceleration.homeDelta +
+        " · " + acceleration.homePreviousRate + " → " + acceleration.homeLatestRate + " / 10 min)";
+      homeLine.style.color = stateColor(acceleration.homeState);
+      const awayLine = document.createElement("div");
+      awayLine.textContent = "Hostia: " + acceleration.awayState + " (" +
+        (acceleration.awayDelta > 0 ? "+" : "") + acceleration.awayDelta +
+        " · " + acceleration.awayPreviousRate + " → " + acceleration.awayLatestRate + " / 10 min)";
+      awayLine.style.color = stateColor(acceleration.awayState);
+      accelerationText.append(homeLine, awayLine);
+      accelerationPanel.appendChild(accelerationText);
+      const intervalNote = document.createElement("div");
+      intervalNote.textContent = "Porovnanie dvoch posledných platných intervalov: " +
+        acceleration.previousMinutes + " a " + acceleration.latestMinutes +
+        " min. Zmena váženej aktivity, nie pravdepodobnosť gólu.";
+      intervalNote.style.cssText = "font-size:10px;color:#94a3b8;margin-top:5px;line-height:1.4;";
+      accelerationPanel.appendChild(intervalNote);
+    } else {
+      const waiting = document.createElement("div");
+      waiting.textContent = acceleration?.reason || "Zrýchlenie zatiaľ nemožno vypočítať.";
+      waiting.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.45;";
+      accelerationPanel.appendChild(waiting);
+    }
+    panel.appendChild(accelerationPanel);
 
     const disclaimer = document.createElement("div");
     disclaimer.textContent = "Informačný prehľad, nie samostatný predikčný ani stávkový signál.";
@@ -2812,7 +2925,8 @@
     }
     const momentumTrend = renderMomentumTrend(momentumSection, match, historyData, collectedAt, threat);
     const momentumReliability = getMatchReliability(match, historyData, collectedAt);
-    renderMomentumOverview(momentumSection, pressure, snapshot, threat, momentumTrend, momentumReliability);
+    const pressureAcceleration = calculatePressureAcceleration(match, historyData, collectedAt);
+    renderMomentumOverview(momentumSection, pressure, snapshot, threat, momentumTrend, momentumReliability, pressureAcceleration);
 
     if (!allowSignals) {
       addSignalPanel(signalSection, {
