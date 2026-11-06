@@ -373,6 +373,9 @@ jobs:
             if (/finished|ended|full.?time/.test(s)) return formatOf(m) === "halves" ? 3 : 5;
             return 0;
           };
+          const isHalftime = m => /half.?time|halftime|break/.test(
+            String(m.status_text || m.period?.name || m.period || m.status || "").toLowerCase()
+          );
           const archiveMatches = Array.isArray(archive.matches) ? archive.matches : [];
           const allNow = [...(Array.isArray(current.live_matches) ? current.live_matches : []), ...archiveMatches];
           const lookup = new Map(allNow.map(m => [keyOf(m), m]));
@@ -429,7 +432,7 @@ jobs:
           // New v4 model for men's NCAA: forecast the second half from the completed first half
           // plus the historical second-half average from the same competition only.
           for (const m of live) {
-            if (formatOf(m) !== "halves" || periodOf(m) !== 2 || !complete(m,1)) continue;
+            if (formatOf(m) !== "halves" || !isHalftime(m) || periodOf(m) !== 2 || !complete(m,1)) continue;
             const matchKey = keyOf(m);
             if (predictions.some(p => p.match_key === matchKey && p.model_version === 4 && p.target_half === 2)) continue;
             const league = leagueOf(m);
