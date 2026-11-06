@@ -1634,7 +1634,17 @@ jobs:
             echo "Žiadne nové zmeny na uloženie."
           else
             git commit -m "Update LIVE football data"
-            # Rebase onto main in case a code edit landed while this collection ran.
-            git pull --rebase origin main
-            git push
+            # The basketball collector may push to main at the same time.
+            # Retry fetch/rebase/push so fresh football data is not lost on a ref race.
+            for attempt in 1 2 3 4 5; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then
+                exit 0
+              fi
+              echo "Push conflict, retry ${attempt}/5"
+              sleep $((attempt * 2))
+            done
+            echo "Unable to push football data after five retries."
+            exit 1
           fi
