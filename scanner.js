@@ -518,7 +518,7 @@
 
       const homeText = String(item.home).trim();
       const awayText = String(item.away).trim();
-      const numericValue = value => /^\\d+(?:[.,]\\d+)?\\s*%?$/.test(value);
+      const numericValue = value => /^\d+(?:[.,]\d+)?\s*%?$/.test(value);
       const h = Number(homeText.replace("%", "").replace(",", "."));
       const a = Number(awayText.replace("%", "").replace(",", "."));
       if (numericValue(homeText) && numericValue(awayText) && Number.isFinite(h) && Number.isFinite(a) && h >= 0 && a >= 0 && h + a > 0) {
