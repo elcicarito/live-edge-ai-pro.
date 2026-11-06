@@ -111,8 +111,10 @@ for (const [id, x] of matches) {
   }
   snaps.sort((a,b) => String(a?.collected_at || "").localeCompare(String(b?.collected_at || "")));
   totalSnapshots += snaps.length;
+  const minuteSequence = snaps.map(s => parseMinute(s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute)).filter(m => m !== null);
+  const hasMinuteRegression = minuteSequence.some((m, i) => i > 0 && m < minuteSequence[i - 1]);
 
-  let previousMinute = null, nonMonotonic = false, eligible = 0, positives = 0, negatives = 0, ambiguous = 0;
+  let previousMinute = null, nonMonotonic = hasMinuteRegression, eligible = 0, positives = 0, negatives = 0, ambiguous = 0;
   let agreementCount = 0;
   for (const s of snaps) {
     const rawMinute = s?.minute ?? s?.live_minute ?? s?.raw_match?.live_minute ?? s?.match?.live_minute;
@@ -124,7 +126,7 @@ for (const [id, x] of matches) {
     previousMinute = minute;
     const score = scorePair(s);
     if (!score) snapshotScoreMissing++;
-    if (timelineComplete && score) {
+    if (timelineComplete && score && !nonMonotonic) {
       const goalsBefore = goalRecords.filter(g => g.minute < minute).length;
       const sameAtMinute = goalRecords.some(g => g.minute === minute);
       if (!sameAtMinute && score[0] + score[1] === goalsBefore) agreementCount++;
@@ -137,6 +139,7 @@ for (const [id, x] of matches) {
       bump(reasonCounts, !allGoalTimesValid ? "gólová udalosť bez čitateľnej minúty" : !goalCountAgrees ? "počet gólov v udalostiach nesúhlasí s konečným skóre" : "neúplná časová os");
       continue;
     }
+    if (nonMonotonic) { labelCounts.ambiguous++; ambiguous++; bump(reasonCounts, "minúty LIVE snímok nie sú monotónne"); continue; }
     if (!score) { labelCounts.ambiguous++; ambiguous++; bump(reasonCounts, "chýba skóre v LIVE snímke"); continue; }
     if (goalRecords.some(g => g.minute === minute)) {
       sameMinuteGoalAmbiguities++; labelCounts.ambiguous++; ambiguous++;
