@@ -272,10 +272,9 @@
     if (!performanceContent) return;
     performanceContent.replaceChildren();
     const matches = Array.isArray(archiveData?.matches) ? archiveData.matches : [];
-    const completeMatches = matches.filter(m => [0,1,2,3].every(q => {
-      const h = m?.period_scores?.home?.[q], a = m?.period_scores?.away?.[q];
-      return h !== null && h !== undefined && a !== null && a !== undefined &&
-        Number.isFinite(Number(h)) && Number.isFinite(Number(a)) && Number(h) + Number(a) > 0;
+    const completeMatches = matches.filter(m => Array.from({length:periodCount(m)},(_,i)=>i).every(q => {
+      const h=m?.period_scores?.home?.[q],a=m?.period_scores?.away?.[q];
+      return h!==null&&h!==undefined&&a!==null&&a!==undefined&&Number.isFinite(Number(h))&&Number.isFinite(Number(a))&&Number(h)+Number(a)>0;
     }));
     const leagueCounts = new Map();
     completeMatches.forEach(m => {
@@ -289,7 +288,7 @@
       Number(p.actual_total) >= Number(p.range_low) && Number(p.actual_total) <= Number(p.range_high)).length;
     const coverage = settled.length ? covered / settled.length * 100 : null;
     const metrics = [
-      ["Kompletné zápasy v archíve", completeMatches.length],
+      ["Kompletné zápasy podľa formátu", completeMatches.length],
       ["Ligy s min. 10 zápasmi", eligibleLeagues],
       ["Vyhodnotené predikcie", settled.length],
       ["Priemerná absolútna chyba", mae === null ? "—" : mae.toFixed(1) + " b."]
@@ -311,11 +310,11 @@
     coverageNote.style.cssText="font-size:12px;color:#d7e3f1;margin:8px 0";
     performanceContent.appendChild(coverageNote);
     const qTitle=document.createElement("div");
-    qTitle.textContent="PRESNOSŤ PODĽA ŠTVRTINY";
+    qTitle.textContent="PRESNOSŤ PODĽA OBDOBIA";
     qTitle.style.cssText="font-size:11px;font-weight:900;color:#39e6a5;margin:15px 0 7px";
     performanceContent.appendChild(qTitle);
     [1,2,3,4].forEach(q => {
-      const group=settled.filter(p=>Number(p.target_quarter)===q);
+      const group=settled.filter(p=>Number(p.target_quarter)===q && p.model_version===3);
       const qMae=group.length?group.reduce((sum,p)=>sum+Number(p.absolute_error),0)/group.length:null;
       const row=document.createElement("div");
       row.style.cssText="display:flex;justify-content:space-between;gap:10px;padding:8px 2px;border-bottom:1px solid #263b55;font-size:11px";
@@ -324,6 +323,11 @@
       right.style.color=group.length>=10?"#39e6a5":"#a9bdd4";
       row.append(left,right); performanceContent.appendChild(row);
     });
+    const halfGroup=settled.filter(p=>p.model_version===4&&Number(p.target_half)===2);
+    const halfRow=document.createElement("div");halfRow.style.cssText="display:flex;justify-content:space-between;gap:10px;padding:8px 2px;border-bottom:1px solid #263b55;font-size:11px";
+    const halfLabel=document.createElement("span");halfLabel.textContent="H2 · mužské NCAA";
+    const halfValue=document.createElement("strong");halfValue.textContent=halfGroup.length?(halfGroup.reduce((sum,p)=>sum+Number(p.absolute_error),0)/halfGroup.length).toFixed(1)+" b. · n="+halfGroup.length:"Čaká sa na výsledky";
+    halfValue.style.color=halfGroup.length>=10?"#39e6a5":"#a9bdd4";halfRow.append(halfLabel,halfValue);performanceContent.appendChild(halfRow);
     const leagueTitle=document.createElement("div");
     leagueTitle.textContent="HISTORICKÁ VZORKA PODĽA LÍG";
     leagueTitle.style.cssText="font-size:11px;font-weight:900;color:#39e6a5;margin:15px 0 7px";
@@ -376,7 +380,7 @@
         const card = document.createElement("div");
         card.style.cssText = "background:#0d1929;border:1px solid #354d69;border-radius:9px;padding:11px;margin:8px 0";
         const name = document.createElement("div");
-        name.textContent = (p.league || "Liga neznáma") + " · " + p.home + " – " + p.away + " · Q" + p.target_quarter;
+        name.textContent = (p.league || "Liga neznáma") + " · " + p.home + " – " + p.away + " · " + (p.model_version===4?"H"+p.target_half:"Q"+p.target_quarter);
         name.style.cssText = "font-size:12px;color:#a9bdd4;line-height:1.4";
         const value = document.createElement("div");
         value.textContent = p.predicted_total + " bodov";
@@ -399,7 +403,7 @@
           const row = document.createElement("div");
           row.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:8px 2px;border-bottom:1px solid #263b55;font-size:11px";
           const label = document.createElement("span");
-          label.textContent = p.home + " – " + p.away + " · Q" + p.target_quarter;
+          label.textContent = p.home + " – " + p.away + " · " + (p.model_version===4?"H"+p.target_half:"Q"+p.target_quarter);
           const result = document.createElement("strong");
           result.textContent = "Odhad " + p.predicted_total + " / skutočnosť " + p.actual_total + " · ±" + p.absolute_error;
           result.style.color = p.absolute_error <= 5 ? "#39e6a5" : "#f2c66d";
