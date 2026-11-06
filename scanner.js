@@ -1625,6 +1625,25 @@
     addText(target, "Prahy 1:0 sa môžu prekrývať: rovnaký zápas môže byť samostatne započítaný pri 8, 10 aj 12 strelách. Vzorky sa preto nesčítavajú.");
   }
 
+  function renderFootballPerformanceCenter(greenArchive, bttsArchive) {
+    const el = document.getElementById("football-model-performance-content");
+    if (!el) return;
+    const green = Array.isArray(greenArchive?.signals) ? greenArchive.signals : [];
+    const btts = Array.isArray(bttsArchive?.signals) ? bttsArchive.signals : [];
+    const stats = rows => { const w=rows.filter(x=>x.status==="WIN").length; const l=rows.filter(x=>x.status==="LOSS").length; const open=rows.filter(x=>x.status==="OPEN").length; const u=rows.filter(x=>x.status==="UNRESOLVED").length; const n=w+l; return {w,l,open,u,n,p:n?Math.round(w/n*100)+"%":"—"}; };
+    const g=stats(green), b=stats(btts);
+    const times=green.filter(x=>x.status==="WIN"&&Number.isFinite(Number(x.settledMinute))&&Number.isFinite(Number(x.startMinute))).map(x=>Number(x.settledMinute)-Number(x.startMinute)).filter(x=>x>=0&&x<=30);
+    const avg=times.length?(times.reduce((a,v)=>a+v,0)/times.length).toFixed(1)+" min":"—";
+    el.innerHTML="";
+    const grid=document.createElement("div"); grid.style.cssText="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;"; el.appendChild(grid);
+    const add=(label,value,detail)=>{const c=document.createElement("div");c.style.cssText="padding:11px;border:1px solid #344b65;border-radius:9px;background:#101b2b;";const v=document.createElement("div");v.textContent=value;v.style.cssText="font-size:20px;font-weight:900;color:#e2e8f0;";const l=document.createElement("div");l.textContent=label;l.style.cssText="font-size:10px;font-weight:800;color:#aebed0;margin-top:3px;";const d=document.createElement("div");d.textContent=detail;d.style.cssText="font-size:10px;color:#94a3b8;margin-top:4px;";c.append(v,l,d);grid.appendChild(c);};
+    add("ZELENÝ · ÚSPEŠNOSŤ",g.p,g.w+" WIN / "+g.l+" LOSS · N="+g.n);
+    add("ZELENÝ · PRIEM. ČAS DO GÓLU",avg,"Podľa prvého zachytenia gólu");
+    add("BTTS · ÚSPEŠNOSŤ",b.p,b.w+" WIN / "+b.l+" LOSS · N="+b.n);
+    add("CELKOM ULOŽENÉ SIGNÁLY",String(green.length+btts.length),"Zelené "+green.length+" · BTTS "+btts.length);
+    const note=document.createElement("p");note.textContent="Otvorené: zelené "+g.open+", BTTS "+b.open+" · Neoverené: zelené "+g.u+", BTTS "+b.u+". WIN rate počíta iba potvrdené WIN a LOSS. Čas do gólu je orientačný podľa prvého zachytenia v LIVE dátach.";note.style.cssText="font-size:10px;line-height:1.5;color:#aebed0;margin:9px 0;";el.appendChild(note);
+    const warning=document.createElement("p");warning.textContent="Vzorka pod 10 je veľmi malá; pod 30 iba orientačná. Rozbory podľa minúty, skóre, ligy a štatistík sa aktivujú po doplnení týchto údajov do archívu.";warning.style.cssText="font-size:10px;line-height:1.5;color:#fbbf24;";el.appendChild(warning);
+  }
   function renderSystemStats(current, signalArchive, matchArchive) {
     if (!systemStatsEl) return;
     systemStatsEl.innerHTML = "";
@@ -2537,6 +2556,8 @@
         else if (bttsSignalArchiveEl) { bttsSignalArchiveEl.innerHTML = ""; addText(bttsSignalArchiveEl, "Archív BTTS sa nepodarilo načítať."); }
         renderMatchArchive(matchArchive);
         renderSystemStats(current, signalArchive, matchArchive);
+      renderFootballPerformanceCenter(signalArchive, bttsArchive);
+        renderFootballPerformanceCenter(signalArchive, bttsArchive);
 
         signalEl.textContent =
           `ZASTARANÉ DÁTA – NIE LIVE | Posledný zber: ${current.collected_at || "neznámy čas"} | Signály zablokované`;
