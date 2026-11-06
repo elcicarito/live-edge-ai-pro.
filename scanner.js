@@ -1672,11 +1672,15 @@
     target.innerHTML = "";
 
     const matches = new Map();
-    const addMatch = (id, candidates) => {
+    const matchDetails = new Map();
+    const addMatch = (id, candidates, source) => {
       if (!id) id = "unknown_" + matches.size;
       const key = String(id);
       if (!matches.has(key)) matches.set(key, new Set());
       const labels = matches.get(key);
+      if (source && (!matchDetails.has(key) || source?.final_match || source?.match?.incidents || source?.incidents)) {
+        matchDetails.set(key, source);
+      }
       for (const stats of candidates) {
         if (!Array.isArray(stats)) continue;
         for (const item of stats) {
@@ -1736,14 +1740,14 @@
       const match = record?.match || {};
       const id = findCanonicalMatchId(match) ||
         (match.home && match.away ? [match.home, match.away, match.time || ""].join("_") : "");
-      addMatch(id, collectNestedStats(match));
+      addMatch(id, collectNestedStats(match), match);
     }
     for (const item of (Array.isArray(matchArchive?.archived_matches) ? matchArchive.archived_matches : [])) {
       const id = findCanonicalMatchId(item) || item?.id ||
         (item?.final_match?.home && item?.final_match?.away
           ? [item.final_match.home, item.final_match.away, item.final_match.time || ""].join("_")
           : "");
-      addMatch(id, collectNestedStats(item));
+      addMatch(id, collectNestedStats(item), item);
     }
     for (const item of (Array.isArray(permanentHistory) ? permanentHistory : [])) {
       const match = item?.final_match || item?.last_snapshot?.match || item?.match || {};
@@ -1767,6 +1771,50 @@
     const categories = [...categoryMap.entries()]
       .map(([label, ids]) => ({ label, matches: ids.size }))
       .sort((a, b) => b.matches - a.matches || a.label.localeCompare(b.label, "sk"));
+    // Doplnkové údaje z API: incidenty, polčasový stav a zostavy.
+    // Každý zápas sa započíta iba raz; preferuje sa finálny/archívny objekt.
+    const eventTotals = new Map();
+    const eventMatches = new Map();
+    let matchesWithIncidents = 0;
+    let matchesWithLineups = 0;
+    let matchesWithHalfTime = 0;
+    const walkObjects = (value, visit, depth = 0) => {
+      if (!value || typeof value !== "object" || depth > 7) return;
+      visit(value);
+      if (Array.isArray(value)) {
+        for (const child of value) walkObjects(child, visit, depth + 1);
+      } else {
+        for (const child of Object.values(value)) {
+          if (child && typeof child === "object") walkObjects(child, visit, depth + 1);
+        }
+      }
+    };
+    for (const [matchId, source] of matchDetails.entries()) {
+      const preferred = source?.final_match || source?.last_snapshot?.match || source?.match || source;
+      let incidents = null;
+      let hasLineups = false;
+      let hasHalfTime = false;
+      walkObjects(preferred, object => {
+        if (!incidents && Array.isArray(object.incidents)) incidents = object.incidents;
+        if (object.lineups && typeof object.lineups === "object") hasLineups = true;
+        for (const [key, value] of Object.entries(object)) {
+          if (/half.?time|half.?score|ht.?score/i.test(key) && value !== null && value !== undefined && value !== "") hasHalfTime = true;
+        }
+      });
+      if (incidents?.length) {
+        matchesWithIncidents++;
+        const seenTypes = new Set();
+        for (const event of incidents) {
+          const type = String(event?.type || event?.type_id || "Neznámy typ").trim();
+          eventTotals.set(type, (eventTotals.get(type) || 0) + 1);
+          seenTypes.add(type);
+        }
+        for (const type of seenTypes) eventMatches.set(type, (eventMatches.get(type) || 0) + 1);
+      }
+      if (hasLineups) matchesWithLineups++;
+      if (hasHalfTime) matchesWithHalfTime++;
+    }
+
     const totalMatches = matches.size;
     const avg = observedMatches ? (totalCategoryMatches / observedMatches).toFixed(1) : "—";
     const coverage = totalMatches ? Math.round(observedMatches / totalMatches * 100) : 0;
@@ -1814,7 +1862,48 @@
         target.appendChild(row);
       }
     }
-    addText(target, "Počítajú sa iba kategórie, ktoré API skutočne poslalo. Chýbajúca štatistika sa nepovažuje za nulu. Záznamy LIVE a archívne dáta sa môžu pri nejednoznačnom ID počítať samostatne.");
+    const extraHeading = document.createElement("div");
+    extraHeading.textContent = "DOPLNKOVÉ ÚDAJE Z API";
+    extraHeading.style.cssText = "font-size:12px;font-weight:900;margin:18px 0 8px;color:#dbeafe;";
+    target.appendChild(extraHeading);
+    const extraGrid = document.createElement("div");
+    extraGrid.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;";
+    target.appendChild(extraGrid);
+    const previousGrid = grid;
+    const addExtraCard = (label, value, detail) => {
+      const card = document.createElement("div");
+      card.style.cssText = "padding:11px;border:1px solid #35465e;border-radius:10px;background:#101b2b;min-width:0;";
+      const name = document.createElement("div"); name.textContent = label;
+      name.style.cssText = "font-size:10px;color:#9baabe;margin-bottom:5px;font-weight:800;";
+      const number = document.createElement("div"); number.textContent = String(value);
+      number.style.cssText = "font-size:19px;font-weight:900;color:#e2e8f0;overflow-wrap:anywhere;";
+      const note = document.createElement("div"); note.textContent = detail;
+      note.style.cssText = "font-size:10px;color:#94a3b8;margin-top:4px;";
+      card.append(name, number, note); extraGrid.appendChild(card);
+    };
+    addExtraCard("ZÁPASY S INCIDENTMI", matchesWithIncidents, "Z " + totalMatches + " unikátnych zápasov");
+    addExtraCard("ZÁPASY S POLOČASOVÝM STAVOM", matchesWithHalfTime, "Dostupné HT / half-time polia");
+    addExtraCard("ZÁPASY SO ZOSTAVAMI", matchesWithLineups, "Zostavy a náhradníci");
+    addExtraCard("TYPY INCIDENTOV", eventTotals.size, "Rôzne typy udalostí v API");
+    const eventHeading = document.createElement("div");
+    eventHeading.textContent = "INCIDENTY PODĽA TYPU · POČET UDALOSTÍ / ZÁPASOV";
+    eventHeading.style.cssText = "font-size:11px;font-weight:900;margin:14px 0 8px;color:#dbeafe;";
+    target.appendChild(eventHeading);
+    if (!eventTotals.size) addText(target, "Zatiaľ nie sú dostupné incidenty.");
+    else {
+      const eventRows = [...eventTotals.entries()].sort((a,b) => b[1]-a[1]);
+      for (const [type, count] of eventRows) {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;gap:12px;padding:7px 9px;border-bottom:1px solid #26384d;font-size:12px;";
+        const name = document.createElement("span"); name.textContent = type;
+        name.style.cssText = "color:#dbe5f0;overflow-wrap:anywhere;";
+        const value = document.createElement("strong");
+        value.textContent = count + " udal. / " + (eventMatches.get(type) || 0) + " záp.";
+        value.style.cssText = "color:#39e6a5;white-space:nowrap;";
+        row.append(name, value); target.appendChild(row);
+      }
+    }
+    addText(target, "Štatistiky, incidenty, HT údaje a zostavy sa počítajú iba z polí skutočne prítomných v API. Zápasy sa deduplikujú podľa ID; chýbajúce údaje sa nepovažujú za nulu. Počty incidentov sú udalosti v uloženom zápase, nie počet historických LIVE snapshotov.");
   }
 
   function renderSystemStats(current, signalArchive, matchArchive) {
