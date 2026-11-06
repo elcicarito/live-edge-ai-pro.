@@ -258,7 +258,6 @@ jobs:
                 const newScores = enriched.period_scores;
                 const home = [], away = [];
                 for (let q = 0; q < 4; q++) {
-                  if (q >= periodCount(match)) { home[q] = null; away[q] = null; continue; }
                   const oldH = Number(oldScores.home?.[q]), oldA = Number(oldScores.away?.[q]);
                   const oldValid = oldScores.home?.[q] !== null && oldScores.home?.[q] !== undefined &&
                     oldScores.away?.[q] !== null && oldScores.away?.[q] !== undefined &&
