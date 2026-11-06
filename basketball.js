@@ -94,14 +94,14 @@
     const score = match?.score || match?.scores || {};
     const sideScore = score?.[side] && typeof score[side] === "object" ? score[side] : {};
     const periods = match?.periods?.[side] || match?.period_scores?.[side] || match?.[side + "_period_scores"] || match?.[side + "_quarters"];
-    if (Array.isArray(periods)) return periods.map(v => v === null || v === undefined ? "–" : (typeof v === "object" ? (v.score ?? v.points ?? v.value ?? "–") : v));
+    if (Array.isArray(periods)) return periods.slice(0, periodCount(match)).map(v => v === null || v === undefined ? "–" : (typeof v === "object" ? (v.score ?? v.points ?? v.value ?? "–") : v));
     const keys = ["period1","period2","period3","period4","overtime1","overtime2","q1","q2","q3","q4","quarter1","quarter2","quarter3","quarter4"];
     const vals = keys.map(k => sideScore[k] ?? score?.[side + "_" + k] ?? match?.[side + "_" + k]);
     const firstFour = vals.slice(0,4);
     if (firstFour.some(v => v !== undefined && v !== null)) {
       const out = firstFour.map(v => v ?? "–");
       vals.slice(4).forEach(v => { if (v !== undefined && v !== null) out.push(v); });
-      return out;
+      return out.slice(0, periodCount(match));
     }
     return [];
   };
