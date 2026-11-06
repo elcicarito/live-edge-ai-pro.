@@ -1175,6 +1175,29 @@
     };
   }
 
+  // LIVE TEAM POWER je relatívny index aktuálnej prevahy, nie dlhodobá sila klubu ani pravdepodobnosť gólu.
+  // Chýbajúce komponenty sa vynechajú a váhy sa normalizujú.
+  function calculateTeamPower(pressure, snapshot, acceleration) {
+    if (!pressure) return { ready: false, reason: "Čakám na použiteľné štatistiky tlaku." };
+    const sides = {};
+    ["home", "away"].forEach(side => {
+      const components = [{ value: pressure[side], weight: 50 }];
+      if (snapshot?.ready && Number.isFinite(snapshot[side + "ActivityRate"])) {
+        components.push({ value: Math.max(0, Math.min(100, snapshot[side + "ActivityRate"] * 10)), weight: 35 });
+      }
+      if (acceleration?.ready && Number.isFinite(acceleration[side + "Delta"])) {
+        components.push({ value: Math.max(0, Math.min(100, 50 + acceleration[side + "Delta"] * 5)), weight: 15 });
+      }
+      const totalWeight = components.reduce((sum, item) => sum + item.weight, 0);
+      const score = Math.round(components.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight);
+      sides[side] = {
+        score,
+        label: score >= 70 ? "SILNÁ PREVAHA" : score >= 55 ? "MIERNA PREVAHA" : score >= 45 ? "VYROVNANÉ" : "SLABŠIA PREVAHA"
+      };
+    });
+    return { ready: true, sides };
+  }
+
   // Diagnostické skóre kvality príležitosti; nie je to pravdepodobnosť gólu.
   // Chýbajúce komponenty sa vynechajú a váhy sa prepočítajú iba z dostupných dát.
   function calculateSignalQuality(threat, snapshot, reliability, acceleration, collectedAt) {
@@ -1367,6 +1390,49 @@
       accelerationPanel.appendChild(waiting);
     }
     panel.appendChild(accelerationPanel);
+
+    const teamPower = calculateTeamPower(pressure, snapshot, acceleration);
+    const powerPanel = document.createElement("div");
+    powerPanel.style.cssText = "margin-top:10px;padding:11px;background:#142338;border:1px solid #38516e;border-radius:9px;";
+    const powerHeading = document.createElement("div");
+    powerHeading.textContent = "AI TEAM POWER INDEX · 0–100";
+    powerHeading.style.cssText = "font-size:11px;font-weight:900;color:#e2e8f0;margin-bottom:8px;";
+    powerPanel.appendChild(powerHeading);
+    if (teamPower.ready) {
+      ["home", "away"].forEach(side => {
+        const item = teamPower.sides[side];
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;gap:8px;margin:7px 0;font-size:11px;";
+        const name = document.createElement("strong");
+        name.textContent = side === "home" ? "DOMÁCI" : "HOSTIA";
+        name.style.color = "#cbd5e1";
+        const value = document.createElement("strong");
+        value.textContent = item.score + "/100 · " + item.label;
+        value.style.color = item.score >= 70 ? "#39e6a5" : item.score >= 55 ? "#fbbf24" : "#cbd5e1";
+        row.append(name, value);
+        powerPanel.appendChild(row);
+        const track = document.createElement("div");
+        track.style.cssText = "height:7px;background:#26384d;border-radius:8px;overflow:hidden;margin-bottom:7px;";
+        const fill = document.createElement("div");
+        fill.style.cssText = "height:100%;width:" + item.score + "%;background:" + (side === "home" ? "#39e6a5" : "#94a3b8") + ";border-radius:8px;";
+        track.appendChild(fill);
+        powerPanel.appendChild(track);
+      });
+      const powerMethod = document.createElement("div");
+      powerMethod.textContent = "Váhy: aktuálny tlak 50 %, aktivita 35 %, zrýchlenie 15 % (ak je dostupné). Chýbajúce zložky sa vynechajú a váhy sa prepočítajú.";
+      powerMethod.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.45;margin-top:5px;";
+      powerPanel.appendChild(powerMethod);
+    } else {
+      const waiting = document.createElement("div");
+      waiting.textContent = teamPower.reason;
+      waiting.style.cssText = "font-size:10px;color:#94a3b8;";
+      powerPanel.appendChild(waiting);
+    }
+    const powerWarning = document.createElement("div");
+    powerWarning.textContent = "Meria iba aktuálnu LIVE prevahu v tomto zápase. Nie je to dlhodobá kvalita tímu, pravdepodobnosť gólu ani stávkový signál.";
+    powerWarning.style.cssText = "font-size:10px;color:#94a3b8;line-height:1.4;margin-top:7px;";
+    powerPanel.appendChild(powerWarning);
+    panel.appendChild(powerPanel);
 
     const qualityScores = calculateSignalQuality(threat, snapshot, reliability, acceleration, collectedAt);
     const qualityPanel = document.createElement("div");
