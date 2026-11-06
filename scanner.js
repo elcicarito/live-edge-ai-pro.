@@ -2318,9 +2318,11 @@
       groups.get(name).push(item);
     });
 
-    const getPriority = item => getMatchPriority(
-      item.match, item.collectedAt, allowSignals, staleMode, signalArchive, bttsArchive
-    );
+    const priorityByItem = new Map(items.map(item => [
+      item,
+      getMatchPriority(item.match, item.collectedAt, allowSignals, staleMode, signalArchive, bttsArchive)
+    ]));
+    const getPriority = item => priorityByItem.get(item) || { rank: 0, score: 0 };
     const rankedGroups = [...groups.entries()].map(([league, leagueItems]) => {
       leagueItems.sort((a, b) => {
         const pa = getPriority(a);
