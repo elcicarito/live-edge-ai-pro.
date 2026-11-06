@@ -516,9 +516,12 @@
       values.append(home, label, away);
       row.appendChild(values);
 
-      const h = Number(String(item.home).replace(",", ".").replace(/[^0-9.+-]/g, ""));
-      const a = Number(String(item.away).replace(",", ".").replace(/[^0-9.+-]/g, ""));
-      if (Number.isFinite(h) && Number.isFinite(a) && h >= 0 && a >= 0 && h + a > 0) {
+      const homeText = String(item.home).trim();
+      const awayText = String(item.away).trim();
+      const numericValue = value => /^\\d+(?:[.,]\\d+)?\\s*%?$/.test(value);
+      const h = Number(homeText.replace("%", "").replace(",", "."));
+      const a = Number(awayText.replace("%", "").replace(",", "."));
+      if (numericValue(homeText) && numericValue(awayText) && Number.isFinite(h) && Number.isFinite(a) && h >= 0 && a >= 0 && h + a > 0) {
         const bar = document.createElement("div");
         bar.style.cssText = "display:flex;gap:3px;height:5px;margin-top:8px;overflow:hidden;border-radius:8px;background:#26384f;";
         const homeBar = document.createElement("div");
