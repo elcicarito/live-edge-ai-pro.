@@ -47,7 +47,20 @@ jobs:
                 const html = await response.text();
                 report.tracker_iframe = { url: iframeUrl, status: response.status, content_type: response.headers.get('content-type'), body: html.slice(0, 50000) };
                 const assetRefs = [...html.matchAll(/<(?:script|link)[^>]+(?:src|href)=["']([^"']+\.js[^"']*)["']/gi)].map(m => new URL(m[1], iframeUrl).href);
-              const scriptUrls = [...new Set(assetRefs)].slice(0, 20);
+                const mainScriptUrl = assetRefs.find(url => /\/assets\/index\.[^/]+\.js/.test(url));
+                let lazyChunkUrls = [];
+                if (mainScriptUrl) {
+                  try {
+                    const mainResponse = await fetch(mainScriptUrl);
+                    const mainBody = await mainResponse.text();
+                    lazyChunkUrls = [...mainBody.matchAll(/import\(["'](\.\/[^"']+\.js)["']\)/g)].map(m => new URL(m[1], mainScriptUrl).href);
+                    const assetChunkUrls = [...mainBody.matchAll(/["'](assets\/[^"' ]+\.js)["']/g)].map(m => new URL(m[1], iframeUrl).href);
+                    lazyChunkUrls.push(...assetChunkUrls);
+                  } catch (error) {
+                    report.lazy_chunk_error = String(error);
+                  }
+                }
+                const scriptUrls = [...new Set([...assetRefs, ...lazyChunkUrls])].slice(0, 60);
                 report.tracker_scripts = [];
                 for (const scriptUrl of scriptUrls) {
                   try {
