@@ -77,7 +77,7 @@
     const raw = textOf(match?.status_text, match?.period?.name, match?.period, match?.quarter, match?.period_name, match?.clock, match?.time_remaining);
     if (formatOf(match) !== "halves") return raw;
     if (/half.?time|halftime|break/i.test(raw)) return "Prestávka · polčas";
-    const m = raw.match(/([1-2])(?:st|nd)?\\s*(?:quarter|period|q)/i);
+    const m = raw.match(/([1-2])(?:st|nd)?\s*(?:quarter|period|q)/i);
     return m ? (Number(m[1]) === 1 ? "1. polčas" : "2. polčas") : raw;
   };
   const flagOf = league => {
