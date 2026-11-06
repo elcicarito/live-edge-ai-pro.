@@ -1666,6 +1666,120 @@
     const note=document.createElement("p");note.textContent="Otvorené: zelené "+g.open+", BTTS "+b.open+" · Neoverené: zelené "+g.u+", BTTS "+b.u+". WIN rate počíta iba potvrdené WIN a LOSS. Čas do gólu je orientačný podľa prvého zachytenia v LIVE dátach.";note.style.cssText="font-size:10px;line-height:1.5;color:#aebed0;margin:9px 0;";el.appendChild(note);
     const warning=document.createElement("p");warning.textContent="Vzorka pod 10 je veľmi malá; pod 30 iba orientačná. Rozbory podľa minúty, skóre, ligy a štatistík sa aktivujú po doplnení týchto údajov do archívu.";warning.style.cssText="font-size:10px;line-height:1.5;color:#fbbf24;";el.appendChild(warning);
   }
+  function renderApiDataQuality(current, matchArchive, permanentHistory) {
+    const target = document.getElementById("api-data-quality-content");
+    if (!target) return;
+    target.innerHTML = "";
+
+    const matches = new Map();
+    const addMatch = (id, candidates) => {
+      if (!id) id = "unknown_" + matches.size;
+      const key = String(id);
+      if (!matches.has(key)) matches.set(key, new Set());
+      const labels = matches.get(key);
+      for (const stats of candidates) {
+        if (!Array.isArray(stats)) continue;
+        for (const item of stats) {
+          const label = String(item?.label || item?.name || "").trim();
+          if (label) labels.add(label);
+        }
+      }
+    };
+    const collectNestedStats = (value, found = [], depth = 0) => {
+      if (!value || typeof value !== "object" || depth > 5) return found;
+      if (Array.isArray(value)) {
+        for (const item of value) collectNestedStats(item, found, depth + 1);
+        return found;
+      }
+      if (Array.isArray(value.stats)) found.push(value.stats);
+      for (const [key, child] of Object.entries(value)) {
+        if (key !== "stats" && child && typeof child === "object") {
+          collectNestedStats(child, found, depth + 1);
+        }
+      }
+      return found;
+    };
+
+    for (const record of (Array.isArray(current?.records) ? current.records : [])) {
+      const match = record?.match || {};
+      const id = match.tracker?.id || match.id || match.url || (match.home + "_" + match.away);
+      addMatch(id, collectNestedStats(match));
+    }
+    for (const item of (Array.isArray(matchArchive?.archived_matches) ? matchArchive.archived_matches : [])) {
+      const id = item?.id || item?.final_match?.url || item?.last_snapshot?.match?.url;
+      addMatch(id, collectNestedStats(item));
+    }
+    for (const item of (Array.isArray(permanentHistory) ? permanentHistory : [])) {
+      const match = item?.final_match || item?.last_snapshot?.match || item?.match || {};
+      const id = item?.id || match.tracker?.id || match.id || match.url;
+      addMatch(id, collectNestedStats(item));
+    }
+
+    const categoryMap = new Map();
+    let observedMatches = 0;
+    let totalCategoryMatches = 0;
+    for (const labels of matches.values()) {
+      if (!labels.size) continue;
+      observedMatches++;
+      totalCategoryMatches += labels.size;
+      for (const label of labels) {
+        if (!categoryMap.has(label)) categoryMap.set(label, new Set());
+        categoryMap.get(label).add([...matches.entries()].find(([, set]) => set === labels)?.[0]);
+      }
+    }
+    const categories = [...categoryMap.entries()]
+      .map(([label, ids]) => ({ label, matches: ids.size }))
+      .sort((a, b) => b.matches - a.matches || a.label.localeCompare(b.label, "sk"));
+    const totalMatches = matches.size;
+    const avg = observedMatches ? (totalCategoryMatches / observedMatches).toFixed(1) : "—";
+    const coverage = totalMatches ? Math.round(observedMatches / totalMatches * 100) : 0;
+
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;";
+    target.appendChild(grid);
+    const addCard = (label, value, detail) => {
+      const card = document.createElement("div");
+      card.style.cssText = "padding:11px;border:1px solid #35465e;border-radius:10px;background:#101b2b;min-width:0;";
+      const name = document.createElement("div");
+      name.textContent = label;
+      name.style.cssText = "font-size:10px;color:#9baabe;margin-bottom:5px;font-weight:800;";
+      const number = document.createElement("div");
+      number.textContent = String(value);
+      number.style.cssText = "font-size:19px;font-weight:900;color:#e2e8f0;overflow-wrap:anywhere;";
+      const note = document.createElement("div");
+      note.textContent = detail;
+      note.style.cssText = "font-size:10px;color:#94a3b8;margin-top:4px;";
+      card.append(name, number, note);
+      grid.appendChild(card);
+    };
+    addCard("ROZPOZNANÉ KATEGÓRIE", categories.length, "Rôzne názvy štatistík z API");
+    addCard("ZÁPASY SO ŠTATISTIKAMI", observedMatches, "Z "+totalMatches+" zápasových záznamov");
+    addCard("POKRYTIE ZÁZNAMOV", coverage+"%", "Aspoň jedna štatistická kategória");
+    addCard("PRIEMER KATEGÓRIÍ", avg, "Na zápas s dostupnými štatistikami");
+
+    const heading = document.createElement("div");
+    heading.textContent = "DOSTUPNOSŤ PODĽA KATEGÓRIE";
+    heading.style.cssText = "font-size:12px;font-weight:900;margin:14px 0 8px;color:#dbeafe;";
+    target.appendChild(heading);
+    if (!categories.length) {
+      addText(target, "Zatiaľ nie sú dostupné štatistiky na vyhodnotenie.");
+    } else {
+      for (const item of categories) {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;gap:12px;padding:7px 9px;border-bottom:1px solid #26384d;font-size:12px;";
+        const name = document.createElement("span");
+        name.textContent = item.label;
+        name.style.cssText = "color:#dbe5f0;overflow-wrap:anywhere;";
+        const count = document.createElement("strong");
+        count.textContent = item.matches+" / "+totalMatches+" záp.";
+        count.style.cssText = "color:#39e6a5;white-space:nowrap;";
+        row.append(name, count);
+        target.appendChild(row);
+      }
+    }
+    addText(target, "Počítajú sa iba kategórie, ktoré API skutočne poslalo. Chýbajúca štatistika sa nepovažuje za nulu. Záznamy LIVE a archívne dáta sa môžu pri nejednoznačnom ID počítať samostatne.");
+  }
+
   function renderSystemStats(current, signalArchive, matchArchive) {
     if (!systemStatsEl) return;
     systemStatsEl.innerHTML = "";
@@ -2649,6 +2763,8 @@
         else if (bttsSignalArchiveEl) { bttsSignalArchiveEl.innerHTML = ""; addText(bttsSignalArchiveEl, "Archív BTTS sa nepodarilo načítať."); }
         renderMatchArchive(matchArchive);
         renderSystemStats(current, signalArchive, matchArchive);
+      renderApiDataQuality(current, matchArchive, matchHistoryData);
+        renderApiDataQuality(current, matchArchive, matchHistoryData);
       renderFootballPerformanceCenter(signalArchive, bttsArchive);
         renderFootballPerformanceCenter(signalArchive, bttsArchive);
 
