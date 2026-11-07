@@ -1,0 +1,153 @@
+name: SportScore last 30 days archive
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - ".github/workflows/sportscore-last-30-days-archive.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sportscore-last-30-days-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Download fixtures and full match details for the last 30 days
+        env:
+          SPORT_SCORE_BASE: https://sportscore.com/api/v1
+        run: |
+          python - <<'PY'
+          import os, json, time, datetime, urllib.parse, urllib.request, urllib.error, collections, csv, zipfile
+          from pathlib import Path
+
+          BASE = os.environ["SPORT_SCORE_BASE"]
+          HEADERS = {"User-Agent":"LIVE-EDGE-AI-PRO-historical-archive/1.0","Accept":"application/json"}
+          now = datetime.datetime.now(datetime.timezone.utc)
+          start = now - datetime.timedelta(days=30)
+          first = start.date()
+          last = now.date()
+          dates = []
+          d = first
+          while d <= last:
+              dates.append(d.isoformat())
+              d += datetime.timedelta(days=1)
+
+          out = Path("sportscore-last-30-days")
+          out.mkdir(exist_ok=True)
+          fixtures_file = (out / "fixtures.jsonl").open("w", encoding="utf-8")
+          details_file = (out / "match_details.jsonl").open("w", encoding="utf-8")
+          summary = {
+              "source":"SportScore API v1",
+              "generated_at_utc":now.isoformat(),
+              "window_start_utc":start.isoformat(),
+              "window_end_utc":now.isoformat(),
+              "dates":[],
+              "totals":{"fixtures_returned":0,"details_saved":0,"details_failed":0,"stats_nonempty":0,"lineups_nonempty":0,"incidents_nonempty":0},
+              "limitations":[
+                  "The fixtures endpoint is requested with limit=200 per date. A date returning 200 may be truncated; the public documentation does not describe pagination for this endpoint.",
+                  "Historical match details are final match records, not minute-by-minute historical LIVE snapshots.",
+                  "Statistics, lineups and incidents are saved exactly as returned; some matches may have empty fields."
+              ]
+          }
+          errors = []
+
+          def get_json(path, params, attempts=4):
+              url = BASE + path + "?" + urllib.parse.urlencode(params)
+              last_error = None
+              for attempt in range(attempts):
+                  try:
+                      req = urllib.request.Request(url, headers=HEADERS)
+                      with urllib.request.urlopen(req, timeout=45) as resp:
+                          return resp.status, json.loads(resp.read().decode("utf-8"))
+                  except Exception as e:
+                      last_error = repr(e)
+                      time.sleep(1.5 * (attempt + 1))
+              raise RuntimeError(last_error)
+
+          def rows_from(payload):
+              if not isinstance(payload, dict): return []
+              rows = payload.get("matches") or payload.get("fixtures") or payload.get("data") or []
+              if isinstance(rows, dict): rows = list(rows.values())
+              return rows if isinstance(rows, list) else []
+
+          def slug_from(m):
+              slug = m.get("slug")
+              if slug: return slug
+              u = m.get("url")
+              if u:
+                  parts = urllib.parse.urlparse(u).path.strip("/").split("/")
+                  if "match" in parts and parts.index("match")+1 < len(parts):
+                      return parts[parts.index("match")+1]
+              return None
+
+          for date in dates:
+              day = {"date":date,"http_status":None,"fixture_count":0,"at_limit_200":False,"details_saved":0,"details_failed":0}
+              try:
+                  status, payload = get_json("/fixtures/", {"sport":"football","date":date,"status":"finished","limit":200})
+                  matches = rows_from(payload)
+                  day.update({"http_status":status,"fixture_count":len(matches),"at_limit_200":len(matches)>=200,
+                              "provider_count":payload.get("count") if isinstance(payload,dict) else None})
+                  summary["totals"]["fixtures_returned"] += len(matches)
+                  for m in matches:
+                      if not isinstance(m,dict): continue
+                      fixtures_file.write(json.dumps({"date":date,"fixture":m},ensure_ascii=False,separators=(",",":"))+"\n")
+                      slug = slug_from(m)
+                      if not slug:
+                          day["details_failed"] += 1
+                          summary["totals"]["details_failed"] += 1
+                          errors.append({"date":date,"fixture_id":m.get("id"),"error":"missing_match_slug"})
+                          continue
+                      try:
+                          ds, detail = get_json("/match/", {"sport":"football","slug":slug})
+                          match = detail.get("match") if isinstance(detail,dict) else None
+                          if not isinstance(match,dict): match = detail
+                          record = {"date":date,"slug":slug,"http_status":ds,"match":match}
+                          details_file.write(json.dumps(record,ensure_ascii=False,separators=(",",":"))+"\n")
+                          day["details_saved"] += 1
+                          summary["totals"]["details_saved"] += 1
+                          if isinstance(match,dict):
+                              if match.get("stats") or match.get("statistics"): summary["totals"]["stats_nonempty"] += 1
+                              if match.get("lineups"): summary["totals"]["lineups_nonempty"] += 1
+                              if match.get("incidents") or match.get("timeline") or match.get("events"): summary["totals"]["incidents_nonempty"] += 1
+                      except Exception as e:
+                          day["details_failed"] += 1
+                          summary["totals"]["details_failed"] += 1
+                          errors.append({"date":date,"slug":slug,"error":repr(e)})
+                      time.sleep(0.18)
+              except Exception as e:
+                  day["error"] = repr(e)
+                  errors.append({"date":date,"error":repr(e)})
+              summary["dates"].append(day)
+              print(json.dumps(day,ensure_ascii=False))
+          fixtures_file.close()
+          details_file.close()
+
+          (out/"summary.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
+          (out/"errors.json").write_text(json.dumps(errors,ensure_ascii=False,indent=2),encoding="utf-8")
+          with (out/"daily_summary.csv").open("w",newline="",encoding="utf-8") as f:
+              w=csv.DictWriter(f,fieldnames=["date","http_status","fixture_count","at_limit_200","details_saved","details_failed"])
+              w.writeheader()
+              for day in summary["dates"]: w.writerow({k:day.get(k) for k in w.fieldnames})
+          with zipfile.ZipFile("sportscore-last-30-days.zip","w",zipfile.ZIP_DEFLATED) as z:
+              for p in out.iterdir(): z.write(p,p.name)
+          print("FINAL_SUMMARY",json.dumps(summary["totals"],ensure_ascii=False))
+          print("ARCHIVE_READY sportscore-last-30-days.zip")
+          PY
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sportscore-last-30-days
+          path: |
+            sportscore-last-30-days.zip
+            sportscore-last-30-days/summary.json
+            sportscore-last-30-days/daily_summary.csv
+            sportscore-last-30-days/errors.json
+          if-no-files-found: error
+          retention-days: 30
