@@ -1,0 +1,102 @@
+name: PitchAPI isolated live probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      date_utc:
+        description: "UTC date YYYY-MM-DD (leave empty for today)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  pitchapi-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe PitchAPI without touching production data
+        env:
+          PITCHAPI_API_KEY: ${{ secrets.PITCHAPI_API_KEY }}
+          INPUT_DATE: ${{ inputs.date_utc }}
+        run: |
+          python - <<'PY'
+          import os, json, datetime, urllib.request, urllib.error
+          from collections import Counter
+
+          key = os.environ.get("PITCHAPI_API_KEY", "").strip()
+          if not key:
+              raise SystemExit("PITCHAPI_API_KEY secret is missing.")
+          date = os.environ.get("INPUT_DATE", "").strip() or datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+          try:
+              datetime.date.fromisoformat(date)
+          except ValueError:
+              raise SystemExit("date_utc must be YYYY-MM-DD")
+
+          base = "https://api.pitchapi.dev/v1"
+          headers = {"X-API-KEY": key, "Accept": "application/json", "User-Agent": "LIVE-EDGE-AI-PRO-isolated-probe/1.0"}
+
+          def get(path):
+              req = urllib.request.Request(base + path, headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as res:
+                      return res.status, json.loads(res.read().decode("utf-8"))
+              except urllib.error.HTTPError as e:
+                  body = e.read(1000).decode("utf-8", "replace")
+                  return e.code, {"error": {"code": "HTTP_ERROR", "message": body[:300]}}
+              except Exception as e:
+                  return 0, {"error": {"code": type(e).__name__, "message": str(e)[:200]}}
+
+          status, payload = get(f"/date/{date}?status=all")
+          if status != 200 or "data" not in payload:
+              err = payload.get("error", {})
+              raise SystemExit(f"date endpoint failed: HTTP {status}, {err.get('code','unknown')}: {err.get('message','')}")
+          data = payload["data"]
+          matches = data.get("matches", []) if isinstance(data, dict) else []
+          counts = Counter(str(m.get("status", "missing")).lower() for m in matches)
+          print(f"PitchAPI date endpoint: HTTP {status}")
+          print(f"UTC date: {date}")
+          print(f"Matches returned: {len(matches)}")
+          print("Statuses: " + (", ".join(f"{k}={v}" for k,v in sorted(counts.items())) if counts else "none"))
+
+          live_words = {"live","inplay","in_play","1h","2h","ht","et","pen","paused","first_half","second_half"}
+          candidates = [m for m in matches if str(m.get("status","")).lower() in live_words]
+          print(f"Live-status candidates: {len(candidates)}")
+
+          for m in candidates[:8]:
+              mid = m.get("id")
+              if not mid:
+                  continue
+              code_match, match_payload = get(f"/matches/{mid}")
+              code_stats, stats_payload = get(f"/matches/{mid}/stats")
+              code_shots, shots_payload = get(f"/matches/{mid}/shots")
+              code_events, events_payload = get(f"/matches/{mid}/events")
+              match = match_payload.get("data", {}) if isinstance(match_payload, dict) else {}
+              stats = stats_payload.get("data", {}) if isinstance(stats_payload, dict) else {}
+              shots = shots_payload.get("data", []) if isinstance(shots_payload, dict) else []
+              events = events_payload.get("data", []) if isinstance(events_payload, dict) else []
+              if isinstance(shots, dict): shots = shots.get("shots", [])
+              if isinstance(events, dict): events = events.get("events", [])
+              if not isinstance(shots, list): shots = []
+              if not isinstance(events, list): events = []
+              on_target = sum(1 for s in shots if s.get("is_on_target") is True)
+              xg = sum(float(s.get("expected_goals") or 0) for s in shots)
+              minute_values = [e.get("minute") for e in events if isinstance(e,dict) and e.get("minute") is not None]
+              minute = max(minute_values) if minute_values else match.get("minute", match.get("elapsed"))
+              print("---")
+              print(f"{match.get('home_team',{}).get('name',m.get('home_team',{}).get('name','?'))} vs {match.get('away_team',{}).get('name',m.get('away_team',{}).get('name','?'))}")
+              print(f"Status/minute/score: {match.get('status',m.get('status'))} / {minute} / {match.get('score_home',m.get('score_home'))}:{match.get('score_away',m.get('score_away'))}")
+              print(f"HTTP match/stats/shots/events: {code_match}/{code_stats}/{code_shots}/{code_events}")
+              print(f"Shots: {len(shots)}, on-target flag: {on_target}, shot-xG sum: {xg:.3f}")
+              if isinstance(stats,dict):
+                  print("Team-stat periods: " + str(len(stats.get("periods",[]))))
+                  keys = []
+                  for period in stats.get("periods",[]) if isinstance(stats.get("periods",[]),list) else []:
+                      for group in period.get("groups",[]) if isinstance(period,dict) else []:
+                          for item in group.get("items",[]) if isinstance(group,dict) else []:
+                              keys.append(item.get("key") or item.get("title"))
+                  print("Stat keys: " + (", ".join(sorted(set(str(x) for x in keys))) if keys else "none"))
+          if not candidates:
+              print("No live fixtures were listed by the documented date endpoint; this is not proof the account/key is broken.")
+          PY
