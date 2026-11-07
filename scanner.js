@@ -3540,6 +3540,7 @@
   function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false, signalArchive = null, bttsArchive = null, target = matchesEl, compact = false) {
     const card = document.createElement("div");
     if (compact) card.classList.add("compact-match-card");
+    else card.classList.add("priority-match-card");
 
     card.style.cssText = compact
       ? "background:#0d1929;padding:7px;margin:5px 0;border-radius:9px;border:1px solid #293d55;"
@@ -3987,6 +3988,7 @@
 
       const categoryHeading = document.createElement("div");
       categoryHeading.textContent = title + " · " + categoryItems.length;
+      categoryHeading.classList.add(compact ? "match-category-other" : "match-category-confirmed");
       categoryHeading.style.cssText = compact
         ? "font-size:11px;font-weight:900;letter-spacing:.6px;color:#9fb0c5;margin:16px 2px 5px;padding:2px 1px;"
         : "font-size:12px;font-weight:900;letter-spacing:.7px;color:#39e6a5;margin:8px 2px 6px;padding:3px 1px;";
@@ -4013,6 +4015,7 @@
         .sort((a, b) => b.rank - a.rank || b.score - a.score || a.league.localeCompare(b.league, "sk"))
         .forEach(({ league, leagueItems }) => {
           const section = document.createElement("section");
+          section.classList.add(compact ? "match-league-other" : "match-league-confirmed");
           section.style.cssText = "margin:7px 0 10px;padding:8px;background:#0a1422;border:1px solid #263a52;border-radius:12px;";
 
           const heading = document.createElement("div");
