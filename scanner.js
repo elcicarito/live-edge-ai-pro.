@@ -5,7 +5,8 @@
   const SIGNAL_ARCHIVE_URL = "./data/signal-archive.json";
   const BTTS_ARCHIVE_URL = "./data/btts-signal-archive.json";
   const MATCH_ARCHIVE_URL = "./data/live-archive.json";
-  const MATCH_HISTORY_URL = "./data/live-match-history.jsonl";
+  const MATCH_HISTORY_URL = "./data/live-match-history.jsonl.gz";
+  const LEGACY_MATCH_HISTORY_URL = "./data/live-match-history.jsonl";
   const SIGNAL_KEY = "live_edge_signals_v6";
 
   const MIN_GAP_MINUTES = 3;
@@ -198,16 +199,29 @@
 
   async function loadPermanentMatchHistory() {
     if (!matchHistoryPromise) {
-      matchHistoryPromise = fetch(MATCH_HISTORY_URL + "?t=" + Date.now(), {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" }
-      }).then(async response => {
-        if (!response.ok) throw new Error("HTTP " + response.status);
-        const content = await response.text();
-        return content.split("\n").filter(Boolean).map(line => {
-          try { return JSON.parse(line); } catch { return null; }
-        }).filter(Boolean);
-      }).catch(error => {
+      const parseLines = content => content.split("\n").filter(Boolean).map(line => {
+        try { return JSON.parse(line); } catch { return null; }
+      }).filter(Boolean);
+
+      matchHistoryPromise = (async () => {
+        try {
+          const response = await fetch(MATCH_HISTORY_URL + "?t=" + Date.now(), {
+            cache: "no-store", headers: { "Cache-Control": "no-cache" }
+          });
+          if (!response.ok) throw new Error("HTTP " + response.status + " – gzip archív");
+          if (typeof DecompressionStream !== "function") throw new Error("Prehliadač nepodporuje gzip dekompresiu.");
+          const compressed = await response.arrayBuffer();
+          const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
+          return parseLines(await new Response(stream).text());
+        } catch (gzipError) {
+          // Kompatibilita počas migrácie a pre starší archívny súbor.
+          const legacy = await fetch(LEGACY_MATCH_HISTORY_URL + "?t=" + Date.now(), {
+            cache: "no-store", headers: { "Cache-Control": "no-cache" }
+          });
+          if (!legacy.ok) throw gzipError;
+          return parseLines(await legacy.text());
+        }
+      })().catch(error => {
         console.warn("Trvalá história zápasov nie je dostupná:", error);
         return [];
       });

@@ -21,8 +21,8 @@ jobs:
         run: |
           mkdir -p audit-output
           node <<'NODE'
-          const fs=require("fs"), path=require("path");
-          const H="data/live-match-history.jsonl", A="data/live-archive.json", O="audit-output";
+          const fs=require("fs"), path=require("path"), zlib=require("zlib");
+          const H="data/live-match-history.jsonl.gz", LEGACY_H="data/live-match-history.jsonl", A="data/live-archive.json", O="audit-output";
           const valid=v=>v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v));
           const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
           const cat=l=>{const s=norm(l);if(s.includes("shotsontarget")||s==="sot"||s.includes("ontarget"))return"shots_on_target";if(s.includes("shot"))return"shots";if(s.includes("dangerousattack"))return"dangerous_attacks";if(s.includes("attack"))return"attacks";if(s.includes("possession"))return"possession";if(s.includes("corner"))return"corners";if(s.includes("card"))return"cards";return null;};
@@ -30,7 +30,7 @@ jobs:
           const eventsOf=m=>{for(const k of ["events","incidents","timeline","match_events"])if(Array.isArray(m?.[k]))return m[k];return[];};
           const rows=[], ids=new Map(), labels=new Map(), eventKeys=new Map(), eventTypes=new Map(), catsMatches=new Map(), catsEntries=new Map(), samples=[];
           let bad=0, duplicates=0, totalSnaps=0, minuteSnaps=0, scoreSnaps=0, statSnaps=0, finalValid=0, eventMatches=0;
-          const raw=fs.existsSync(H)?fs.readFileSync(H,"utf8"):"";
+          const raw=fs.existsSync(H)?zlib.gunzipSync(fs.readFileSync(H)).toString("utf8"):fs.existsSync(LEGACY_H)?fs.readFileSync(LEGACY_H,"utf8"):"";
           for(const line of raw.split(/\r?\n/)){if(!line.trim())continue;try{const x=JSON.parse(line);if(!x||x.match_id==null){bad++;continue;}const id=String(x.match_id);if(ids.has(id)){duplicates++;if((x.snapshots||[]).length>(ids.get(id).snapshots||[]).length)ids.set(id,x);}else ids.set(id,x);}catch{bad++;}}
           let archive={};if(fs.existsSync(A))archive=JSON.parse(fs.readFileSync(A,"utf8"));
           const archiveIds=new Set((archive.archived_matches||[]).filter(x=>x?.id!=null).map(x=>String(x.id)));
