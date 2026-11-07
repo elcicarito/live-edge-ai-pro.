@@ -61,15 +61,36 @@ jobs:
           ]
           live_words = {"live", "inprogress", "in_progress", "in-play", "in_play",
                         "1st_half", "2nd_half", "halftime", "half_time"}
-          candidates = [m for m in matches
-                        if str(m.get("status", "")).lower().replace(" ", "_") in live_words]
-          out["live_candidates"] = [m.get("id") for m in candidates]
+          now = datetime.datetime.now(datetime.timezone.utc)
+          live_candidates = [m for m in matches
+                             if str(m.get("status", "")).lower().replace(" ", "_") in live_words]
+          # If the feed has no LIVE label, test recently-started fixtures too.
+          overdue = []
+          for m in matches:
+              if str(m.get("status", "")).lower() != "not_started" or not m.get("time_utc"):
+                  continue
+              try:
+                  kickoff = datetime.datetime.fromisoformat(m["time_utc"].replace("Z", "+00:00"))
+              except Exception:
+                  continue
+              age_minutes = (now - kickoff).total_seconds() / 60
+              if 10 <= age_minutes <= 180:
+                  overdue.append(m)
+          overdue.sort(key=lambda m: m.get("time_utc", ""), reverse=True)
+          candidates = live_candidates or overdue[:5]
+          out["live_candidates"] = [m.get("id") for m in live_candidates]
+          out["overdue_candidates_tested"] = [
+              {"id": m.get("id"), "home": (m.get("home_team") or {}).get("name"),
+               "away": (m.get("away_team") or {}).get("name"), "time_utc": m.get("time_utc"),
+               "status": m.get("status")} for m in candidates
+          ]
           print("Fixture statuses:", json.dumps(out["fixture_statuses"], ensure_ascii=False))
+          print("Candidates tested:", json.dumps(out["overdue_candidates_tested"], ensure_ascii=False))
 
           if not candidates:
               out["notes"].append(
-                  "No match was labelled live/in-progress in today's status=all listing; "
-                  "therefore no live-update claim can be confirmed from this run."
+                  "No LIVE-labelled or recently-started not_started fixtures were available; "
+                  "live updates could not be tested."
               )
           else:
               for sample in range(3):
@@ -96,7 +117,9 @@ jobs:
           print("Probe summary:", json.dumps({
               "date_utc": today, "fixture_count": len(matches),
               "statuses": sorted(set(str(m.get("status")) for m in matches)),
-              "live_candidates": len(candidates), "samples": len(out["snapshots"])
+              "live_candidates": len(live_candidates),
+              "overdue_candidates_tested": len(candidates),
+              "samples": len(out["snapshots"])
           }, ensure_ascii=False))
           PY
       - name: Upload probe report
