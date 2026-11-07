@@ -15,21 +15,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Probe SportScore football feed
+      - name: Probe SportScore football feed and match details
         run: |
           python - <<'PY'
-          import json, urllib.request, urllib.error, datetime, os, re
+          import json, urllib.request, urllib.parse, datetime, os, collections
           base = "https://sportscore.com/api/widget"
           headers = {"User-Agent": "LIVE-EDGE-AI-PRO-SportScore-Probe/1.0", "Accept": "application/json"}
           def get(path):
               req = urllib.request.Request(base + path, headers=headers)
               with urllib.request.urlopen(req, timeout=25) as response:
-                  raw = response.read()
-                  return response.status, response.headers.get("content-type"), json.loads(raw.decode("utf-8"))
+                  return response.status, response.headers.get("content-type"), json.loads(response.read().decode("utf-8"))
           report = {
               "checked_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "source": "SportScore public developer API",
-              "feed": {}, "live_candidates": [], "detail_probes": [], "errors": []
+              "feed": {}, "status_counts": {}, "records_summary": [],
+              "live_candidates": [], "detail_probes": [], "errors": []
           }
           try:
               status, ctype, payload = get("/matches/?sport=football&limit=50")
@@ -42,33 +42,39 @@ jobs:
                   "http_status": status, "content_type": ctype,
                   "top_level_keys": list(payload.keys()) if isinstance(payload, dict) else [],
                   "count_reported": payload.get("count") if isinstance(payload, dict) else None,
+                  "updated": payload.get("updated") if isinstance(payload, dict) else None,
                   "records_received": len(matches),
                   "sample_record_keys": list(matches[0].keys()) if matches and isinstance(matches[0], dict) else [],
                   "sample_records": matches[:3]
               }
-              live_words = {"live", "in_play", "in-play", "in progress", "in_progress", "1h", "2h", "ht", "half time", "halftime", "extra time", "penalties"}
+              counts = collections.Counter()
               for m in matches:
                   if not isinstance(m, dict):
                       continue
-                  st = str(m.get("status") or m.get("state") or m.get("match_status") or "").strip().lower()
+                  st = str(m.get("status") or m.get("state") or m.get("match_status") or "MISSING").strip().lower()
+                  counts[st] += 1
+                  report["records_summary"].append({
+                      "home": m.get("home") or m.get("home_team"),
+                      "away": m.get("away") or m.get("away_team"),
+                      "status": st, "status_text": m.get("status_text"),
+                      "score": [m.get("home_score"), m.get("away_score")],
+                      "time": m.get("time"), "competition": m.get("competition"),
+                      "url": m.get("url")
+                  })
+                  live_words = {"live", "in_play", "in-play", "in progress", "in_progress", "1h", "2h", "ht", "half time", "halftime", "extra time", "penalties"}
                   if st in live_words or any(w in st for w in ("live", "in progress", "in_play", "in-play")):
-                      report["live_candidates"].append({
-                          "home": m.get("home") or m.get("home_team"),
-                          "away": m.get("away") or m.get("away_team"),
-                          "status": st, "score": [m.get("home_score"), m.get("away_score")],
-                          "slug": m.get("slug") or m.get("match_slug"),
-                          "id": m.get("id") or m.get("match_id")
-                      })
-              # Probe up to 3 match-detail records, prioritising live candidates.
-              candidates = []
+                      report["live_candidates"].append(report["records_summary"][-1])
+              report["status_counts"] = dict(counts)
+              # Probe details for up to 3 records, using the final URL path segment as slug.
+              detail_candidates = []
               for m in matches:
-                  if isinstance(m, dict):
-                      slug = m.get("slug") or m.get("match_slug")
-                      if slug and slug not in candidates:
-                          candidates.append(slug)
-              for slug in candidates[:3]:
+                  if isinstance(m, dict) and m.get("url"):
+                      slug = str(m["url"]).rstrip("/").split("/")[-1]
+                      if slug and slug not in detail_candidates:
+                          detail_candidates.append(slug)
+              for slug in detail_candidates[:3]:
                   try:
-                      ds, dt, detail = get("/match/?sport=football&slug=" + urllib.parse.quote(str(slug), safe=""))
+                      ds, dt, detail = get("/match/?sport=football&slug=" + urllib.parse.quote(slug, safe=""))
                       report["detail_probes"].append({
                           "slug": slug, "http_status": ds, "content_type": dt,
                           "top_level_keys": list(detail.keys()) if isinstance(detail, dict) else [],
@@ -84,9 +90,12 @@ jobs:
           print(json.dumps({
               "checked_at_utc": report["checked_at_utc"],
               "feed": report["feed"],
+              "status_counts": report["status_counts"],
               "live_candidates": report["live_candidates"],
+              "records_summary": report["records_summary"],
               "detail_probe_summaries": [
-                  {"slug": x["slug"], "http_status": x["http_status"], "keys": x["top_level_keys"]}
+                  {"slug": x["slug"], "http_status": x["http_status"], "keys": x["top_level_keys"],
+                   "detail_sample": x["detail_sample"]}
                   for x in report["detail_probes"]
               ],
               "errors": report["errors"]
