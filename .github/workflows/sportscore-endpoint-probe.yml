@@ -1,0 +1,88 @@
+name: SportScore isolated endpoint test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare-endpoints:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Compare SportScore live fixtures endpoints
+        env:
+          BASE_URL: https://sportscore.com
+        run: |
+          node --input-type=module <<'NODE'
+          const base = process.env.BASE_URL;
+          const targets = [
+            {
+              name: "current_v1_fixtures",
+              url: `${base}/api/v1/fixtures/?sport=football&status=live&limit=200`
+            },
+            {
+              name: "widget_matches",
+              url: `${base}/api/widget/matches/?sport=football&limit=50`
+            }
+          ];
+
+          function statusOf(match) {
+            const raw = match?.status;
+            if (typeof raw === "string") return raw.trim().toLowerCase() || "empty";
+            if (raw && typeof raw === "object") {
+              return String(raw.type ?? raw.name ?? raw.short ?? "object").trim().toLowerCase();
+            }
+            return raw == null ? "missing" : typeof raw;
+          }
+
+          for (const target of targets) {
+            const url = new URL(target.url);
+            url.searchParams.set("_probe", String(Date.now()));
+            console.log(`\n=== ${target.name} ===`);
+            try {
+              const response = await fetch(url, {
+                headers: {
+                  accept: "application/json",
+                  "cache-control": "no-cache",
+                  pragma: "no-cache",
+                  "user-agent": "LIVE-EDGE-AI-PRO-endpoint-diagnostic/1.0"
+                },
+                signal: AbortSignal.timeout(20000)
+              });
+              const contentType = response.headers.get("content-type");
+              const cacheControl = response.headers.get("cache-control");
+              const cfCache = response.headers.get("cf-cache-status");
+              const text = await response.text();
+              let payload = null;
+              try { payload = JSON.parse(text); } catch {}
+              const matches = Array.isArray(payload?.matches) ? payload.matches : null;
+              const statusCounts = {};
+              if (matches) {
+                for (const match of matches) {
+                  const status = statusOf(match);
+                  statusCounts[status] = (statusCounts[status] || 0) + 1;
+                }
+              }
+              console.log(JSON.stringify({
+                endpoint: target.name,
+                http_status: response.status,
+                content_type: contentType,
+                cache_control: cacheControl,
+                cf_cache_status: cfCache,
+                json_valid: payload !== null,
+                payload_keys: payload && typeof payload === "object" ? Object.keys(payload).slice(0, 30) : [],
+                provider_count: payload?.count ?? null,
+                matches_count: matches ? matches.length : null,
+                match_statuses: matches ? statusCounts : null,
+                response_preview: payload === null ? text.slice(0, 180) : undefined
+              }, null, 2));
+            } catch (error) {
+              console.log(JSON.stringify({
+                endpoint: target.name,
+                request_error: String(error?.message || error)
+              }, null, 2));
+            }
+          }
+          NODE
