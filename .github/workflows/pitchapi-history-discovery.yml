@@ -73,10 +73,10 @@ jobs:
               eligible = []
               for season in seasons:
                   season_text = str(season)
-                  years = [int(x) for x in re.findall(r"\\d{4}", season_text)]
+                  years = [int(x) for x in re.findall("[0-9]{4}", season_text)]
                   if years and max(years) >= from_year:
                       eligible.append(season_text)
-              season_years = [(min([int(x) for x in re.findall(r"\\d{4}", s)]), s) for s in eligible]
+              season_years = [(min([int(x) for x in re.findall("[0-9]{4}", s)]), s) for s in eligible]
               ordered = [s for _, s in sorted(season_years)]
               league_rows.append({
                   "league_id": lid, "league": name, "country_code": country,
