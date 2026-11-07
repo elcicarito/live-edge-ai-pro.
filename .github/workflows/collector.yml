@@ -88,11 +88,11 @@ jobs:
             for (let i = 1; i <= attempts; i++) {
               let retryAfterMs = 0;
               let responseReceived = false;
+              const endpoint = metricEndpoint(url);
 
               try {
                 const separator = url.includes("?") ? "&" : "?";
                 const freshUrl = `${url}${separator}_cache=${Date.now()}_${i}`;
-                const endpoint = metricEndpoint(url);
                 collectorMetrics.request_count++;
                 countMetric(endpoint, "requests");
 
