@@ -69,7 +69,7 @@ jobs:
               detail_candidates = []
               for m in matches:
                   if isinstance(m, dict) and m.get("url"):
-                      slug = str(m["url"]).rstrip("/").split("/")[-1]
+                      slug = str(m["url"]).rstrip("/").split("/")[-2]
                       if slug and slug not in detail_candidates:
                           detail_candidates.append(slug)
               for slug in detail_candidates[:3]:
