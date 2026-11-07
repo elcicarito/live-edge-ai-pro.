@@ -3594,6 +3594,24 @@
 
     card.appendChild(header);
 
+    // BetFury neposkytuje v aktuálnom LIVE feede bookmaker event ID.
+    // Preto otvárame overenú oficiálnu športovú sekciu, nie vymyslený deep link.
+    const cardPriority = getMatchPriority(match, historyData, collectedAt, allowSignals, staleMode, signalArchive, bttsArchive);
+    if (!staleMode && cardPriority.rank === 2) {
+      const betfuryLink = document.createElement("a");
+      betfuryLink.href = "https://betfury.com/sports";
+      betfuryLink.target = "_blank";
+      betfuryLink.rel = "noopener noreferrer";
+      betfuryLink.textContent = "↗ OTVORIŤ BETFURY – HĽADAŤ ZÁPAS";
+      betfuryLink.title = "Otvorí oficiálnu športovú ponuku BetFury. Konkrétny zápas treba vyhľadať podľa názvov tímov.";
+      betfuryLink.style.cssText = "display:block;width:100%;box-sizing:border-box;text-align:center;text-decoration:none;font-size:11px;font-weight:900;color:#07120f;background:#39e6a5;border:1px solid #39e6a5;border-radius:8px;padding:10px 8px;margin:7px 0 9px;";
+      card.appendChild(betfuryLink);
+      const linkNote = document.createElement("div");
+      linkNote.textContent = "BetFury zatiaľ nemá v našich dátach dostupné ID na otvorenie konkrétneho zápasu.";
+      linkNote.style.cssText = "font-size:10px;line-height:1.35;color:#9baabe;margin:0 1px 8px;";
+      card.appendChild(linkNote);
+    }
+
     const leagueLine = document.createElement("div");
     leagueLine.textContent = `${getCompetitionFlag(match)} ${match.competition || "Neznáma súťaž"}`;
     leagueLine.style.cssText = "font-size:12px;color:#a8b8cc;margin:2px 0 9px;";
