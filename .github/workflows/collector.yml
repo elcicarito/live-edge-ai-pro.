@@ -26,6 +26,7 @@ jobs:
 
           node <<'NODE'
           const fs = require("fs");
+          const zlib = require("zlib");
 
           const BASE = "https://sportscore.com/api/v1";
           const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -33,9 +34,11 @@ jobs:
           const ARCHIVE_PATH = "data/live-archive.json";
           const CURRENT_PATH = "data/live-current.json";
           const LATEST_PATH = "data/live-latest.json";
-          const HISTORY_PATH = "data/live-history.jsonl";
+          const HISTORY_PATH = "data/live-history.jsonl.gz";
+          const LEGACY_HISTORY_PATH = "data/live-history.jsonl";
           const HISTORY_JSON_PATH = "data/live-history.json";
-          const MATCH_TIMELINE_PATH = "data/live-match-timeline.json";
+          const MATCH_TIMELINE_PATH = "data/live-match-timeline.json.gz";
+          const LEGACY_MATCH_TIMELINE_PATH = "data/live-match-timeline.json";
           const HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
           const HISTORY_FRONTEND_LIMIT = 288;
           const SIGNAL_ARCHIVE_PATH = "data/signal-archive.json";
@@ -162,9 +165,20 @@ jobs:
             throw lastError;
           }
 
-          function readJson(path, fallback) {
-            if (!fs.existsSync(path)) return fallback;
-            return JSON.parse(fs.readFileSync(path, "utf8"));
+          function readText(path, legacyPath = null) {
+            if (fs.existsSync(path)) {
+              const bytes = fs.readFileSync(path);
+              return path.endsWith(".gz")
+                ? zlib.gunzipSync(bytes).toString("utf8")
+                : bytes.toString("utf8");
+            }
+            if (legacyPath && fs.existsSync(legacyPath)) return fs.readFileSync(legacyPath, "utf8");
+            return null;
+          }
+
+          function readJson(path, fallback, legacyPath = null) {
+            const content = readText(path, legacyPath);
+            return content === null ? fallback : JSON.parse(content);
           }
 
           function getStatus(match) {
@@ -279,9 +293,10 @@ jobs:
           }
 
           function readHistoryCounts() {
-            if (!fs.existsSync(HISTORY_PATH)) return [];
+            const content = readText(HISTORY_PATH, LEGACY_HISTORY_PATH);
+            if (content === null) return [];
 
-            return fs.readFileSync(HISTORY_PATH, "utf8")
+            return content
               .split("\n")
               .filter(Boolean)
               .slice(-30)
@@ -979,9 +994,7 @@ jobs:
             // Frontendový pracovný buffer ostáva na 288 záznamoch (približne 24 h),
             // aby sa zbytočne nezväčšovalo každé načítanie skenera.
             const historyCutoff = Date.now() - HISTORY_RETENTION_MS;
-            const history = (fs.existsSync(HISTORY_PATH)
-              ? fs.readFileSync(HISTORY_PATH, "utf8")
-              : "")
+            const history = (readText(HISTORY_PATH, LEGACY_HISTORY_PATH) || "")
               .split("\n")
               .filter(Boolean)
               .map(line => {
@@ -1004,8 +1017,9 @@ jobs:
 
             fs.writeFileSync(
               HISTORY_PATH,
-              history.map(batch => JSON.stringify(batch)).join("\n") + "\n"
+              zlib.gzipSync(history.map(batch => JSON.stringify(batch)).join("\n") + "\n")
             );
+            if (fs.existsSync(LEGACY_HISTORY_PATH)) fs.unlinkSync(LEGACY_HISTORY_PATH);
 
             fs.writeFileSync(
               HISTORY_JSON_PATH,
@@ -1020,7 +1034,7 @@ jobs:
               retention_days: 7,
               updated_at: null,
               matches: []
-            });
+            }, LEGACY_MATCH_TIMELINE_PATH);
 
             for (const item of Array.isArray(previousTimeline.matches) ? previousTimeline.matches : []) {
               if (item?.id) timelineById.set(String(item.id), {
@@ -1116,8 +1130,9 @@ jobs:
 
             fs.writeFileSync(
               MATCH_TIMELINE_PATH,
-              JSON.stringify(matchTimeline)
+              zlib.gzipSync(JSON.stringify(matchTimeline))
             );
+            if (fs.existsSync(LEGACY_MATCH_TIMELINE_PATH)) fs.unlinkSync(LEGACY_MATCH_TIMELINE_PATH);
 
             // =========================================
             // TRVALÁ HISTÓRIA UKONČENÝCH ZÁPASOV
@@ -1126,17 +1141,16 @@ jobs:
             // dostupné LIVE snímky do archívu bez automatickej retencie.
             // Zápas sa uloží iba raz podľa stabilného ID.
             // =========================================
-            const PERMANENT_MATCH_HISTORY_PATH = "data/live-match-history.jsonl";
-            if (!fs.existsSync(PERMANENT_MATCH_HISTORY_PATH)) {
-              fs.writeFileSync(PERMANENT_MATCH_HISTORY_PATH, "");
-            }
+            const PERMANENT_MATCH_HISTORY_PATH = "data/live-match-history.jsonl.gz";
+            const LEGACY_PERMANENT_MATCH_HISTORY_PATH = "data/live-match-history.jsonl";
             const permanentIds = new Set();
+            const existingPermanentText = readText(
+              PERMANENT_MATCH_HISTORY_PATH,
+              LEGACY_PERMANENT_MATCH_HISTORY_PATH
+            ) || "";
 
-            if (fs.existsSync(PERMANENT_MATCH_HISTORY_PATH)) {
-              const existingLines = fs.readFileSync(
-                PERMANENT_MATCH_HISTORY_PATH,
-                "utf8"
-              ).split("\n").filter(Boolean);
+            if (existingPermanentText) {
+              const existingLines = existingPermanentText.split("\n").filter(Boolean);
 
               for (const line of existingLines) {
                 try {
@@ -1178,12 +1192,14 @@ jobs:
               permanentIds.add(id);
             }
 
-            if (permanentRecords.length) {
-              fs.appendFileSync(
-                PERMANENT_MATCH_HISTORY_PATH,
-                permanentRecords.map(item => JSON.stringify(item)).join("\n") + "\n"
-              );
+            const permanentAppendText = permanentRecords.map(item => JSON.stringify(item)).join("\n") + (permanentRecords.length ? "\n" : "");
+            if (fs.existsSync(PERMANENT_MATCH_HISTORY_PATH)) {
+              // Concatenated gzip members allow append-only growth without rewriting the full archive.
+              if (permanentAppendText) fs.appendFileSync(PERMANENT_MATCH_HISTORY_PATH, zlib.gzipSync(permanentAppendText));
+            } else if (existingPermanentText || permanentAppendText) {
+              fs.writeFileSync(PERMANENT_MATCH_HISTORY_PATH, zlib.gzipSync(existingPermanentText + permanentAppendText));
             }
+            if (fs.existsSync(LEGACY_PERMANENT_MATCH_HISTORY_PATH)) fs.unlinkSync(LEGACY_PERMANENT_MATCH_HISTORY_PATH);
 
             console.log("PERMANENT MATCH HISTORY:", JSON.stringify({
               newly_archived: permanentRecords.length,
@@ -1951,7 +1967,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/live-current.json data/live-latest.json data/live-history.jsonl data/live-history.json data/live-match-timeline.json data/live-match-history.jsonl data/live-archive.json data/signal-archive.json data/btts-signal-archive.json data/football-collector-metrics.jsonl
+          git add data/live-current.json data/live-latest.json data/live-history.json data/live-history.jsonl.gz data/live-match-timeline.json.gz data/live-match-history.jsonl.gz data/live-archive.json data/signal-archive.json data/btts-signal-archive.json data/football-collector-metrics.jsonl
+          git add -A -- data/live-history.jsonl data/live-match-timeline.json data/live-match-history.jsonl
 
           if git diff --cached --quiet; then
             echo "Žiadne nové zmeny na uloženie."
