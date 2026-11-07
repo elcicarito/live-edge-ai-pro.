@@ -3616,6 +3616,7 @@
 
     // Rýchly prehľad kľúčových štatistík priamo v karte zápasu.
     const quickStats = document.createElement("div");
+    if (noSignal) quickStats.classList.add("no-signal-expand-stats");
     quickStats.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;";
     const addQuickStat = (label, value) => {
       if (!value) return;
@@ -3641,6 +3642,7 @@
     const priority = getMatchPriority(match, historyData, collectedAt, allowSignals, staleMode, signalArchive, bttsArchive);
     if (priority.label) {
       const priorityTag = document.createElement("div");
+      if (noSignal) priorityTag.classList.add("no-signal-expand-priority");
       priorityTag.textContent = priority.label;
       priorityTag.style.cssText = "display:inline-flex;align-items:center;font-size:10px;font-weight:900;letter-spacing:.35px;padding:5px 8px;margin:0 0 9px;border-radius:7px;color:" + priority.color + ";background:" + priority.background + ";border:1px solid " + priority.border + ";";
       card.appendChild(priorityTag);
@@ -3650,6 +3652,7 @@
       ? signalArchive.signals.filter(item => String(item.matchId) === matchId(match))
       : [];
     const signalSummary = document.createElement("div");
+    if (noSignal) signalSummary.classList.add("no-signal-expand-summary");
     signalSummary.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;";
     const signalCounts = {
       OPEN: relatedSignals.filter(item => item.status === "OPEN").length,
@@ -3677,6 +3680,7 @@
     card.appendChild(signalSummary);
 
     const detail = document.createElement("details");
+    if (noSignal) detail.classList.add("no-signal-expand-detail");
     detail.style.cssText = "border-top:1px solid #293b52;padding-top:8px;";
     const detailSummary = document.createElement("summary");
     detailSummary.textContent = "📊 OTVORIŤ PREHĽAD ZÁPASU";
