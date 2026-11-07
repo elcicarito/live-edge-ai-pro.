@@ -3599,6 +3599,21 @@
     leagueLine.style.cssText = "font-size:12px;color:#a8b8cc;margin:2px 0 9px;";
     card.appendChild(leagueLine);
 
+    if (noSignal && !staleMode) {
+      const expandButton = document.createElement("button");
+      expandButton.type = "button";
+      expandButton.textContent = "＋ ZOBRAZIŤ ŠTATISTIKY ZÁPASU";
+      expandButton.setAttribute("aria-expanded", "false");
+      expandButton.style.cssText = "display:block;width:100%;text-align:left;font-size:10px;font-weight:800;color:#8fb6d9;background:#102137;border:1px solid #29435f;border-radius:6px;padding:5px 7px;margin:4px 0;cursor:pointer;";
+      expandButton.addEventListener("click", event => {
+        event.stopPropagation();
+        const expanded = card.classList.toggle("no-signal-expanded");
+        expandButton.textContent = expanded ? "− SKRYŤ ŠTATISTIKY ZÁPASU" : "＋ ZOBRAZIŤ ŠTATISTIKY ZÁPASU";
+        expandButton.setAttribute("aria-expanded", String(expanded));
+      });
+      card.appendChild(expandButton);
+    }
+
     // Rýchly prehľad kľúčových štatistík priamo v karte zápasu.
     const quickStats = document.createElement("div");
     quickStats.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;";
