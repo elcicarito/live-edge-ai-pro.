@@ -1894,67 +1894,68 @@ jobs:
                 .map(item => [frontendMatchId(item.final_match) || String(item.id || ""), item.final_match])
             );
             for (const signal of bttsArchive.signals) {
-              if (signal.status !== "OPEN") continue;
               const finalMatch = bttsFinals.get(String(signal.matchId));
               if (!finalMatch) continue;
-              const rawScoringSide = signal.predictedSide === "home"
-                ? finalMatch.home_score : finalMatch.away_score;
-              const rawOtherSide = signal.predictedSide === "home"
-                ? finalMatch.away_score : finalMatch.home_score;
-              const scoring = Number(rawScoringSide);
-              const other = Number(rawOtherSide);
-              if (rawScoringSide == null || rawOtherSide == null ||
-                  !Number.isFinite(scoring) || !Number.isFinite(other)) continue;
-              signal.status = scoring > 0 ? "WIN" : "LOSS";
-              signal.settledAt = signalNow;
-              signal.settledScore = Number(finalMatch.home_score) + ":" + Number(finalMatch.away_score);
 
-              // Ulož presnú časovú os gólov z potvrdeného finálneho detailu.
-              // Čas gólu nikdy neodvodzuj z konečného skóre ani z času archivácie.
+              // Nové signály vyhodnoť rovnako ako doteraz.
+              if (signal.status === "OPEN") {
+                const rawScoringSide = signal.predictedSide === "home"
+                  ? finalMatch.home_score : finalMatch.away_score;
+                const rawOtherSide = signal.predictedSide === "home"
+                  ? finalMatch.away_score : finalMatch.home_score;
+                const scoring = Number(rawScoringSide);
+                const other = Number(rawOtherSide);
+                if (rawScoringSide == null || rawOtherSide == null ||
+                    !Number.isFinite(scoring) || !Number.isFinite(other)) continue;
+                signal.status = scoring > 0 ? "WIN" : "LOSS";
+                signal.settledAt = signalNow;
+                signal.settledScore = Number(finalMatch.home_score) + ":" + Number(finalMatch.away_score);
+                signal.settlementNote = scoring > 0
+                  ? "Predikovaný tím skóroval do potvrdeného konca zápasu."
+                  : "Predikovaný tím do potvrdeného konca zápasu neskóroval.";
+              }
+
+              // Zároveň spätne doplň časovú os aj starším už vyhodnoteným signálom.
+              // Čas gólu nikdy neodvodzuj z konečného skóre ani času archivácie.
               const finalIncidents = Array.isArray(finalMatch.incidents)
                 ? finalMatch.incidents
                 : null;
+              if (finalIncidents === null) continue;
+
               signal.goalEvents = finalIncidents
-                ? finalIncidents
-                    .filter(event => event && (
-                      event.is_goal === true ||
-                      String(event.type || "").toLowerCase() === "goal" ||
-                      Number(event.type_id) === 1
-                    ))
-                    .map(event => {
-                      const rawMinute = event.time ?? event.minute ?? null;
-                      const minuteText = String(rawMinute ?? "");
-                      const minuteNumber = /^\d+(?:\+\d+)?$/.test(minuteText)
-                        ? Number(minuteText.split("+")[0])
-                        : null;
-                      return {
-                        minute: rawMinute,
-                        minuteNumber,
-                        side: event.side || null,
-                        player: event.player || null,
-                        homeScore: event.home_score ?? null,
-                        awayScore: event.away_score ?? null
-                      };
-                    })
-                : null;
-              signal.goalTimingAvailable = finalIncidents !== null;
-              const predictedSideGoals = Array.isArray(signal.goalEvents)
-                ? signal.goalEvents.filter(event => event.side === signal.predictedSide)
-                : [];
+                .filter(event => event && (
+                  event.is_goal === true ||
+                  String(event.type || "").toLowerCase() === "goal" ||
+                  Number(event.type_id) === 1
+                ))
+                .map(event => {
+                  const rawMinute = event.time ?? event.minute ?? null;
+                  const minuteText = String(rawMinute ?? "");
+                  const minuteNumber = /^\\d+(?:\\+\\d+)?$/.test(minuteText)
+                    ? Number(minuteText.split("+")[0])
+                    : null;
+                  return {
+                    minute: rawMinute,
+                    minuteNumber,
+                    side: event.side || null,
+                    player: event.player || null,
+                    homeScore: event.home_score ?? null,
+                    awayScore: event.away_score ?? null
+                  };
+                });
+              signal.goalTimingAvailable = true;
+              const predictedSideGoals = signal.goalEvents.filter(
+                event => event.side === signal.predictedSide
+              );
               signal.firstPredictedGoalMinute = predictedSideGoals.length
                 ? predictedSideGoals
                     .map(event => event.minuteNumber)
                     .filter(Number.isFinite)
                     .sort((a, b) => a - b)[0] ?? null
                 : null;
-              signal.predictedSideScoredAt75Plus = finalIncidents === null
-                ? null
-                : predictedSideGoals.some(event =>
-                    Number.isFinite(event.minuteNumber) && event.minuteNumber >= 75
-                  );
-              signal.settlementNote = scoring > 0
-                ? "Predikovaný tím skóroval do potvrdeného konca zápasu."
-                : "Predikovaný tím do potvrdeného konca zápasu neskóroval.";
+              signal.predictedSideScoredAt75Plus = predictedSideGoals.some(event =>
+                Number.isFinite(event.minuteNumber) && event.minuteNumber >= 75
+              );
             }
             bttsArchive.updated_at = signalNow;
             fs.writeFileSync(BTTS_ARCHIVE_PATH, JSON.stringify(bttsArchive, null, 2));
