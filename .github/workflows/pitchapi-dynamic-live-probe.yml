@@ -1,0 +1,109 @@
+name: PitchAPI dynamic LIVE discovery probe
+
+on:
+  push:
+    paths:
+      - ".github/workflows/pitchapi-dynamic-live-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Discover today's fixtures and probe only API-labelled LIVE match
+        env:
+          PITCHAPI_API_KEY: ${{ secrets.PITCHAPI_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os, json, time, datetime, urllib.request, urllib.error, urllib.parse
+          from pathlib import Path
+
+          key = os.environ.get("PITCHAPI_API_KEY", "").strip()
+          if not key:
+              raise SystemExit("PITCHAPI_API_KEY secret is missing.")
+          base = "https://api.pitchapi.dev/v1"
+          headers = {"X-API-KEY": key, "Accept": "application/json",
+                     "User-Agent": "LIVE-EDGE-AI-PRO-dynamic-live-probe/1.0"}
+
+          def get(path):
+              req = urllib.request.Request(base + path, headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=25) as r:
+                      return r.status, json.loads(r.read().decode("utf-8"))
+              except urllib.error.HTTPError as e:
+                  return e.code, {"error": e.read(1000).decode("utf-8", "replace")}
+
+          today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+          code, payload = get(f"/date/{today}?status=all")
+          if code != 200:
+              raise SystemExit(f"Date discovery failed: HTTP {code}; {str(payload)[:500]}")
+          matches = payload.get("data", {}).get("matches", [])
+          if not isinstance(matches, list):
+              raise SystemExit("Unexpected date response: data.matches is not a list.")
+
+          live_words = {"live", "in_play", "inplay", "in-progress", "in_progress",
+                        "playing", "1h", "2h", "half_time", "halftime"}
+          candidates = []
+          for m in matches:
+              status = str(m.get("status", "")).strip().lower().replace(" ", "_")
+              if status in live_words or "live" in status or "in_play" in status:
+                  candidates.append(m)
+
+          def compact(m):
+              return {"id": m.get("id"), "home": (m.get("home_team") or {}).get("name"),
+                      "away": (m.get("away_team") or {}).get("name"),
+                      "status": m.get("status"), "score_home": m.get("score_home"),
+                      "score_away": m.get("score_away"), "date": m.get("date"),
+                      "time_utc": m.get("time_utc")}
+
+          report = {"checked_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "date_utc": today, "date_http_status": code,
+                    "fixtures_returned": len(matches),
+                    "status_counts": {}, "live_candidates": [compact(m) for m in candidates],
+                    "samples": [], "conclusion": ""}
+          for m in matches:
+              s = str(m.get("status", "missing"))
+              report["status_counts"][s] = report["status_counts"].get(s, 0) + 1
+
+          if not candidates:
+              report["conclusion"] = "No fixture was labelled LIVE by PitchAPI in today's date feed; no match endpoint was polled."
+              print("SUMMARY", json.dumps({k:v for k,v in report.items() if k != "samples"}, ensure_ascii=False))
+          else:
+              chosen = candidates[0]
+              mid = chosen.get("id")
+              if not mid:
+                  raise SystemExit("LIVE candidate has no match ID.")
+              report["chosen_match"] = compact(chosen)
+              for n in range(2):
+                  sample = {"number": n + 1,
+                            "at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                            "endpoints": {}}
+                  for endpoint in ("", "/events", "/shots", "/momentum", "/stats"):
+                      name = endpoint.lstrip("/") or "match"
+                      status_code, data = get(f"/matches/{urllib.parse.quote(str(mid), safe='')}{endpoint}")
+                      sample["endpoints"][name] = {"http_status": status_code, "response": data}
+                      time.sleep(5)
+                  report["samples"].append(sample)
+                  print("Captured sample", n + 1, "for", mid)
+                  if n == 0:
+                      time.sleep(60)
+              report["conclusion"] = "A PitchAPI-labelled LIVE fixture was sampled twice; compare returned payloads to determine whether fields changed."
+              print("SUMMARY", json.dumps({"chosen_match": report["chosen_match"],
+                    "samples": len(report["samples"]),
+                    "statuses": [{k:v["http_status"] for k,v in x["endpoints"].items()} for x in report["samples"]]},
+                    ensure_ascii=False))
+          Path("pitchapi-dynamic-live-probe").mkdir(exist_ok=True)
+          Path("pitchapi-dynamic-live-probe/report.json").write_text(
+              json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+          PY
+      - name: Upload dynamic LIVE probe report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pitchapi-dynamic-live-probe
+          path: pitchapi-dynamic-live-probe/report.json
+          if-no-files-found: error
+          retention-days: 7
