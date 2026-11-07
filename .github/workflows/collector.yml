@@ -1931,7 +1931,7 @@ jobs:
                 .map(event => {
                   const rawMinute = event.time ?? event.minute ?? null;
                   const minuteText = String(rawMinute ?? "");
-                  const minuteNumber = /^\\d+(?:\\+\\d+)?$/.test(minuteText)
+                  const minuteNumber = /^\d+(?:\+\d+)?$/.test(minuteText)
                     ? Number(minuteText.split("+")[0])
                     : null;
                   return {
