@@ -1,0 +1,160 @@
+name: PitchAPI historical coverage discovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_year:
+        description: "First season year to include (default 2021)"
+        required: false
+        type: string
+        default: "2021"
+  push:
+    paths:
+      - ".github/workflows/pitchapi-history-discovery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Discover historical league and match coverage (read-only)
+        env:
+          PITCHAPI_API_KEY: ${{ secrets.PITCHAPI_API_KEY }}
+          FROM_YEAR: ${{ inputs.from_year }}
+        run: |
+          python - <<'PY'
+          import os, json, csv, time, datetime, urllib.request, urllib.error
+          from collections import Counter, defaultdict
+
+          key = os.environ.get("PITCHAPI_API_KEY", "").strip()
+          if not key:
+              raise SystemExit("PITCHAPI_API_KEY secret is missing.")
+          try:
+              from_year = int(os.environ.get("FROM_YEAR", "2021") or "2021")
+          except ValueError:
+              raise SystemExit("from_year must be a four-digit year.")
+          if from_year < 2021 or from_year > datetime.datetime.now(datetime.timezone.utc).year:
+              raise SystemExit("from_year must be between 2021 and the current year.")
+
+          BASE = "https://api.pitchapi.dev/v1"
+          HEADERS = {"X-API-KEY": key, "Accept": "application/json",
+                     "User-Agent": "LIVE-EDGE-AI-PRO-history-discovery/1.0"}
+
+          def get(path, attempts=5):
+              for attempt in range(attempts):
+                  req = urllib.request.Request(BASE + path, headers=HEADERS)
+                  try:
+                      with urllib.request.urlopen(req, timeout=30) as response:
+                          return json.loads(response.read().decode("utf-8"))
+                  except urllib.error.HTTPError as exc:
+                      body = exc.read(1200).decode("utf-8", "replace")
+                      if exc.code == 429 or 500 <= exc.code < 600:
+                          wait = int(exc.headers.get("Retry-After", "2") or "2")
+                          time.sleep(min(max(wait, 2) * (attempt + 1), 30))
+                          continue
+                      raise RuntimeError(f"HTTP {exc.code} for {path}: {body[:400]}")
+                  except Exception:
+                      if attempt == attempts - 1:
+                          raise
+                      time.sleep(2 * (attempt + 1))
+              raise RuntimeError(f"Request failed after retries: {path}")
+
+          payload = get("/leagues")
+          leagues = payload.get("data", {}).get("leagues", [])
+          if not isinstance(leagues, list) or not leagues:
+              raise SystemExit("PitchAPI returned no leagues in data.leagues.")
+
+          league_rows, match_rows = [], []
+          errors = []
+          total_seasons = 0
+          for index, league in enumerate(leagues, 1):
+              lid = league.get("id")
+              name = league.get("name", "Unknown")
+              country = league.get("country_code", "")
+              seasons = league.get("seasons", [])
+              eligible = []
+              for season in seasons:
+                  text = str(season)
+                  years = [int(x) for x in __import__("re").findall(r"\\d{4}", text)]
+                  if years and max(years) >= from_year:
+                      eligible.append(text)
+              league_rows.append({
+                  "league_id": lid, "league": name, "country_code": country,
+                  "seasons_listed": len(seasons), "seasons_in_scope": len(eligible),
+                  "first_season_in_scope": eligible[-1] if eligible else "",
+                  "last_season_in_scope": eligible[0] if eligible else ""
+              })
+              for season in eligible:
+                  total_seasons += 1
+                  try:
+                      result = get(f"/leagues/{lid}/matches?season={urllib.parse.quote(season, safe='')}&status=played")
+                      matches = result.get("data", {}).get("matches", [])
+                      if not isinstance(matches, list):
+                          raise RuntimeError("data.matches is not a list")
+                      for m in matches:
+                          hs, aws = m.get("score_home"), m.get("score_away")
+                          valid_score = isinstance(hs, (int, float)) and isinstance(aws, (int, float))
+                          match_rows.append({
+                              "match_id": m.get("id", ""), "date": m.get("date", ""),
+                              "time_utc": m.get("time_utc", ""), "league_id": lid,
+                              "league": name, "country_code": country, "season": season,
+                              "home": (m.get("home_team") or {}).get("name", ""),
+                              "away": (m.get("away_team") or {}).get("name", ""),
+                              "status": m.get("status", ""),
+                              "score_home": hs if valid_score else "",
+                              "score_away": aws if valid_score else "",
+                              "btts": int(hs > 0 and aws > 0) if valid_score else "",
+                              "valid_final_score": bool(valid_score)
+                          })
+                      time.sleep(0.08)
+                  except Exception as exc:
+                      errors.append({"league": name, "league_id": lid, "season": season, "error": str(exc)[:400]})
+              print(f"[{index}/{len(leagues)}] {name}: {len(eligible)} seasons in scope")
+
+          # Deduplicate by opaque match ID; preserve first occurrence.
+          unique = {}
+          for row in match_rows:
+              if row["match_id"]:
+                  unique[row["match_id"]] = row
+          match_rows = list(unique.values())
+          os.makedirs("pitchapi-output", exist_ok=True)
+          with open("pitchapi-output/pitchapi-leagues.csv", "w", newline="", encoding="utf-8") as f:
+              writer = csv.DictWriter(f, fieldnames=list(league_rows[0].keys()))
+              writer.writeheader(); writer.writerows(league_rows)
+          fields = list(match_rows[0].keys()) if match_rows else [
+              "match_id","date","time_utc","league_id","league","country_code","season",
+              "home","away","status","score_home","score_away","btts","valid_final_score"]
+          with open("pitchapi-output/pitchapi-historical-matches.csv", "w", newline="", encoding="utf-8") as f:
+              writer = csv.DictWriter(f, fieldnames=fields)
+              writer.writeheader(); writer.writerows(match_rows)
+          score_rows = [m for m in match_rows if m["valid_final_score"]]
+          report = {
+              "generated_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "read_only": True, "source": "PitchAPI", "from_year": from_year,
+              "leagues_returned": len(leagues), "seasons_requested": total_seasons,
+              "unique_matches": len(match_rows), "matches_with_final_score": len(score_rows),
+              "btts_yes": sum(m["btts"] == 1 for m in score_rows),
+              "btts_no": sum(m["btts"] == 0 for m in score_rows),
+              "btts_rate": round(sum(m["btts"] == 1 for m in score_rows) / len(score_rows), 6) if score_rows else None,
+              "errors": errors, "notes": [
+                  "This is a coverage and final-score discovery pass, not a LIVE strategy backtest.",
+                  "Historical LIVE reconstruction requires minute-stamped shots/events and strict time alignment.",
+                  "No production files, signals, or collectors are modified."
+              ]
+          }
+          with open("pitchapi-output/pitchapi-history-report.json", "w", encoding="utf-8") as f:
+              json.dump(report, f, ensure_ascii=False, indent=2)
+          print("PITCHAPI HISTORICAL COVERAGE")
+          print(json.dumps({k:v for k,v in report.items() if k != "errors"}, ensure_ascii=False, indent=2))
+          print("Errors:", len(errors))
+          PY
+      - name: Upload historical coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pitchapi-historical-coverage
+          path: pitchapi-output/
+          if-no-files-found: error
+          retention-days: 30
