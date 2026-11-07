@@ -1,0 +1,104 @@
+name: PitchAPI LIVE capability probe
+
+on:
+  push:
+    paths:
+      - ".github/workflows/pitchapi-live-capability-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe today's fixtures and repeat live-match endpoints
+        env:
+          PITCHAPI_API_KEY: ${{ secrets.PITCHAPI_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os, json, time, datetime, urllib.request, urllib.error
+          from pathlib import Path
+
+          key = os.environ.get("PITCHAPI_API_KEY", "").strip()
+          if not key:
+              raise SystemExit("PITCHAPI_API_KEY secret is missing.")
+          headers = {"X-API-KEY": key, "Accept": "application/json",
+                     "User-Agent": "LIVE-EDGE-AI-PRO-live-probe/1.0"}
+          base = "https://api.pitchapi.dev/v1"
+          today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+          out = {"date_utc": today, "checked_at_utc": [], "fixture_statuses": [],
+                 "live_candidates": [], "snapshots": [], "notes": []}
+
+          def get(path):
+              req = urllib.request.Request(base + path, headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=25) as r:
+                      return r.status, json.loads(r.read().decode("utf-8"))
+              except urllib.error.HTTPError as e:
+                  body = e.read(1200).decode("utf-8", "replace")
+                  return e.code, {"error": body}
+
+          code, payload = get(f"/date/{today}?status=all")
+          out["date_http_status"] = code
+          if code != 200:
+              out["date_response"] = payload
+              raise SystemExit("Could not retrieve today's fixtures.")
+          matches = payload.get("data", {}).get("matches", [])
+          out["fixture_count"] = len(matches)
+          out["fixture_statuses"] = [
+              {"id": m.get("id"), "home": (m.get("home_team") or {}).get("name"),
+               "away": (m.get("away_team") or {}).get("name"),
+               "status": m.get("status"), "score_home": m.get("score_home"),
+               "score_away": m.get("score_away"), "time_utc": m.get("time_utc")}
+              for m in matches
+          ]
+          live_words = {"live", "inprogress", "in_progress", "in-play", "in_play",
+                        "1st_half", "2nd_half", "halftime", "half_time"}
+          candidates = [m for m in matches
+                        if str(m.get("status", "")).lower().replace(" ", "_") in live_words]
+          out["live_candidates"] = [m.get("id") for m in candidates]
+          print("Fixture statuses:", json.dumps(out["fixture_statuses"], ensure_ascii=False))
+
+          if not candidates:
+              out["notes"].append(
+                  "No match was labelled live/in-progress in today's status=all listing; "
+                  "therefore no live-update claim can be confirmed from this run."
+              )
+          else:
+              for sample in range(3):
+                  checked = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                  snap = {"sample": sample + 1, "at_utc": checked, "matches": []}
+                  for m in candidates:
+                      mid = m["id"]
+                      item = {"id": mid, "endpoints": {}}
+                      for name, suffix in [
+                          ("match", ""), ("shots", "/shots"), ("events", "/events"),
+                          ("momentum", "/momentum"), ("stats", "/stats")
+                      ]:
+                          c, d = get(f"/matches/{mid}{suffix}")
+                          item["endpoints"][name] = {"http_status": c, "response": d}
+                      snap["matches"].append(item)
+                  out["checked_at_utc"].append(checked)
+                  out["snapshots"].append(snap)
+                  if sample < 2:
+                      time.sleep(60)
+
+          Path("pitchapi-live-probe").mkdir(exist_ok=True)
+          Path("pitchapi-live-probe/report.json").write_text(
+              json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+          print("Probe summary:", json.dumps({
+              "date_utc": today, "fixture_count": len(matches),
+              "statuses": sorted(set(str(m.get("status")) for m in matches)),
+              "live_candidates": len(candidates), "samples": len(out["snapshots"])
+          }, ensure_ascii=False))
+          PY
+      - name: Upload probe report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pitchapi-live-capability-probe
+          path: pitchapi-live-probe/report.json
+          if-no-files-found: error
+          retention-days: 7
