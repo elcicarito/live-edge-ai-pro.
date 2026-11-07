@@ -27,17 +27,24 @@ jobs:
           FROM_YEAR: ${{ inputs.from_year }}
         run: |
           python - <<'PY'
-          import os, json, re, urllib.request
+          import os, json, re, time, urllib.request, urllib.error
           key = os.environ.get("PITCHAPI_API_KEY", "").strip()
           if not key:
               raise SystemExit("PITCHAPI_API_KEY secret is missing.")
           year = int(os.environ.get("FROM_YEAR") or "2021")
           if year < 2021 or year > 2026:
               raise SystemExit("from_year must be between 2021 and 2026.")
-          req = urllib.request.Request("https://api.pitchapi.dev/v1/leagues",
-              headers={"X-API-KEY": key, "Accept": "application/json"})
-          with urllib.request.urlopen(req, timeout=30) as r:
-              payload = json.loads(r.read().decode())
+          headers = {"X-API-KEY": key, "Accept": "application/json", "User-Agent": "LIVE-EDGE-AI-PRO-history/1.0"}
+          for attempt in range(8):
+              req = urllib.request.Request("https://api.pitchapi.dev/v1/leagues", headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      payload = json.loads(r.read().decode())
+                  break
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in (403, 429, 500, 502, 503, 504) or attempt == 7:
+                      raise
+                  time.sleep(min(3 * (attempt + 1), 45))
           leagues = payload.get("data", {}).get("leagues", [])
           matrix = []
           for league in leagues:
