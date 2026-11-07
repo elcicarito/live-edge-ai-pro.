@@ -3537,9 +3537,10 @@
     return found ? found.flag : "🌍";
   }
 
-  function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false, signalArchive = null, bttsArchive = null, target = matchesEl, compact = false) {
+  function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false, signalArchive = null, bttsArchive = null, target = matchesEl, compact = false, noSignal = false) {
     const card = document.createElement("div");
-    if (compact) card.classList.add("compact-match-card");
+    if (noSignal) card.classList.add("no-signal-match-card");
+    else if (compact) card.classList.add("compact-match-card");
     else card.classList.add("priority-match-card");
 
     card.style.cssText = compact
@@ -3981,9 +3982,10 @@
     ]));
     const getPriority = item => priorityByItem.get(item) || { rank: 0, score: 0 };
     const confirmedItems = items.filter(item => getPriority(item).rank === 2);
-    const otherItems = items.filter(item => getPriority(item).rank !== 2);
+    const pressureItems = items.filter(item => getPriority(item).rank === 1);
+    const noSignalItems = items.filter(item => getPriority(item).rank === 0);
 
-    const renderCategory = (categoryItems, title, compact) => {
+    const renderCategory = (categoryItems, title, compact, noSignal = false) => {
       if (!categoryItems.length) return;
 
       const categoryHeading = document.createElement("div");
@@ -4033,7 +4035,8 @@
             signalArchive,
             bttsArchive,
             section,
-            compact
+            compact,
+            noSignal
           ));
 
           matchesEl.appendChild(section);
@@ -4041,7 +4044,8 @@
     };
 
     renderCategory(confirmedItems, "⚡ POTVRDENÉ SIGNÁLY", false);
-    renderCategory(otherItems, "👀 OSTATNÉ LIVE ZÁPASY", true);
+    renderCategory(pressureItems, "⚠ ZVÝŠENÝ TLAK – BEZ POTVRDENÉHO SIGNÁLU", true);
+    renderCategory(noSignalItems, "○ ZÁPASY BEZ AKTUÁLNEHO SIGNÁLU", true, true);
   }
 
   function updateDashboard(current, liveCount, signalArchive, bttsArchive, fresh, complete) {
