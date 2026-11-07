@@ -1,0 +1,98 @@
+name: SportScore explicit LIVE date probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Probe documented LIVE date and matches aliases
+        env:
+          BASE_URL: https://sportscore.com
+        run: |
+          node --input-type=module <<'NODE'
+          const base = process.env.BASE_URL;
+          const today = new Date().toISOString().slice(0, 10);
+          const targets = [
+            {
+              name: "fixtures_today_live",
+              path: "/api/v1/fixtures/",
+              params: { sport: "football", date: today, status: "live", limit: "200" }
+            },
+            {
+              name: "fixtures_today_all_statuses",
+              path: "/api/v1/fixtures/",
+              params: { sport: "football", date: today, limit: "200" }
+            },
+            {
+              name: "v1_matches_alias",
+              path: "/api/v1/matches/",
+              params: { sport: "football", limit: "50" }
+            },
+            {
+              name: "widget_matches",
+              path: "/api/widget/matches/",
+              params: { sport: "football", limit: "50" }
+            }
+          ];
+
+          function statusOf(match) {
+            const raw = match?.status;
+            if (typeof raw === "string") return raw.trim().toLowerCase() || "empty";
+            if (raw && typeof raw === "object") {
+              return String(raw.type ?? raw.name ?? raw.short ?? "object").trim().toLowerCase();
+            }
+            return raw == null ? "missing" : typeof raw;
+          }
+
+          for (const target of targets) {
+            const url = new URL(target.path, base);
+            for (const [key, value] of Object.entries(target.params)) url.searchParams.set(key, value);
+            url.searchParams.set("_probe", String(Date.now()));
+            console.log("\\n=== " + target.name + " ===");
+            try {
+              const response = await fetch(url, {
+                headers: {
+                  accept: "application/json",
+                  "cache-control": "no-cache",
+                  pragma: "no-cache",
+                  "user-agent": "LIVE-EDGE-AI-PRO-explicit-live-date-probe/1.0"
+                },
+                signal: AbortSignal.timeout(20000)
+              });
+              const raw = await response.text();
+              let payload = null;
+              try { payload = JSON.parse(raw); } catch {}
+              const matches = Array.isArray(payload?.matches) ? payload.matches : null;
+              const statuses = {};
+              for (const match of matches || []) {
+                const status = statusOf(match);
+                statuses[status] = (statuses[status] || 0) + 1;
+              }
+              console.log(JSON.stringify({
+                endpoint: target.name,
+                tested_date_utc: today,
+                http_status: response.status,
+                content_type: response.headers.get("content-type"),
+                cache_control: response.headers.get("cache-control"),
+                json_valid: payload !== null,
+                payload_keys: payload && typeof payload === "object" ? Object.keys(payload).slice(0, 30) : [],
+                provider_count: payload?.count ?? null,
+                matches_count: matches ? matches.length : null,
+                match_statuses: matches ? statuses : null,
+                response_preview: payload === null ? raw.slice(0, 160) : undefined
+              }, null, 2));
+            } catch (error) {
+              console.log(JSON.stringify({
+                endpoint: target.name,
+                tested_date_utc: today,
+                request_error: String(error?.message || error)
+              }, null, 2));
+            }
+          }
+          NODE
