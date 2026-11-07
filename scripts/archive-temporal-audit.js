@@ -1,6 +1,8 @@
 const fs = require("fs");
 const path = require("path");
-const HISTORY = "data/live-match-history.jsonl";
+const zlib = require("zlib");
+const HISTORY = "data/live-match-history.jsonl.gz";
+const LEGACY_HISTORY = "data/live-match-history.jsonl";
 const OUT = "audit-output";
 const norm = v => String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const finite = v => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
@@ -119,7 +121,9 @@ function percentile(a, p) {
 function bump(map, key, n=1) { map.set(String(key), (map.get(String(key)) || 0) + n); }
 function top(map, limit=30) { return [...map.entries()].sort((a,b)=>b[1]-a[1]).slice(0,limit).map(([value,count])=>({value,count})); }
 
-const raw = fs.readFileSync(HISTORY, "utf8");
+const raw = fs.existsSync(HISTORY)
+  ? zlib.gunzipSync(fs.readFileSync(HISTORY)).toString("utf8")
+  : fs.existsSync(LEGACY_HISTORY) ? fs.readFileSync(LEGACY_HISTORY, "utf8") : "";
 const matches = new Map();
 let invalidLines = 0, duplicateIds = 0;
 for (const line of raw.split(/\r?\n/)) {
