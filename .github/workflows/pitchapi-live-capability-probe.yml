@@ -45,7 +45,11 @@ jobs:
           out["date_http_status"] = code
           if code != 200:
               out["date_response"] = payload
-              raise SystemExit("Could not retrieve today's fixtures.")
+              print("Date endpoint HTTP status:", code)
+              print("Date endpoint response:", json.dumps(payload, ensure_ascii=False))
+              Path("pitchapi-live-probe").mkdir(exist_ok=True)
+              Path("pitchapi-live-probe/report.json").write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+              raise SystemExit("Could not retrieve today's fixtures; response saved for diagnosis.")
           matches = payload.get("data", {}).get("matches", [])
           out["fixture_count"] = len(matches)
           out["fixture_statuses"] = [
