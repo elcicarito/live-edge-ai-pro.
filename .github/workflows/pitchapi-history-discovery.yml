@@ -26,9 +26,7 @@ jobs:
           FROM_YEAR: ${{ inputs.from_year }}
         run: |
           python - <<'PY'
-          import os, json, csv, time, datetime, urllib.request, urllib.error
-          from collections import Counter, defaultdict
-
+          import os, json, csv, time, datetime, urllib.request, urllib.error, urllib.parse, re
           key = os.environ.get("PITCHAPI_API_KEY", "").strip()
           if not key:
               raise SystemExit("PITCHAPI_API_KEY secret is missing.")
@@ -67,30 +65,30 @@ jobs:
           if not isinstance(leagues, list) or not leagues:
               raise SystemExit("PitchAPI returned no leagues in data.leagues.")
 
-          league_rows, match_rows = [], []
-          errors = []
+          league_rows, match_rows, errors = [], [], []
           total_seasons = 0
           for index, league in enumerate(leagues, 1):
-              lid = league.get("id")
-              name = league.get("name", "Unknown")
-              country = league.get("country_code", "")
-              seasons = league.get("seasons", [])
+              lid, name = league.get("id"), league.get("name", "Unknown")
+              country, seasons = league.get("country_code", ""), league.get("seasons", [])
               eligible = []
               for season in seasons:
-                  text = str(season)
-                  years = [int(x) for x in __import__("re").findall(r"\\d{4}", text)]
+                  season_text = str(season)
+                  years = [int(x) for x in re.findall(r"\\d{4}", season_text)]
                   if years and max(years) >= from_year:
-                      eligible.append(text)
+                      eligible.append(season_text)
+              season_years = [(min([int(x) for x in re.findall(r"\\d{4}", s)]), s) for s in eligible]
+              ordered = [s for _, s in sorted(season_years)]
               league_rows.append({
                   "league_id": lid, "league": name, "country_code": country,
                   "seasons_listed": len(seasons), "seasons_in_scope": len(eligible),
-                  "first_season_in_scope": eligible[-1] if eligible else "",
-                  "last_season_in_scope": eligible[0] if eligible else ""
+                  "oldest_season_in_scope": ordered[0] if ordered else "",
+                  "newest_season_in_scope": ordered[-1] if ordered else ""
               })
-              for season in eligible:
+              for season in ordered:
                   total_seasons += 1
                   try:
-                      result = get(f"/leagues/{lid}/matches?season={urllib.parse.quote(season, safe='')}&status=played")
+                      path = f"/leagues/{lid}/matches?season={urllib.parse.quote(season, safe='')}&status=played"
+                      result = get(path)
                       matches = result.get("data", {}).get("matches", [])
                       if not isinstance(matches, list):
                           raise RuntimeError("data.matches is not a list")
@@ -112,13 +110,9 @@ jobs:
                       time.sleep(0.08)
                   except Exception as exc:
                       errors.append({"league": name, "league_id": lid, "season": season, "error": str(exc)[:400]})
-              print(f"[{index}/{len(leagues)}] {name}: {len(eligible)} seasons in scope")
+              print(f"[{index}/{len(leagues)}] {name}: {len(ordered)} seasons in scope")
 
-          # Deduplicate by opaque match ID; preserve first occurrence.
-          unique = {}
-          for row in match_rows:
-              if row["match_id"]:
-                  unique[row["match_id"]] = row
+          unique = {row["match_id"]: row for row in match_rows if row["match_id"]}
           match_rows = list(unique.values())
           os.makedirs("pitchapi-output", exist_ok=True)
           with open("pitchapi-output/pitchapi-leagues.csv", "w", newline="", encoding="utf-8") as f:
@@ -130,18 +124,18 @@ jobs:
           with open("pitchapi-output/pitchapi-historical-matches.csv", "w", newline="", encoding="utf-8") as f:
               writer = csv.DictWriter(f, fieldnames=fields)
               writer.writeheader(); writer.writerows(match_rows)
-          score_rows = [m for m in match_rows if m["valid_final_score"]]
+          scored = [m for m in match_rows if m["valid_final_score"]]
+          yes = sum(m["btts"] == 1 for m in scored)
           report = {
               "generated_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "read_only": True, "source": "PitchAPI", "from_year": from_year,
               "leagues_returned": len(leagues), "seasons_requested": total_seasons,
-              "unique_matches": len(match_rows), "matches_with_final_score": len(score_rows),
-              "btts_yes": sum(m["btts"] == 1 for m in score_rows),
-              "btts_no": sum(m["btts"] == 0 for m in score_rows),
-              "btts_rate": round(sum(m["btts"] == 1 for m in score_rows) / len(score_rows), 6) if score_rows else None,
+              "unique_matches": len(match_rows), "matches_with_final_score": len(scored),
+              "btts_yes": yes, "btts_no": len(scored) - yes,
+              "btts_rate": round(yes / len(scored), 6) if scored else None,
               "errors": errors, "notes": [
-                  "This is a coverage and final-score discovery pass, not a LIVE strategy backtest.",
-                  "Historical LIVE reconstruction requires minute-stamped shots/events and strict time alignment.",
+                  "Coverage and final-score discovery only; not a LIVE strategy backtest.",
+                  "Minute-stamped shots/events must be audited before reconstructing LIVE states.",
                   "No production files, signals, or collectors are modified."
               ]
           }
