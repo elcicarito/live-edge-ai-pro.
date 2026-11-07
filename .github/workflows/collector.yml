@@ -58,7 +58,8 @@ jobs:
             retry_count: 0,
             network_error_count: 0,
             parse_error_count: 0,
-            endpoint_counts: {}
+            endpoint_counts: {},
+            api_response_diagnostics: []
           };
 
           function metricEndpoint(rawUrl) {
@@ -87,11 +88,11 @@ jobs:
             for (let i = 1; i <= attempts; i++) {
               let retryAfterMs = 0;
               let responseReceived = false;
+              const endpoint = metricEndpoint(url);
 
               try {
                 const separator = url.includes("?") ? "&" : "?";
                 const freshUrl = `${url}${separator}_cache=${Date.now()}_${i}`;
-                const endpoint = metricEndpoint(url);
                 collectorMetrics.request_count++;
                 countMetric(endpoint, "requests");
 
@@ -106,6 +107,18 @@ jobs:
                   cache: "no-store"
                 });
                 responseReceived = true;
+
+                const diagnosticHeaders = {};
+                for (const headerName of [
+                  "date", "age", "retry-after", "content-type",
+                  "cache-control", "cf-cache-status", "x-cache",
+                  "x-ratelimit-limit", "x-ratelimit-remaining",
+                  "x-ratelimit-reset", "ratelimit-limit",
+                  "ratelimit-remaining", "ratelimit-reset"
+                ]) {
+                  const value = response.headers.get(headerName);
+                  if (value !== null) diagnosticHeaders[headerName] = value;
+                }
 
                 if (response.ok) {
                   collectorMetrics.success_count++;
@@ -128,6 +141,23 @@ jobs:
                 }
 
                 const data = await response.json();
+
+                const responseDiagnostic = {
+                  endpoint,
+                  http_status: response.status,
+                  headers: diagnosticHeaders,
+                  payload_keys: data && typeof data === "object" ? Object.keys(data).slice(0, 30) : [],
+                  matches_count: Array.isArray(data?.matches) ? data.matches.length : null,
+                  match_statuses: Array.isArray(data?.matches)
+                    ? data.matches.reduce((counts, match) => {
+                        const status = getStatus(match) || "unknown";
+                        counts[status] = (counts[status] || 0) + 1;
+                        return counts;
+                      }, {})
+                    : null
+                };
+                collectorMetrics.api_response_diagnostics.push(responseDiagnostic);
+                console.log("SPORTSCORE RESPONSE DIAGNOSTICS:", JSON.stringify(responseDiagnostic));
 
                 if (!data || typeof data !== "object") {
                   throw new Error("Neplatná JSON odpoveď");
