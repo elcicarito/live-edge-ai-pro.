@@ -3983,6 +3983,23 @@
     const getPriority = item => priorityByItem.get(item) || { rank: 0, score: 0 };
     const confirmedItems = items.filter(item => getPriority(item).rank === 2);
     const pressureItems = items.filter(item => getPriority(item).rank === 1);
+
+    const latestSignalTime = item => {
+      const id = matchId(item.match);
+      const records = [
+        ...(Array.isArray(signalArchive?.signals) ? signalArchive.signals : []),
+        ...(Array.isArray(bttsArchive?.signals) ? bttsArchive.signals : [])
+      ];
+      let latest = 0;
+      records.forEach(signal => {
+        if (String(signal?.matchId) !== id) return;
+        const time = Date.parse(signal?.createdAt || "");
+        if (Number.isFinite(time)) latest = Math.max(latest, time);
+      });
+      if (latest) return latest;
+      const collected = Date.parse(item.collectedAt || "");
+      return Number.isFinite(collected) ? collected : 0;
+    };
     const noSignalItems = items.filter(item => getPriority(item).rank === 0);
 
     const renderCategory = (categoryItems, title, compact, noSignal = false) => {
@@ -3995,6 +4012,27 @@
         ? "font-size:11px;font-weight:900;letter-spacing:.6px;color:#9fb0c5;margin:16px 2px 5px;padding:2px 1px;"
         : "font-size:12px;font-weight:900;letter-spacing:.7px;color:#39e6a5;margin:8px 2px 6px;padding:3px 1px;";
       matchesEl.appendChild(categoryHeading);
+
+      // Potvrdené signály zobrazujeme ako jeden chronologický zoznam,
+      // aby poradie neovplyvňovalo rozdelenie podľa súťaží.
+      if (!compact) {
+        categoryItems
+          .slice()
+          .sort((a, b) => latestSignalTime(b) - latestSignalTime(a))
+          .forEach(item => renderMatch(
+            item.match,
+            historyData,
+            item.collectedAt,
+            allowSignals,
+            staleMode,
+            signalArchive,
+            bttsArchive,
+            matchesEl,
+            false,
+            noSignal
+          ));
+        return;
+      }
 
       const groups = new Map();
       categoryItems.forEach(item => {
