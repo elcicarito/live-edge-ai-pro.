@@ -1908,6 +1908,50 @@ jobs:
               signal.status = scoring > 0 ? "WIN" : "LOSS";
               signal.settledAt = signalNow;
               signal.settledScore = Number(finalMatch.home_score) + ":" + Number(finalMatch.away_score);
+
+              // Ulož presnú časovú os gólov z potvrdeného finálneho detailu.
+              // Čas gólu nikdy neodvodzuj z konečného skóre ani z času archivácie.
+              const finalIncidents = Array.isArray(finalMatch.incidents)
+                ? finalMatch.incidents
+                : null;
+              signal.goalEvents = finalIncidents
+                ? finalIncidents
+                    .filter(event => event && (
+                      event.is_goal === true ||
+                      String(event.type || "").toLowerCase() === "goal" ||
+                      Number(event.type_id) === 1
+                    ))
+                    .map(event => {
+                      const rawMinute = event.time ?? event.minute ?? null;
+                      const minuteText = String(rawMinute ?? "");
+                      const minuteNumber = /^\\d+(?:\\+\\d+)?$/.test(minuteText)
+                        ? Number(minuteText.split("+")[0])
+                        : null;
+                      return {
+                        minute: rawMinute,
+                        minuteNumber,
+                        side: event.side || null,
+                        player: event.player || null,
+                        homeScore: event.home_score ?? null,
+                        awayScore: event.away_score ?? null
+                      };
+                    })
+                : null;
+              signal.goalTimingAvailable = finalIncidents !== null;
+              const predictedSideGoals = Array.isArray(signal.goalEvents)
+                ? signal.goalEvents.filter(event => event.side === signal.predictedSide)
+                : [];
+              signal.firstPredictedGoalMinute = predictedSideGoals.length
+                ? predictedSideGoals
+                    .map(event => event.minuteNumber)
+                    .filter(Number.isFinite)
+                    .sort((a, b) => a - b)[0] ?? null
+                : null;
+              signal.predictedSideScoredAt75Plus = finalIncidents === null
+                ? null
+                : predictedSideGoals.some(event =>
+                    Number.isFinite(event.minuteNumber) && event.minuteNumber >= 75
+                  );
               signal.settlementNote = scoring > 0
                 ? "Predikovaný tím skóroval do potvrdeného konca zápasu."
                 : "Predikovaný tím do potvrdeného konca zápasu neskóroval.";
