@@ -59,7 +59,7 @@ jobs:
           if not matrix:
               raise SystemExit("No league seasons found for selected year.")
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write("matrix=" + json.dumps(matrix, separators=(",", ":")) + "\\n")
+              f.write("matrix=" + json.dumps(matrix, separators=(",", ":")) + chr(10))
           print(f"Prepared {len(matrix)} league jobs from {year} onward.")
           PY
 
@@ -169,7 +169,7 @@ jobs:
                               "country_code": country, "season": season,
                               "endpoint": name, "http_status": code, "response": data
                           }
-                          handles[name].write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\\n")
+                          handles[name].write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + chr(10))
                           counts[f"{name}_http_{code}"] += 1
                           if code not in (200, 404):
                               errors.append({"match_id": mid, "endpoint": name,
