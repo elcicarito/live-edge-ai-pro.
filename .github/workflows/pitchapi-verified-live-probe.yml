@@ -1,0 +1,73 @@
+name: PitchAPI verified LIVE match probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Poll one independently reported LIVE match
+        env:
+          PITCHAPI_API_KEY: ${{ secrets.PITCHAPI_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os, json, time, datetime, urllib.request, urllib.error
+          from pathlib import Path
+
+          key = os.environ.get("PITCHAPI_API_KEY", "").strip()
+          if not key:
+              raise SystemExit("PITCHAPI_API_KEY secret is missing.")
+          match_id = "m_3LKBom"  # Slovan Bratislava vs Trenčín; external live-score report showed it in play.
+          base = "https://api.pitchapi.dev/v1"
+          headers = {"X-API-KEY": key, "Accept": "application/json",
+                     "User-Agent": "LIVE-EDGE-AI-PRO-verified-live-probe/1.0"}
+
+          def get(path):
+              req = urllib.request.Request(base + path, headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      return r.status, json.loads(r.read().decode("utf-8"))
+              except urllib.error.HTTPError as e:
+                  return e.code, {"error": e.read(1000).decode("utf-8", "replace")}
+
+          report = {
+              "match_id": match_id,
+              "match": "Slovan Bratislava vs Trenčín",
+              "external_live_reference": "LiveScore listing for 7 Nov 2026 showed Slovan Bratislava 1-1 Trenčín at 63 minutes.",
+              "samples": []
+          }
+          for n in range(3):
+              sample = {"number": n + 1,
+                        "at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                        "endpoints": {}}
+              for endpoint in ("", "/events", "/shots", "/momentum", "/stats"):
+                  name = endpoint.lstrip("/") or "match"
+                  code, data = get(f"/matches/{match_id}{endpoint}")
+                  sample["endpoints"][name] = {"http_status": code, "response": data}
+                  time.sleep(3)
+              report["samples"].append(sample)
+              print("Sample", n + 1, "captured at", sample["at_utc"])
+              if n < 2:
+                  time.sleep(60)
+          Path("pitchapi-verified-live-probe").mkdir(exist_ok=True)
+          Path("pitchapi-verified-live-probe/report.json").write_text(
+              json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+          print("SUMMARY", json.dumps({
+              "match_id": match_id,
+              "samples": len(report["samples"]),
+              "statuses": [{k: v["http_status"] for k, v in s["endpoints"].items()}
+                           for s in report["samples"]]
+          }))
+          PY
+      - name: Upload probe report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pitchapi-verified-live-probe
+          path: pitchapi-verified-live-probe/report.json
+          if-no-files-found: error
+          retention-days: 7
