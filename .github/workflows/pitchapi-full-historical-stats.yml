@@ -1,0 +1,197 @@
+name: PitchAPI full historical statistics collection
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_year:
+        description: "First season year (PitchAPI history starts in 2021)"
+        required: false
+        type: string
+        default: "2021"
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - id: matrix
+        env:
+          PITCHAPI_API_KEY: ${{ secrets.PITCHAPI_API_KEY }}
+          FROM_YEAR: ${{ inputs.from_year }}
+        run: |
+          python - <<'PY'
+          import os, json, re, urllib.request
+          key = os.environ.get("PITCHAPI_API_KEY", "").strip()
+          if not key:
+              raise SystemExit("PITCHAPI_API_KEY secret is missing.")
+          year = int(os.environ.get("FROM_YEAR") or "2021")
+          if year < 2021 or year > 2026:
+              raise SystemExit("from_year must be between 2021 and 2026.")
+          req = urllib.request.Request("https://api.pitchapi.dev/v1/leagues",
+              headers={"X-API-KEY": key, "Accept": "application/json"})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              payload = json.loads(r.read().decode())
+          leagues = payload.get("data", {}).get("leagues", [])
+          matrix = []
+          for league in leagues:
+              seasons = []
+              for season in league.get("seasons", []):
+                  years = [int(x) for x in re.findall(r"[0-9]{4}", str(season))]
+                  if years and max(years) >= year:
+                      seasons.append(str(season))
+              if seasons:
+                  matrix.append({"league_id": league["id"], "league": league.get("name", ""),
+                                 "country_code": league.get("country_code", ""), "seasons": seasons})
+          if not matrix:
+              raise SystemExit("No league seasons found for selected year.")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("matrix=" + json.dumps(matrix, separators=(",", ":")) + "\\n")
+          print(f"Prepared {len(matrix)} league jobs from {year} onward.")
+          PY
+
+  collect:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        league: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: Collect every documented match statistics endpoint
+        env:
+          PITCHAPI_API_KEY: ${{ secrets.PITCHAPI_API_KEY }}
+          LEAGUE_ID: ${{ matrix.league.league_id }}
+          LEAGUE_NAME: ${{ matrix.league.league }}
+          COUNTRY_CODE: ${{ matrix.league.country_code }}
+          SEASONS_JSON: ${{ toJson(matrix.league.seasons) }}
+        run: |
+          python - <<'PY'
+          import os, json, gzip, time, datetime, urllib.request, urllib.error, urllib.parse
+          from collections import Counter
+
+          key = os.environ.get("PITCHAPI_API_KEY", "").strip()
+          if not key:
+              raise SystemExit("PITCHAPI_API_KEY secret is missing.")
+          league_id = os.environ["LEAGUE_ID"]
+          league_name = os.environ.get("LEAGUE_NAME", "")
+          country = os.environ.get("COUNTRY_CODE", "")
+          seasons = json.loads(os.environ["SEASONS_JSON"])
+          base = "https://api.pitchapi.dev/v1"
+          headers = {"X-API-KEY": key, "Accept": "application/json",
+                     "User-Agent": "LIVE-EDGE-AI-PRO-historical-stats/1.0"}
+
+          def get(path, attempts=6):
+              for attempt in range(attempts):
+                  req = urllib.request.Request(base + path, headers=headers)
+                  try:
+                      with urllib.request.urlopen(req, timeout=35) as response:
+                          return response.status, json.loads(response.read().decode("utf-8"))
+                  except urllib.error.HTTPError as exc:
+                      body = exc.read(1600).decode("utf-8", "replace")
+                      try:
+                          payload = json.loads(body)
+                      except Exception:
+                          payload = {"error": {"message": body[:500]}}
+                      if exc.code == 404:
+                          return 404, payload
+                      if exc.code == 429 or 500 <= exc.code < 600:
+                          retry = int(exc.headers.get("Retry-After", "2") or "2")
+                          time.sleep(min(max(retry, 2) * (attempt + 1), 45))
+                          continue
+                      return exc.code, payload
+                  except Exception as exc:
+                      if attempt == attempts - 1:
+                          return 0, {"error": {"message": str(exc)[:500]}}
+                      time.sleep(2 * (attempt + 1))
+              return 0, {"error": {"message": "retry limit exceeded"}}
+
+          endpoint_paths = {
+              "match": "",
+              "shots": "/shots",
+              "events": "/events",
+              "momentum": "/momentum",
+              "lineups": "/lineups",
+              "team_stats": "/stats",
+              "player_stats": "/players",
+              "player_stats_halves": "/players/halves",
+              "head_to_head": "/h2h",
+              "advanced_team": "/advanced",
+              "advanced_players": "/advanced/players",
+              "advanced_network": "/advanced/network",
+              "heatmaps": "/heatmaps"
+          }
+          os.makedirs("pitchapi-full", exist_ok=True)
+          handles = {}
+          for name in endpoint_paths:
+              handles[name] = gzip.open(f"pitchapi-full/{name}.jsonl.gz", "wt", encoding="utf-8")
+          counts = Counter()
+          match_ids = set()
+          errors = []
+          started = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+          try:
+              for season in seasons:
+                  q = urllib.parse.quote(season, safe="")
+                  status, payload = get(f"/leagues/{league_id}/matches?season={q}&status=played")
+                  if status != 200:
+                      errors.append({"stage": "season_matches", "season": season,
+                                     "http_status": status, "response": payload})
+                      continue
+                  matches = payload.get("data", {}).get("matches", [])
+                  counts["listed_matches"] += len(matches)
+                  for match in matches:
+                      mid = match.get("id")
+                      if not mid or mid in match_ids:
+                          continue
+                      match_ids.add(mid)
+                      counts["unique_matches"] += 1
+                      for name, suffix in endpoint_paths.items():
+                          path = f"/matches/{mid}" + suffix
+                          code, data = get(path)
+                          record = {
+                              "match_id": mid, "league_id": league_id, "league": league_name,
+                              "country_code": country, "season": season,
+                              "endpoint": name, "http_status": code, "response": data
+                          }
+                          handles[name].write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\\n")
+                          counts[f"{name}_http_{code}"] += 1
+                          if code not in (200, 404):
+                              errors.append({"match_id": mid, "endpoint": name,
+                                             "http_status": code,
+                                             "error": str(data.get("error", {}))[:500]})
+                          time.sleep(0.035)
+                      if counts["unique_matches"] % 25 == 0:
+                          print(f"{league_name}: collected {counts['unique_matches']} matches")
+          finally:
+              for h in handles.values():
+                  h.close()
+
+          report = {
+              "source": "PitchAPI", "generated_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "started_at_utc": started, "league_id": league_id, "league": league_name,
+              "country_code": country, "seasons": seasons, "endpoints": list(endpoint_paths),
+              "counts": dict(counts), "unique_match_ids": len(match_ids), "errors": errors,
+              "notes": [
+                  "Raw endpoint envelopes are preserved as gzip JSONL; no missing field is converted to zero.",
+                  "404 ANALYTICS_UNAVAILABLE and HALVES_UNAVAILABLE are retained as availability information.",
+                  "This is historical match-level data, not minute-by-minute historical snapshots or bookmaker odds."
+              ]
+          }
+          with open("pitchapi-full/report.json", "w", encoding="utf-8") as f:
+              json.dump(report, f, ensure_ascii=False, indent=2)
+          print(json.dumps({k:v for k,v in report.items() if k != "errors"}, ensure_ascii=False, indent=2))
+          print("Non-404 errors:", len(errors))
+          PY
+      - name: Upload this league's raw historical statistics
+        uses: actions/upload-artifact@v4
+        with:
+          name: pitchapi-full-${{ matrix.league.league_id }}
+          path: pitchapi-full/
+          if-no-files-found: error
+          retention-days: 30
