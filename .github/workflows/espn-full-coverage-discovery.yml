@@ -1,0 +1,237 @@
+name: ESPN FULL SOCCER COVERAGE DISCOVERY (ISOLATED)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: espn-full-coverage-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Discover ESPN soccer leagues and test scoreboards
+        shell: bash
+        run: |
+          mkdir -p espn-full-coverage
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const base = "https://sports.core.api.espn.com/v2/sports/soccer/leagues";
+          const site = "https://site.api.espn.com/apis/site/v2/sports/soccer";
+          const required = ["shotsOnTarget", "totalShots", "wonCorners", "possessionPct"];
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+          const report = {
+            started_at: new Date().toISOString(),
+            source: "ESPN public undocumented soccer APIs",
+            league_directory: { pages: 0, reported_count: null, refs_found: 0 },
+            requests: { directory: 0, scoreboards: 0, successful_scoreboards: 0, failed_scoreboards: 0, http_429: 0 },
+            leagues: [],
+            limitations: [
+              "A successful scoreboard response proves endpoint availability, not reliable live coverage in every season.",
+              "Statistics are verified only where current LIVE events expose them in scoreboard payloads.",
+              "No unlimited quota or service-level guarantee is implied.",
+              "Division tier is inferred from numeric league slug suffix (.1, .2, etc.); cup and international competitions are classified separately."
+            ]
+          };
+
+          async function getJson(url, attempts = 4) {
+            let lastError;
+            for (let attempt = 0; attempt < attempts; attempt++) {
+              try {
+                const response = await fetch(url, {
+                  headers: { accept: "application/json", "user-agent": "LIVE-EDGE-ESPN-COVERAGE-DISCOVERY/1.0" },
+                  signal: AbortSignal.timeout(20000)
+                });
+                if (response.status === 429) {
+                  report.requests.http_429++;
+                  const wait = Math.min(30000, 5000 * (attempt + 1));
+                  await sleep(wait);
+                  throw new Error("HTTP 429");
+                }
+                if (!response.ok) throw new Error("HTTP " + response.status);
+                return await response.json();
+              } catch (error) {
+                lastError = error;
+                if (attempt + 1 < attempts) await sleep(Math.min(10000, 1500 * (attempt + 1)));
+              }
+            }
+            throw lastError || new Error("Request failed");
+          }
+
+          function statsMap(team) {
+            const out = {};
+            for (const stat of team?.statistics || []) {
+              if (stat?.name) out[stat.name] = stat.displayValue ?? stat.value ?? null;
+            }
+            return out;
+          }
+
+          function classify(slug) {
+            const match = slug.match(/\.(\d+)$/);
+            if (match) return { tier: Number(match[1]), tier_label: Number(match[1]) === 1 ? "1st tier" : Number(match[1]) === 2 ? "2nd tier" : Number(match[1]) + "th tier" };
+            return { tier: null, tier_label: "cup / international / other" };
+          }
+
+          const first = await getJson(base + "?limit=100&page=1");
+          report.requests.directory++;
+          report.league_directory.reported_count = first.count ?? null;
+          const pageCount = Math.max(1, Number(first.pageCount || 1));
+          const refs = [...(first.items || [])];
+          report.league_directory.pages = pageCount;
+
+          for (let page = 2; page <= pageCount; page++) {
+            const data = await getJson(base + "?limit=100&page=" + page);
+            report.requests.directory++;
+            refs.push(...(data.items || []));
+            await sleep(200);
+          }
+
+          const slugs = [...new Set(refs.map(item => {
+            const ref = item?.$ref || item?.ref || "";
+            const match = ref.match(/\/leagues\/([^/?]+)/);
+            return match?.[1] || null;
+          }).filter(Boolean))].sort();
+
+          report.league_directory.refs_found = refs.length;
+          report.league_directory.unique_slugs = slugs.length;
+
+          for (let i = 0; i < slugs.length; i++) {
+            const slug = slugs[i];
+            const row = {
+              slug,
+              ...classify(slug),
+              http_status: null,
+              league_name: null,
+              event_count: 0,
+              live_count: 0,
+              live_complete_count: 0,
+              live_partial_count: 0,
+              stats_fields_seen: [],
+              error: null
+            };
+            report.requests.scoreboards++;
+
+            try {
+              const data = await getJson(site + "/" + encodeURIComponent(slug) + "/scoreboard");
+              row.http_status = 200;
+              report.requests.successful_scoreboards++;
+              row.league_name = data.leagues?.[0]?.name || data.leagues?.[0]?.abbreviation || null;
+              const events = Array.isArray(data.events) ? data.events : [];
+              row.event_count = events.length;
+
+              for (const event of events) {
+                const competition = event.competitions?.[0];
+                const state = competition?.status?.type?.state || event.status?.type?.state || "";
+                if (state !== "in") continue;
+                row.live_count++;
+                const teams = competition?.competitors || [];
+                const home = teams.find(team => team.homeAway === "home") || teams[0];
+                const away = teams.find(team => team.homeAway === "away") || teams[1];
+                const homeStats = statsMap(home), awayStats = statsMap(away);
+                const missing = required.filter(key => homeStats[key] == null || awayStats[key] == null);
+                const complete = missing.length === 0;
+                if (complete) row.live_complete_count++;
+                else row.live_partial_count++;
+                for (const key of required) {
+                  if (homeStats[key] != null && awayStats[key] != null && !row.stats_fields_seen.includes(key)) row.stats_fields_seen.push(key);
+                }
+                if (!report.live_samples) report.live_samples = [];
+                report.live_samples.push({
+                  league_slug: slug,
+                  league_name: row.league_name,
+                  event_id: event.id,
+                  match: event.name,
+                  clock: competition?.status?.displayClock || competition?.status?.type?.detail || null,
+                  home_score: home?.score ?? null,
+                  away_score: away?.score ?? null,
+                  complete_required_stats: complete,
+                  missing_stats: missing,
+                  home_stats: homeStats,
+                  away_stats: awayStats
+                });
+              }
+            } catch (error) {
+              row.error = String(error?.message || error);
+              row.http_status = /HTTP (\d+)/.exec(row.error)?.[1] ? Number(/HTTP (\d+)/.exec(row.error)[1]) : null;
+              report.requests.failed_scoreboards++;
+            }
+
+            report.leagues.push(row);
+            if ((i + 1) % 25 === 0) {
+              console.log(JSON.stringify({ tested: i + 1, total: slugs.length, ok: report.requests.successful_scoreboards, failed: report.requests.failed_scoreboards, http_429: report.requests.http_429 }));
+            }
+            await sleep(450);
+          }
+
+          const tierCounts = {};
+          for (const row of report.leagues) {
+            const key = row.tier_label;
+            tierCounts[key] ||= { total: 0, scoreboard_ok: 0, with_live: 0, live_complete: 0 };
+            tierCounts[key].total++;
+            if (row.http_status === 200) tierCounts[key].scoreboard_ok++;
+            if (row.live_count > 0) tierCounts[key].with_live++;
+            if (row.live_complete_count > 0) tierCounts[key].live_complete++;
+          }
+
+          report.finished_at = new Date().toISOString();
+          report.summary = {
+            directory_reported_count: report.league_directory.reported_count,
+            unique_slugs: slugs.length,
+            scoreboard_ok: report.requests.successful_scoreboards,
+            scoreboard_failed: report.requests.failed_scoreboards,
+            http_429: report.requests.http_429,
+            leagues_with_live_matches: report.leagues.filter(x => x.live_count > 0).length,
+            live_match_snapshots: (report.live_samples || []).length,
+            live_matches_with_all_required_stats: (report.live_samples || []).filter(x => x.complete_required_stats).length,
+            tier_counts: tierCounts,
+            required_stats: required
+          };
+
+          fs.writeFileSync("espn-full-coverage/espn-full-coverage.json", JSON.stringify(report, null, 2));
+          const lines = [
+            "# ESPN full soccer coverage discovery",
+            "",
+            "Started: " + report.started_at,
+            "Finished: " + report.finished_at,
+            "",
+            "Directory count: " + report.league_directory.reported_count,
+            "Unique league slugs: " + slugs.length,
+            "Scoreboards OK: " + report.requests.successful_scoreboards,
+            "Scoreboards failed: " + report.requests.failed_scoreboards,
+            "HTTP 429: " + report.requests.http_429,
+            "Leagues with LIVE matches now: " + report.summary.leagues_with_live_matches,
+            "LIVE snapshots: " + report.summary.live_match_snapshots,
+            "LIVE matches with all required stats: " + report.summary.live_matches_with_all_required_stats,
+            "",
+            "## Coverage by tier",
+            "",
+            "| Tier | Discovered | Scoreboard OK | Has LIVE now | LIVE with complete stats |",
+            "|---|---:|---:|---:|---:|",
+            ...Object.entries(tierCounts).sort((a,b) => (a[1].tier || 99) - (b[1].tier || 99)).map(([label,x]) => "| " + label + " | " + x.total + " | " + x.scoreboard_ok + " | " + x.with_live + " | " + x.live_complete + " |"),
+            "",
+            "## All discovered leagues",
+            "",
+            "| League | Slug | Tier | HTTP | Events | LIVE | LIVE complete | Error |",
+            "|---|---|---|---:|---:|---:|---:|---|",
+            ...report.leagues.map(x => "| " + (x.league_name || "Unknown") + " | " + x.slug + " | " + x.tier_label + " | " + (x.http_status ?? "-") + " | " + x.event_count + " | " + x.live_count + " | " + x.live_complete_count + " | " + (x.error || "") + " |"),
+            "",
+            "Required per-team fields: " + required.join(", "),
+            "",
+            "A 200 scoreboard response is not proof of active season or complete live statistics. Review the JSON report for individual LIVE samples."
+          ];
+          fs.writeFileSync("espn-full-coverage/README.md", lines.join("\n"));
+          console.log(lines.join("\n"));
+          NODE
+      - name: Upload ESPN full coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-full-coverage
+          path: espn-full-coverage/
+          if-no-files-found: error
+          retention-days: 14
