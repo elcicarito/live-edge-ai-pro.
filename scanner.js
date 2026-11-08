@@ -622,19 +622,20 @@
 
     const stats = match?.stats || [];
     const missing = [];
+    const sot = statValue(stats, "shots on target");
+    const offTarget = statValue(stats, "shots off target");
+    const possession = statValue(stats, "possession");
+    if (!sot) missing.push("strely na bránu");
+    if (!offTarget) missing.push("strely mimo bránu");
+    if (!possession) missing.push("držanie lopty");
 
-    if (!statValue(stats, "possession")) missing.push("držanie lopty");
-    if (!statValue(stats, "shots on target")) missing.push("strely na bránu");
-    if (!statValue(stats, "dangerous attacks")) missing.push("nebezpečné útoky");
-
-    if (!statValue(stats, "shots on target") ||
-        !statValue(stats, "dangerous attacks")) {
+    if (!sot && !offTarget) {
       return {
         status: "INCOMPLETE",
-        label: "NEÚPLNÉ DÁTA",
+        label: "CHÝBAJÚ STRELECKÉ DÁTA",
         background: "#78350f",
         border: "#f59e0b",
-        detail: "Pre Momentum chýbajú: " + missing.join(", ") + "."
+        detail: "Na výpočet nového momenta zatiaľ chýbajú strely na bránu aj mimo bránu."
       };
     }
 
@@ -644,8 +645,7 @@
         label: "ČIASTOČNÉ DÁTA",
         background: "#713f12",
         border: "#eab308",
-        detail: "Prehľadové štatistiky chýbajú: " + missing.join(", ") +
-          ". Momentum sa dá vypočítať."
+        detail: "Momentum používa dostupné strelecké údaje. Doplnkové údaje chýbajú: " + missing.join(", ") + "."
       };
     }
 
