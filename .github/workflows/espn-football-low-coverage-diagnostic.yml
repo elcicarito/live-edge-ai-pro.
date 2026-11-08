@@ -1,0 +1,101 @@
+name: ESPN FOOTBALL LOW-COVERAGE LEAGUE DIAGNOSTIC (ISOLATED)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/espn-football-low-coverage-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Inspect additional historical matches and stat locations
+        shell: bash
+        run: |
+          mkdir -p espn-low-coverage
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const leagues=[
+            ["crc.1","Costa Rica"],["gua.1","Guatemala"],["hon.1","Honduras"],
+            ["slv.1","El Salvador"],["uru.1","Uruguay"],["usa.ncaa.m.1","NCAA Men's Soccer"],
+            ["usa.ncaa.w.1","NCAA Women's Soccer"],["ven.1","Venezuela"],
+            ["mex.2","Mexico Liga de Expansión"],["ned.w.1","Netherlands Women"],
+            ["uru.2","Uruguay Segunda"]
+          ];
+          const dates=["20260912","20261010","20261024","20261107"];
+          const required=["shotsOnTarget","totalShots","wonCorners","possessionPct"];
+          const tasks=[];
+          for(const [slug,name] of leagues) for(const date of dates) tasks.push({slug,name,date});
+          const report={started_at:new Date().toISOString(),leagues,dates,required_stats:required,scoreboards:[],samples:[],http_429:0};
+          async function get(url){
+            const r=await fetch(url,{headers:{accept:"application/json","user-agent":"LIVE-EDGE-ESPN-DIAGNOSTIC/1.0"},signal:AbortSignal.timeout(10000)});
+            if(r.status===429) report.http_429++;
+            if(!r.ok) throw new Error("HTTP "+r.status);
+            return r.json();
+          }
+          let next=0;
+          await Promise.all(Array.from({length:8},async()=>{
+            while(true){
+              const i=next++; if(i>=tasks.length)return;
+              const t=tasks[i], row={...t,status:null,event_count:0,completed:0,error:null};
+              try{
+                const board=await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${t.slug}/scoreboard?dates=${t.date}&limit=100`);
+                row.status=200; row.event_count=board.events?.length||0;
+                const finished=(board.events||[]).filter(e=>["post","final"].includes(e.competitions?.[0]?.status?.type?.state||e.status?.type?.state));
+                row.completed=finished.length; report.scoreboards.push(row);
+                for(const ev of finished.slice(0,3)){
+                  const sample={slug:t.slug,date:t.date,event_id:ev.id,match:ev.name,summary_ok:false,boxscore:false,competitor_stats:false,boxscore_teams:[],competitors:[],missing:[]};
+                  try{
+                    const sum=await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${t.slug}/summary?event=${ev.id}`);
+                    sample.summary_ok=true; sample.boxscore=!!sum.boxscore;
+                    const comp=ev.competitions?.[0]?.competitors||[];
+                    sample.competitors=comp.map(team=>({team:team.team?.displayName||team.team?.name,stats:(team.statistics||[]).map(x=>x.name||x.label)}));
+                    sample.competitor_stats=sample.competitors.some(x=>x.stats.length>0);
+                    const teams=sum.boxscore?.players||sum.boxscore?.teams||[];
+                    sample.boxscore_teams=teams.map(team=>{
+                      const stats=Array.isArray(team.statistics)?team.statistics:(team.statistics?.splits||[]);
+                      const names=stats.map(x=>x.name||x.label).filter(Boolean);
+                      return {team:team.team?.displayName||team.team?.name,stats:names,missing:required.filter(k=>!names.includes(k))};
+                    });
+                    sample.missing=sample.boxscore_teams.flatMap(x=>x.missing);
+                  }catch(e){sample.error=String(e?.message||e);}
+                  report.samples.push(sample);
+                }
+              }catch(e){row.error=String(e?.message||e);report.scoreboards.push(row);}
+            }
+          }));
+          report.summary={
+            scoreboard_requests:report.scoreboards.length,
+            scoreboards_ok:report.scoreboards.filter(x=>x.status===200).length,
+            failed:report.scoreboards.filter(x=>x.status!==200).length,
+            completed_events_found:report.scoreboards.reduce((a,x)=>a+x.completed,0),
+            sampled_summaries:report.samples.length,
+            summaries_ok:report.samples.filter(x=>x.summary_ok).length,
+            boxscores:report.samples.filter(x=>x.boxscore).length,
+            samples_with_competitor_stats:report.samples.filter(x=>x.competitor_stats).length,
+            boxscore_teams_checked:report.samples.reduce((a,x)=>a+x.boxscore_teams.length,0),
+            teams_with_all_required:report.samples.reduce((a,x)=>a+x.boxscore_teams.filter(t=>!t.missing.length).length,0),
+            http_429:report.http_429
+          };
+          report.finished_at=new Date().toISOString();
+          fs.writeFileSync("espn-low-coverage/report.json",JSON.stringify(report,null,2));
+          console.log(JSON.stringify(report.summary,null,2));
+          for(const l of leagues){
+            const ss=report.samples.filter(x=>x.slug===l[0]);
+            const teams=ss.flatMap(x=>x.boxscore_teams);
+            console.log(l[0],JSON.stringify({samples:ss.length,boxscore:ss.filter(x=>x.boxscore).length,teams:teams.length,complete:teams.filter(x=>!x.missing.length).length,competitorStats:ss.filter(x=>x.competitor_stats).length}));
+          }
+          NODE
+      - name: Upload diagnostic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-football-low-coverage-diagnostic
+          path: espn-low-coverage/
+          if-no-files-found: ignore
+          retention-days: 14
