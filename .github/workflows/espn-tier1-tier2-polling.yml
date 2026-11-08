@@ -129,85 +129,97 @@ jobs:
               live_matches: []
             };
 
-            for (const [slug, league, tier] of leagues) {
-              const row = {
-                league,
-                slug,
-                tier,
-                http_status: null,
-                event_count: 0,
-                live_count: 0,
-                live_complete_count: 0,
-                error: null
-              };
-              report.requests++;
+            let leagueCursor = 0;
+            const workers = Array.from({ length: 10 }, async () => {
+              while (true) {
+                const index = leagueCursor++;
+                if (index >= leagues.length) return;
+                const [slug, league, tier] = leagues[index];
+                const row = {
+                  league, slug, tier, http_status: null,
+                  event_count: 0, live_count: 0, live_complete_count: 0, error: null
+                };
+                report.requests++;
 
-              try {
-                const response = await fetch(
-                  `https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard`,
-                  {
-                    headers: {
-                      accept: "application/json",
-                      "user-agent": "LIVE-EDGE-ESPN-TIER-POLL/1.0"
-                    },
-                    signal: AbortSignal.timeout(12000)
-                  }
-                );
-                row.http_status = response.status;
-                if (response.status === 429) report.http_429++;
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                report.successful_requests++;
-
-                const data = await response.json();
-                const events = Array.isArray(data.events) ? data.events : [];
-                row.event_count = events.length;
-
-                for (const event of events) {
-                  const competition = event.competitions?.[0];
-                  const state = competition?.status?.type?.state || event.status?.type?.state || "";
-                  if (state !== "in") continue;
-
-                  const teams = competition?.competitors || [];
-                  const home = teams.find(team => team.homeAway === "home") || teams[0];
-                  const away = teams.find(team => team.homeAway === "away") || teams[1];
-                  const homeStats = statsMap(home);
-                  const awayStats = statsMap(away);
-                  const missing = required.filter(key =>
-                    homeStats[key] == null || awayStats[key] == null
+                try {
+                  const response = await fetch(
+                    `https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard`,
+                    {
+                      headers: {
+                        accept: "application/json",
+                        "user-agent": "LIVE-EDGE-ESPN-TIER-POLL/1.0"
+                      },
+                      signal: AbortSignal.timeout(10000)
+                    }
                   );
-                  const complete = missing.length === 0;
+                  row.http_status = response.status;
+                  if (response.status === 429) report.http_429++;
+                  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                  report.successful_requests++;
 
-                  row.live_count++;
-                  if (complete) row.live_complete_count++;
+                  const data = await response.json();
+                  const events = Array.isArray(data.events) ? data.events : [];
+                  row.event_count = events.length;
 
-                  round.live_matches.push({
-                    league,
-                    slug,
-                    tier,
-                    event_id: event.id,
-                    match: event.name,
-                    clock: competition?.status?.displayClock || competition?.status?.type?.detail || null,
-                    home_score: home?.score ?? null,
-                    away_score: away?.score ?? null,
-                    complete_required_stats: complete,
-                    missing_stats: missing,
-                    home_stats: homeStats,
-                    away_stats: awayStats
-                  });
+                  for (const event of events) {
+                    const competition = event.competitions?.[0];
+                    const state = competition?.status?.type?.state || event.status?.type?.state || "";
+                    if (state !== "in") continue;
+
+                    const teams = competition?.competitors || [];
+                    const home = teams.find(team => team.homeAway === "home") || teams[0];
+                    const away = teams.find(team => team.homeAway === "away") || teams[1];
+                    const homeStats = statsMap(home);
+                    const awayStats = statsMap(away);
+                    const missing = required.filter(key =>
+                      homeStats[key] == null || awayStats[key] == null
+                    );
+                    const complete = missing.length === 0;
+
+                    row.live_count++;
+                    if (complete) row.live_complete_count++;
+
+                    round.live_matches.push({
+                      league, slug, tier, event_id: event.id, match: event.name,
+                      clock: competition?.status?.displayClock || competition?.status?.type?.detail || null,
+                      home_score: home?.score ?? null, away_score: away?.score ?? null,
+                      complete_required_stats: complete, missing_stats: missing,
+                      home_stats: homeStats, away_stats: awayStats
+                    });
+                  }
+                } catch (error) {
+                  report.failed_requests++;
+                  row.error = String(error?.message || error);
                 }
-              } catch (error) {
-                report.failed_requests++;
-                row.error = String(error?.message || error);
+                round.league_results.push(row);
               }
-
-              round.league_results.push(row);
-              await sleep(150);
-            }
+            });
+            await Promise.all(workers);
+            round.league_results.sort((a, b) => a.slug.localeCompare(b.slug));
 
             round.live_match_count = round.live_matches.length;
             round.live_complete_match_count =
               round.live_matches.filter(match => match.complete_required_stats).length;
             report.rounds.push(round);
+            fs.writeFileSync(
+              "espn-tier-poll/progress.json",
+              JSON.stringify({
+                started_at: report.started_at,
+                updated_at: new Date().toISOString(),
+                requests: report.requests,
+                successful_requests: report.successful_requests,
+                failed_requests: report.failed_requests,
+                http_429: report.http_429,
+                rounds_completed: report.rounds.length,
+                latest_round_live_matches: round.live_match_count,
+                rounds: report.rounds.map(r => ({
+                  round: r.round,
+                  sampled_at: r.sampled_at,
+                  live_match_count: r.live_match_count,
+                  live_complete_match_count: r.live_complete_match_count
+                }))
+              }, null, 2)
+            );
 
             console.log(JSON.stringify({
               round: roundNo,
