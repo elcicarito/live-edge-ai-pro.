@@ -11,7 +11,7 @@ const stats=(sotH,sotA,offH,offA,cH=0,cA=0)=>[
  {label:"Corners",home:cH,away:cA},
  {label:"Dangerous Attacks",home:999,away:1}
 ];
-let r=engine.analyse({stats:stats(2,1,3,2,2,1)},[
+let r=engine.analyse({stats:stats(3,1,4,2,3,1)},[
  make(t0,stats(1,1,2,1,1,1)),
  make(t0+300000,stats(2,1,3,2,2,1))
 ],"2026-11-08T12:10:00Z");
