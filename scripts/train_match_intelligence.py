@@ -23,7 +23,7 @@ EXTENDED = BASE + [
     "possession_home", "possession_away", "possession_diff",
 ]
 TARGETS = {
-    "any_goal_remaining": ("label_any_goal_remaining", BASE),
+    "any_goal_remaining": ("label_any_goal_remaining", EXTENDED),
     "home_goal_remaining": ("label_home_goal_remaining", EXTENDED),
     "away_goal_remaining": ("label_away_goal_remaining", EXTENDED),
 }
