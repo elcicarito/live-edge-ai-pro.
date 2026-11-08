@@ -1,0 +1,171 @@
+name: ESPN FOOTBALL EXTENDED HISTORICAL COVERAGE (ISOLATED)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/espn-football-extended-history.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: espn-football-extended-history
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Probe historical scoreboards and team-stat summaries across 60 football leagues
+        shell: bash
+        run: |
+          mkdir -p espn-extended-history
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const leagues = [
+            ["arg.1","Argentine Liga Profesional",1],["aus.1","Australian A-League Men",1],
+            ["aus.w.1","Australian A-League Women",1],["aut.1","Austrian Bundesliga",1],
+            ["bel.1","Belgian Pro League",1],["bol.1","Bolivian Liga Profesional",1],
+            ["bra.1","Brazilian Serie A",1],["chi.1","Chilean Primera División",1],
+            ["chn.1","Chinese Super League",1],["col.1","Colombian Primera A",1],
+            ["crc.1","Costa Rican Primera Division",1],["den.1","Danish Superliga",1],
+            ["ecu.1","LigaPro Ecuador",1],["eng.1","English Premier League",1],
+            ["eng.w.1","English Women's Super League",1],["esp.1","Spanish LALIGA",1],
+            ["esp.w.1","Spanish Liga F",1],["fra.1","French Ligue 1",1],
+            ["fra.w.1","French Première Ligue",1],["ger.1","German Bundesliga",1],
+            ["gre.1","Greek Super League",1],["gua.1","Guatemalan Liga Nacional",1],
+            ["hon.1","Honduran Liga Nacional",1],["ind.1","Indian Super League",1],
+            ["ita.1","Italian Serie A",1],["jpn.1","Japanese J.League",1],
+            ["ksa.1","Saudi Pro League",1],["mex.1","Mexican Liga BBVA MX",1],
+            ["mex.w.1","Mexican Liga BBVA MX Femenil",1],["ned.1","Dutch Eredivisie",1],
+            ["ned.w.1","Dutch Vrouwen Eredivisie",1],["nor.1","Norwegian Eliteserien",1],
+            ["par.1","Paraguayan Primera División",1],["per.1","Peruvian Liga 1",1],
+            ["por.1","Portuguese Primeira Liga",1],["rsa.1","South African Premiership",1],
+            ["rus.1","Russian Premier League",1],["sco.1","Scottish Premiership",1],
+            ["slv.1","Salvadoran Primera Division",1],["swe.1","Swedish Allsvenskan",1],
+            ["tur.1","Turkish Super Lig",1],["uru.1","Liga AUF Uruguaya",1],
+            ["usa.1","MLS",1],["usa.ncaa.m.1","NCAA Men's Soccer",1],
+            ["usa.ncaa.w.1","NCAA Women's Soccer",1],["usa.usl.1","USL Championship",1],
+            ["usa.w.usl.1","USL Super League",1],["ven.1","Venezuelan Primera División",1],
+            ["arg.2","Argentine Nacional B",2],["bra.2","Brazilian Serie B",2],
+            ["eng.2","English Championship",2],["esp.2","Spanish LALIGA 2",2],
+            ["fra.2","French Ligue 2",2],["ger.2","German 2. Bundesliga",2],
+            ["ind.2","Indian Football League",2],["ita.2","Italian Serie B",2],
+            ["mex.2","Mexican Liga de Expansión MX",2],["ned.2","Dutch Keuken Kampioen Divisie",2],
+            ["sco.2","Scottish Championship",2],["uru.2","Uruguayan Segunda División",2]
+          ];
+          const dates = ["20260912","20261010","20261024","20261107"];
+          const required = ["shotsOnTarget","totalShots","wonCorners","possessionPct"];
+          const tasks = [];
+          for (const [slug,name,tier] of leagues) for (const date of dates) tasks.push({slug,name,tier,date});
+          const report = {
+            started_at:new Date().toISOString(),
+            source:"ESPN public undocumented soccer scoreboard and summary endpoints",
+            leagues_tested:leagues.length, dates, required_stats:required,
+            scoreboard_results:[], summary_samples:[], http_429:0,
+            limitations:[
+              "Four date samples per league; this is not a complete season export.",
+              "Post-match summary stats are final match totals, not time-stamped historical LIVE snapshots.",
+              "One completed event per league/date is sampled where available.",
+              "Public undocumented endpoints do not imply unlimited quota or an uptime guarantee."
+            ]
+          };
+          async function getJson(url) {
+            const res=await fetch(url,{headers:{accept:"application/json","user-agent":"LIVE-EDGE-ESPN-EXTENDED-HISTORY/1.0"},signal:AbortSignal.timeout(10000)});
+            if(res.status===429) report.http_429++;
+            if(!res.ok) throw new Error("HTTP "+res.status);
+            return await res.json();
+          }
+          let cursor=0;
+          const workers=Array.from({length:8},async()=>{
+            while(true){
+              const i=cursor++;
+              if(i>=tasks.length) return;
+              const t=tasks[i];
+              const row={...t,http_status:null,event_count:0,completed_count:0,error:null};
+              try{
+                const data=await getJson(`https://site.api.espn.com/apis/site/v2/sports/soccer/${t.slug}/scoreboard?dates=${t.date}&limit=100`);
+                row.http_status=200;
+                const events=Array.isArray(data.events)?data.events:[];
+                row.event_count=events.length;
+                const completed=events.filter(e=>{
+                  const s=e.competitions?.[0]?.status?.type?.state||e.status?.type?.state;
+                  return s==="post"||s==="final";
+                });
+                row.completed_count=completed.length;
+                report.scoreboard_results.push(row);
+                if(completed.length){
+                  const e=completed[0];
+                  const sample={slug:t.slug,league:t.name,tier:t.tier,date:t.date,event_id:e.id,match:e.name,summary_http:null,has_boxscore:false,teams_checked:0,teams_with_all_required:0,missing_by_team:[],summary_error:null};
+                  try{
+                    const s=await getJson(`https://site.api.espn.com/apis/site/v2/sports/soccer/${t.slug}/summary?event=${e.id}`);
+                    sample.summary_http=200;
+                    const box=s?.boxscore||{};
+                    sample.has_boxscore=!!s?.boxscore;
+                    const teams=box.players||box.teams||[];
+                    for(const team of teams){
+                      const arr=Array.isArray(team.statistics)?team.statistics:(Array.isArray(team.statistics?.splits)?team.statistics.splits:[]);
+                      const names=new Set(arr.map(x=>x.name||x.label).filter(Boolean));
+                      const missing=required.filter(k=>!names.has(k));
+                      sample.teams_checked++;
+                      if(!missing.length) sample.teams_with_all_required++;
+                      sample.missing_by_team.push({team:team.team?.displayName||team.team?.name||null,missing});
+                    }
+                  }catch(err){sample.summary_error=String(err?.message||err);}
+                  report.summary_samples.push(sample);
+                }
+              }catch(err){row.error=String(err?.message||err);report.scoreboard_results.push(row);}
+            }
+          });
+          await Promise.all(workers);
+          report.scoreboard_results.sort((a,b)=>a.slug.localeCompare(b.slug)||a.date.localeCompare(b.date));
+          report.summary_samples.sort((a,b)=>a.slug.localeCompare(b.slug)||a.date.localeCompare(b.date));
+          const samples=report.summary_samples;
+          const perLeague=leagues.map(([slug,name,tier])=>{
+            const rows=report.scoreboard_results.filter(x=>x.slug===slug);
+            const ss=samples.filter(x=>x.slug===slug);
+            return {slug,league:name,tier,scoreboards_ok:rows.filter(x=>x.http_status===200).length,scoreboards_tested:rows.length,completed_events:rows.reduce((a,x)=>a+x.completed_count,0),summary_samples:ss.length,summary_ok:ss.filter(x=>x.summary_http===200).length,complete_team_samples:ss.reduce((a,x)=>a+x.teams_with_all_required,0),teams_checked:ss.reduce((a,x)=>a+x.teams_checked,0)};
+          });
+          report.league_summary=perLeague;
+          report.summary={
+            leagues:leagues.length,dates_per_league:dates.length,scoreboard_requests:report.scoreboard_results.length,
+            scoreboards_ok:report.scoreboard_results.filter(x=>x.http_status===200).length,
+            scoreboards_failed:report.scoreboard_results.filter(x=>x.http_status!==200).length,
+            completed_events_found:report.scoreboard_results.reduce((a,x)=>a+x.completed_count,0),
+            summary_samples:samples.length,summaries_ok:samples.filter(x=>x.summary_http===200).length,
+            summaries_with_boxscore:samples.filter(x=>x.has_boxscore).length,
+            teams_checked:samples.reduce((a,x)=>a+x.teams_checked,0),
+            teams_with_all_required_stats:samples.reduce((a,x)=>a+x.teams_with_all_required,0),
+            http_429:report.http_429,
+            leagues_with_4_of_4_scoreboards:perLeague.filter(x=>x.scoreboards_ok===4).length
+          };
+          report.finished_at=new Date().toISOString();
+          fs.writeFileSync("espn-extended-history/report.json",JSON.stringify(report,null,2));
+          const lines=[
+            "# ESPN football extended historical coverage",
+            "",
+            `Started: ${report.started_at}`,`Finished: ${report.finished_at}`,"",
+            `Leagues: ${report.summary.leagues}; dates per league: ${report.summary.dates_per_league}`,
+            `Scoreboards: ${report.summary.scoreboards_ok}/${report.summary.scoreboard_requests} OK; failed: ${report.summary.scoreboards_failed}`,
+            `Completed events: ${report.summary.completed_events_found}; sampled summaries: ${report.summary.summaries_ok}/${report.summary.summary_samples}`,
+            `Teams checked: ${report.summary.teams_checked}; teams with all four core stats: ${report.summary.teams_with_all_required_stats}`,
+            `HTTP 429: ${report.summary.http_429}; leagues with all four date scoreboards: ${report.summary.leagues_with_4_of_4_scoreboards}/${report.summary.leagues}`,"",
+            "| Tier | League | Scoreboards OK | Events | Summary samples | Teams complete |",
+            "|---:|---|---:|---:|---:|---:|",
+            ...perLeague.map(x=>`| ${x.tier} | ${x.league} | ${x.scoreboards_ok}/4 | ${x.completed_events} | ${x.summary_ok}/${x.summary_samples} | ${x.complete_team_samples}/${x.teams_checked} |`),
+            "","This sample does not establish complete season coverage or historical minute-by-minute LIVE statistics."
+          ];
+          fs.writeFileSync("espn-extended-history/README.md",lines.join("\n"));
+          console.log(lines.join("\n"));
+          NODE
+      - name: Upload extended historical report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-football-extended-history
+          path: espn-extended-history/
+          if-no-files-found: ignore
+          retention-days: 14
