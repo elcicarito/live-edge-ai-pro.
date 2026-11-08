@@ -1,0 +1,41 @@
+name: LIVE Match Intelligence Training
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/match-intelligence-dataset.js'
+      - 'scripts/train_match_intelligence.py'
+      - '.github/workflows/match-intelligence-training.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  train-and-evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build historical snapshot dataset
+        run: node scripts/match-intelligence-dataset.js
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install model dependencies
+        run: python -m pip install --upgrade numpy pandas scikit-learn
+      - name: Train and evaluate isolated models
+        run: python scripts/train_match_intelligence.py
+      - name: Upload dataset and model evaluation
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-match-intelligence-experiment
+          path: |
+            audit-output/match-intelligence-dataset.json
+            audit-output/match-intelligence-dataset.csv
+            audit-output/match-intelligence-report.md
+            audit-output/match-intelligence-models.json
+            audit-output/match-intelligence-training-report.md
+          retention-days: 30
