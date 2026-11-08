@@ -1,0 +1,77 @@
+name: ESPN LIVE EVENT SUMMARY STATISTICS PROBE (ISOLATED)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/espn-live-event-summary-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe event summary and boxscore payloads
+        shell: bash
+        run: |
+          mkdir -p espn-summary-probe
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const samples = [
+            { sport: "football", league: "nfl", event_id: "401873038", label: "NFL Cincinnati Bengals at Atlanta Falcons" },
+            { sport: "rugby", league: "all", event_id: "603998", label: "Rugby England vs Australia" }
+          ];
+          const endpoints = ["summary", "scoreboard"];
+          const report = { started_at: new Date().toISOString(), source: "ESPN public undocumented site API", samples: [], note: "Isolated endpoint probe only; no production scanner changes." };
+
+          for (const sample of samples) {
+            for (const endpoint of endpoints) {
+              const url = endpoint === "summary"
+                ? `https://site.api.espn.com/apis/site/v2/sports/${sample.sport}/${sample.league}/summary?event=${sample.event_id}`
+                : `https://site.api.espn.com/apis/site/v2/sports/${sample.sport}/${sample.league}/scoreboard?event=${sample.event_id}`;
+              const row = { ...sample, endpoint, url, http_status: null, top_level_keys: [], useful_sections: {}, error: null };
+              try {
+                const res = await fetch(url, { headers: { accept: "application/json", "user-agent": "LIVE-EDGE-ESPN-SUMMARY-PROBE/1.0" }, signal: AbortSignal.timeout(15000) });
+                row.http_status = res.status;
+                const raw = await res.text();
+                row.body_bytes = raw.length;
+                if (!res.ok) throw new Error(`HTTP ${res.status}: ${raw.slice(0, 300)}`);
+                const data = JSON.parse(raw);
+                row.top_level_keys = Object.keys(data);
+                for (const key of ["boxscore", "leaders", "plays", "statistics", "scoringPlays", "rosters", "header", "commentary", "gameInfo"]) {
+                  if (data[key] !== undefined) row.useful_sections[key] = data[key];
+                }
+                row.event_name = data.header?.competitions?.[0]?.competitors?.map(c => c.team?.displayName || c.displayName || c.name) || null;
+                row.boxscore_team_count = data.boxscore?.players?.length ?? data.boxscore?.teams?.length ?? null;
+                row.leader_categories = data.leaders?.map(x => x.name || x.displayName) ?? null;
+                row.play_count = Array.isArray(data.plays) ? data.plays.length : null;
+                row.statistics_present = data.statistics !== undefined || data.boxscore !== undefined;
+                // Keep the report compact while preserving field availability and representative payload structure.
+                for (const key of Object.keys(row.useful_sections)) {
+                  const value = row.useful_sections[key];
+                  row.useful_sections[key] = JSON.stringify(value).slice(0, 12000);
+                }
+              } catch (e) { row.error = String(e?.message || e); }
+              report.samples.push(row);
+            }
+          }
+          report.finished_at = new Date().toISOString();
+          report.summary = {
+            requests: report.samples.length,
+            http_200: report.samples.filter(x => x.http_status === 200).length,
+            endpoints_with_stats_or_boxscore: report.samples.filter(x => x.statistics_present).length,
+            failures: report.samples.filter(x => x.error).length
+          };
+          fs.writeFileSync("espn-summary-probe/report.json", JSON.stringify(report, null, 2));
+          console.log(JSON.stringify(report.summary));
+          NODE
+      - name: Upload event summary probe report
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-live-event-summary-probe
+          path: espn-summary-probe/
+          retention-days: 14
