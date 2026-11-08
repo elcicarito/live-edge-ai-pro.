@@ -21,95 +21,67 @@ jobs:
           mkdir -p btts-output
           node <<'NODE'
           const fs = require("fs");
-          const file = "data/btts-signal-archive.json";
-          const archive = JSON.parse(fs.readFileSync(file, "utf8"));
+          const archive = JSON.parse(fs.readFileSync("data/btts-signal-archive.json", "utf8"));
           const signals = Array.isArray(archive.signals) ? archive.signals : [];
-          const minuteOf = e => {
-            const raw = String(e?.minute ?? e?.time ?? "");
-            const m = raw.match(/^(\\d+)(?:\\+\\d+)?$/);
-            return m ? Number(m[1]) : null;
-          };
-          const eventSide = e => {
-            const s = String(e?.side || "").toLowerCase();
-            if (["home","1","h"].includes(s)) return "home";
-            if (["away","2","a"].includes(s)) return "away";
-            return null;
-          };
-          const rows = signals.map(s => {
-            const events = Array.isArray(s.goalEvents) ? s.goalEvents : [];
-            const sideGoals = events
-              .filter(e => eventSide(e) === s.predictedSide)
-              .map(e => ({ minute: minuteOf(e), raw: e.minute ?? e.time ?? null }))
-              .filter(e => Number.isFinite(e.minute))
-              .sort((a,b) => a.minute-b.minute);
-            const first = sideGoals[0] || null;
-            const timingAvailable = s.goalTimingAvailable === true;
-            const settled = ["WIN","LOSS"].includes(s.status);
-            let classification = "UNVERIFIED";
-            if (settled && timingAvailable) {
-              if (!first) classification = "NO_GOAL";
-              else if (first.minute > 70) classification = "AFTER_70";
-              else classification = "BY_70";
-            }
+          const settled = signals.filter(s => ["WIN","LOSS"].includes(s.status));
+          const minute = s => s.firstPredictedGoalMinute == null ? null : Number(s.firstPredictedGoalMinute);
+          const rows = settled.map(s => {
+            const m = minute(s);
+            let classification = m == null ? (s.status === "WIN" ? "WIN_TIME_UNKNOWN" : "NO_GOAL") : m > 70 ? "AFTER_70" : "BY_70";
             return {
-              signalId:s.signalId, matchId:String(s.matchId), home:s.home, away:s.away,
-              competition:s.competition || "", tier:s.tier || "", startMinute:s.startMinute,
-              startScore:s.startScore, predictedSide:s.predictedSide, status:s.status,
-              firstPredictedGoalMinute:first?.minute ?? null,
-              firstPredictedGoalRaw:first?.raw ?? null, classification,
-              goalTimingAvailable:timingAvailable
+              signalId:s.signalId,matchId:String(s.matchId),home:s.home,away:s.away,competition:s.competition||"",
+              tier:s.tier||"",tierKey:s.tierKey||"",startMinute:s.startMinute,startScore:s.startScore,
+              predictedSide:s.predictedSide,predictedTeam:s.predictedTeam,status:s.status,settledScore:s.settledScore,
+              firstPredictedGoalMinute:m,classification,createdAt:s.createdAt
             };
           });
-          const settled = rows.filter(r => ["WIN","LOSS"].includes(r.status));
-          const timed = rows.filter(r => r.classification !== "UNVERIFIED");
-          const unique = new Map();
-          for (const r of timed) {
-            if (!unique.has(r.matchId)) unique.set(r.matchId, []);
-            unique.get(r.matchId).push(r);
+          const pct=(n,d)=>d?Number((100*n/d).toFixed(1)):null;
+          const tierMap={};
+          for(const r of rows){
+            const k=r.tier||r.tierKey||"unknown";
+            tierMap[k]??={signals:0,wins:0,losses:0,after70:0,by70:0,noGoal:0,winTimeUnknown:0};
+            const t=tierMap[k];t.signals++;
+            if(r.status==="WIN")t.wins++;else t.losses++;
+            if(r.classification==="AFTER_70")t.after70++;
+            else if(r.classification==="BY_70")t.by70++;
+            else if(r.classification==="NO_GOAL")t.noGoal++;
+            else t.winTimeUnknown++;
           }
-          const afterSignals = timed.filter(r => r.classification === "AFTER_70");
-          const uniqueAfter = [...unique.entries()].filter(([id,rs]) => rs.some(r=>r.classification==="AFTER_70"));
-          const band = (m) => m <= 70 ? "≤70" : m <= 75 ? "71–75" : m <= 80 ? "76–80" : m <= 85 ? "81–85" : m <= 90 ? "86–90" : "90+";
-          const bands = {};
-          for (const r of timed) if (r.classification === "AFTER_70") {
-            const b=band(r.firstPredictedGoalMinute); bands[b]=(bands[b]||0)+1;
-          }
-          const matchRows = [...unique.entries()].map(([matchId,rs]) => {
-            const representative = rs.slice().sort((a,b)=>(a.startMinute||0)-(b.startMinute||0))[0];
-            const firsts = rs.filter(r=>r.firstPredictedGoalMinute!=null).map(r=>r.firstPredictedGoalMinute);
-            const minFirst = firsts.length ? Math.min(...firsts) : null;
-            return {...representative, signalCount:rs.length, earliestPredictedGoalMinute:minFirst,
-              matchClassification:rs.some(r=>r.classification==="AFTER_70")?"AFTER_70":
-                rs.some(r=>r.classification==="BY_70")?"BY_70":"NO_GOAL"};
+          for(const t of Object.values(tierMap)){t.winPct=pct(t.wins,t.signals);t.after70Pct=pct(t.after70,t.signals);}
+          const byMatch=new Map();
+          for(const r of rows){if(!byMatch.has(r.matchId))byMatch.set(r.matchId,[]);byMatch.get(r.matchId).push(r);}
+          const matchRows=[...byMatch.entries()].map(([matchId,rs])=>{
+            const first=rs.filter(r=>r.firstPredictedGoalMinute!=null).map(r=>r.firstPredictedGoalMinute);
+            const rep=rs[0];
+            return {matchId,home:rep.home,away:rep.away,competition:rep.competition,startScore:rep.startScore,
+              predictedTeam:rep.predictedTeam,signalCount:rs.length,classification:
+                rs.some(r=>r.classification==="AFTER_70")?"AFTER_70":
+                rs.some(r=>r.classification==="BY_70")?"BY_70":
+                rs.some(r=>r.classification==="WIN_TIME_UNKNOWN")?"WIN_TIME_UNKNOWN":"NO_GOAL",
+              firstPredictedGoalMinute:first.length?Math.min(...first):null};
           });
-          const pct=(n,d)=>d?Number((100*n/d).toFixed(2)):null;
-          const summary = {
-            generatedAt:new Date().toISOString(), archiveUpdatedAt:archive.updated_at || null,
-            totalSignals:signals.length, settledSignals:settled.length,
-            settledWins:settled.filter(r=>r.status==="WIN").length,
-            settledLosses:settled.filter(r=>r.status==="LOSS").length,
-            signalsWithVerifiedGoalTiming:timed.length,
-            signalsUnverified:rows.filter(r=>r.classification==="UNVERIFIED").length,
-            perSignal:{
-              after70:afterSignals.length, denominator:timed.length,
-              percent:pct(afterSignals.length,timed.length),
-              by70:timed.filter(r=>r.classification==="BY_70").length,
-              noGoal:timed.filter(r=>r.classification==="NO_GOAL").length
-            },
-            perUniqueMatch:{
-              evaluatedMatches:unique.size, after70:uniqueAfter.length,
-              percent:pct(uniqueAfter.length,unique.size),
-              by70:matchRows.filter(r=>r.matchClassification==="BY_70").length,
-              noGoal:matchRows.filter(r=>r.matchClassification==="NO_GOAL").length
-            },
-            after70MinuteBands:bands,
-            note:"After 70 means the predicted/previously scoreless team scored its first goal after minute 70. Repeated signals are counted separately in perSignal and once per match in perUniqueMatch. Added-time notation is grouped by its base minute."
+          const after=rows.filter(r=>r.classification==="AFTER_70");
+          const wins=rows.filter(r=>r.status==="WIN");
+          const band={};
+          for(const r of after){const m=r.firstPredictedGoalMinute,k=m<=75?"71-75":m<=80?"76-80":m<=85?"81-85":m<=90?"86-90":"90+";band[k]=(band[k]||0)+1;}
+          const uniqueAfter=matchRows.filter(r=>r.classification==="AFTER_70").length;
+          const summary={
+            generatedAt:new Date().toISOString(),archiveUpdatedAt:archive.updated_at||null,
+            totalSignals:signals.length,settledSignals:rows.length,wins:wins.length,losses:rows.length-wins.length,
+            overallWinPct:pct(wins.length,rows.length),after70Signals:after.length,
+            after70PctOfSignals:pct(after.length,rows.length),after70PctOfWins:pct(after.length,wins.length),
+            by70Signals:rows.filter(r=>r.classification==="BY_70").length,
+            noGoalSignals:rows.filter(r=>r.classification==="NO_GOAL").length,
+            winTimeUnknown:rows.filter(r=>r.classification==="WIN_TIME_UNKNOWN").length,
+            uniqueMatches:matchRows.length,uniqueMatchesAfter70:uniqueAfter,uniqueAfter70Pct:pct(uniqueAfter,matchRows.length),
+            after70MinuteBands:band,byTier:tierMap,
+            note:"After 70 means the first goal by the previously scoreless predicted team was after minute 70. Signal-level counts include repeated tiers; unique match counts deduplicate by matchId. Two WIN records can lack a goal event minute and are shown separately."
           };
           fs.writeFileSync("btts-output/btts-after70-summary.json",JSON.stringify(summary,null,2)+"\\n");
-          const cols=Object.keys(rows[0]||{signalId:"",matchId:"",home:"",away:"",competition:"",tier:"",startMinute:"",startScore:"",predictedSide:"",status:"",firstPredictedGoalMinute:"",firstPredictedGoalRaw:"",classification:"",goalTimingAvailable:""});
           const csv=(data,keys)=>[keys.join(","),...data.map(r=>keys.map(k=>'"'+String(r[k]??"").replace(/"/g,'""')+'"').join(","))].join("\\n")+"\\n";
+          const cols=Object.keys(rows[0]||{});
           fs.writeFileSync("btts-output/btts-after70-signals.csv",csv(rows,cols));
-          const mcols=Object.keys(matchRows[0]||{matchId:"",home:"",away:"",competition:"",tier:"",startMinute:"",startScore:"",predictedSide:"",status:"",firstPredictedGoalMinute:"",firstPredictedGoalRaw:"",classification:"",goalTimingAvailable:"",signalCount:"",earliestPredictedGoalMinute:"",matchClassification:""});
+          const mcols=Object.keys(matchRows[0]||{});
           fs.writeFileSync("btts-output/btts-after70-unique-matches.csv",csv(matchRows,mcols));
           console.log("BTTS AFTER 70 SUMMARY",JSON.stringify(summary,null,2));
           NODE
