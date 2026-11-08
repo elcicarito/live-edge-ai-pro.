@@ -47,7 +47,7 @@ jobs:
 
           const REQUIRED_MISSES = 3;
           const DROP_RATIO = 0.5;
-          const MIN_BASELINE = 6;
+          const MIN_BASELINE = 1;
 
           const collectorMetrics = {
             started_at: new Date().toISOString(),
@@ -281,7 +281,7 @@ jobs:
           function numericStat(value) {
             if (value === null || value === undefined || value === "") return null;
             const raw = String(value).trim();
-            if (!/^-?\\d+(?:[.,]\\d+)?%?$/.test(raw)) return null;
+            if (!/^-?\d+(?:[.,]\d+)?%?$/.test(raw)) return null;
             const parsed = Number.parseFloat(raw.replace("%", "").replace(",", "."));
             return Number.isFinite(parsed) ? parsed : null;
           }
@@ -615,7 +615,7 @@ jobs:
               feedGuard.baseline_fixture_count = baseline;
 
               const minimumExpected = Math.max(
-                2,
+                1,
                 Math.ceil(baseline * DROP_RATIO)
               );
 
@@ -780,7 +780,9 @@ jobs:
             // iba podľa zmiznutia z feedu, späť do sledovania konečného detailu.
             for (const [id, item] of [...archived.entries()]) {
               if (item?.status_confirmation === "confirmed_finished") continue;
-              if (!item?.last_snapshot?.match || pending.has(id)) continue;
+              // Old SportScore archive entries cannot be revalidated through ESPN; preserve them unchanged.
+              if (!item?.last_snapshot?.match?.espn_event_id) continue;
+              if (pending.has(id)) continue;
 
               archived.delete(id);
               pending.set(id, {
