@@ -297,11 +297,6 @@
       match?.live_minute ?? ""
     ).toLowerCase().trim();
 
-    const minuteLabel =
-      minute && minute !== "?" && minute !== "HT"
-        ? `${minute}′`
-        : "";
-
     if (
       combined.includes("penalt") ||
       combined.includes("shootout")
@@ -318,9 +313,7 @@
       combined.includes("extratime")
     ) {
       return {
-        label: minuteLabel
-          ? `PREDĹŽENIE · ${minuteLabel}`
-          : "PREDĹŽENIE",
+        label: "PREDĹŽENIE",
         background: "#6d28d9",
         border: "#a78bfa"
       };
@@ -348,9 +341,7 @@
       status === "1h"
     ) {
       return {
-        label: minuteLabel
-          ? `● 1. POLČAS · ${minuteLabel}`
-          : "● 1. POLČAS",
+        label: "● 1. POLČAS",
         background: "#065f46",
         border: "#34d399"
       };
@@ -363,9 +354,7 @@
       status === "2h"
     ) {
       return {
-        label: minuteLabel
-          ? `● 2. POLČAS · ${minuteLabel}`
-          : "● 2. POLČAS",
+        label: "● 2. POLČAS",
         background: "#065f46",
         border: "#34d399"
       };
@@ -418,9 +407,7 @@
     }
 
     return {
-      label: minuteLabel
-        ? `● LIVE · ${minuteLabel}`
-        : "● LIVE",
+      label: "● LIVE",
       background: "#047857",
       border: "#34d399"
     };
@@ -3570,15 +3557,24 @@
     homeName.textContent = match.home || "Domáci";
     homeName.style.cssText = "min-width:0;overflow-wrap:anywhere;font-size:14px;font-weight:800;line-height:1.25;color:#f1f5f9;";
 
+    const scoreGroup = document.createElement("div");
+    scoreGroup.style.cssText = "display:flex;align-items:center;justify-content:center;gap:5px;";
+
+    const clock = document.createElement("span");
+    clock.textContent = minute === "HT" ? "HT" : minute !== "?" ? `${minute}′` : "";
+    clock.style.cssText = "white-space:nowrap;font-size:12px;font-weight:900;color:#7dd3fc;font-variant-numeric:tabular-nums;padding:5px 6px;background:#102b43;border:1px solid #245477;border-radius:7px;";
+
     const score = document.createElement("div");
     score.textContent = `${Number(match.home_score || 0)} : ${Number(match.away_score || 0)}`;
     score.style.cssText = "white-space:nowrap;font-size:23px;font-weight:900;letter-spacing:.5px;color:#fff;font-variant-numeric:tabular-nums;padding:4px 10px;background:#17283d;border:1px solid #38516e;border-radius:10px;";
+    scoreGroup.append(score);
+    if (clock.textContent) scoreGroup.prepend(clock);
 
     const awayName = document.createElement("div");
     awayName.textContent = match.away || "Hostia";
     awayName.style.cssText = "min-width:0;overflow-wrap:anywhere;text-align:right;font-size:14px;font-weight:800;line-height:1.25;color:#f1f5f9;";
 
-    teams.append(homeName, score, awayName);
+    teams.append(homeName, scoreGroup, awayName);
     header.appendChild(teams);
 
     const statusBadge = staleMode
