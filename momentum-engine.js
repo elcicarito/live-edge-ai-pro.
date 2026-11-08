@@ -80,7 +80,8 @@
     const points=[];
     for(let i=1;i<unique.length;i++){const p=interval(unique[i-1],unique[i]);if(p)points.push(p);}
     const pressure=cumulativePressure(match?.stats||[]);
-    const latest=points[points.length-1]||null;
+    const lastPoint=points[points.length-1]||null;
+    const latest=lastPoint&&Math.abs(lastPoint.time-now)<1000?lastPoint:null;
     const recent=latest&&latest.activityShare!==null?{
       home:latest.home,away:latest.away,homeRate:latest.homeRate,awayRate:latest.awayRate,
       minutes:Number(latest.minutes.toFixed(1)),used:latest.used
