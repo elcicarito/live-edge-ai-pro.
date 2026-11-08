@@ -1,0 +1,132 @@
+name: ESPN OTHER SPORTS DISCOVERY (ISOLATED)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/espn-other-sports-discovery.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: espn-other-sports-discovery
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Probe selected ESPN sports scoreboards and live stat coverage
+        shell: bash
+        run: |
+          mkdir -p espn-other-sports
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const leagues = [
+            ["basketball", "nba", "NBA"],
+            ["basketball", "wnba", "WNBA"],
+            ["basketball", "mens-college-basketball", "NCAA Men's Basketball"],
+            ["basketball", "womens-college-basketball", "NCAA Women's Basketball"],
+            ["football", "nfl", "NFL"],
+            ["football", "college-football", "NCAA Football"],
+            ["baseball", "mlb", "MLB"],
+            ["hockey", "nhl", "NHL"],
+            ["hockey", "mens-college-hockey", "NCAA Men's Hockey"],
+            ["rugby", "all", "Rugby (directory probe)"]
+          ];
+
+          const report = {
+            started_at: new Date().toISOString(),
+            source: "ESPN public undocumented site API",
+            note: "One-time isolated probe only; no production scanner changes and no quota/SLA assumption.",
+            results: []
+          };
+
+          function collectStats(competitor) {
+            const stats = {};
+            for (const s of competitor?.statistics || []) {
+              if (s?.name) stats[s.name] = s.displayValue ?? s.value ?? null;
+            }
+            return stats;
+          }
+
+          for (const [sport, league, label] of leagues) {
+            const row = { sport, league, label, http_status: null, event_count: 0, live_count: 0, live_samples: [], error: null };
+            try {
+              const url = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/scoreboard`;
+              const response = await fetch(url, {
+                headers: { accept: "application/json", "user-agent": "LIVE-EDGE-ESPN-OTHER-SPORTS-PROBE/1.0" },
+                signal: AbortSignal.timeout(15000)
+              });
+              row.http_status = response.status;
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const data = await response.json();
+              const events = Array.isArray(data.events) ? data.events : [];
+              row.event_count = events.length;
+              row.league_name = data.leagues?.[0]?.name || data.leagues?.[0]?.abbreviation || null;
+
+              for (const event of events) {
+                const comp = event.competitions?.[0];
+                const state = comp?.status?.type?.state || event.status?.type?.state || "";
+                if (state !== "in") continue;
+                row.live_count++;
+                const competitors = comp?.competitors || [];
+                row.live_samples.push({
+                  event_id: event.id,
+                  name: event.name,
+                  clock: comp?.status?.displayClock || comp?.status?.type?.detail || null,
+                  competitors: competitors.map(c => ({
+                    name: c.team?.displayName || c.team?.name || null,
+                    score: c.score ?? null,
+                    statistics: collectStats(c)
+                  }))
+                });
+              }
+            } catch (e) {
+              row.error = String(e?.message || e);
+            }
+            report.results.push(row);
+            console.log(JSON.stringify({ label, http_status: row.http_status, events: row.event_count, live: row.live_count, error: row.error }));
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+
+          report.finished_at = new Date().toISOString();
+          report.summary = {
+            probes: report.results.length,
+            http_200: report.results.filter(x => x.http_status === 200).length,
+            failures: report.results.filter(x => x.http_status !== 200).length,
+            live_competitions: report.results.filter(x => x.live_count > 0).length,
+            live_matches: report.results.reduce((n, x) => n + x.live_count, 0)
+          };
+
+          fs.writeFileSync("espn-other-sports/espn-other-sports.json", JSON.stringify(report, null, 2));
+          const lines = [
+            "# ESPN other sports discovery",
+            "",
+            `Started: ${report.started_at}`,
+            `Finished: ${report.finished_at}`,
+            "",
+            `Scoreboards HTTP 200: ${report.summary.http_200}/${report.summary.probes}`,
+            `Failures: ${report.summary.failures}`,
+            `Competitions with LIVE matches at this snapshot: ${report.summary.live_competitions}`,
+            `LIVE matches: ${report.summary.live_matches}`,
+            "",
+            "| Sport | Competition | Slug | HTTP | Events | LIVE | Error |",
+            "|---|---|---|---:|---:|---:|---|",
+            ...report.results.map(x => `| ${x.sport} | ${x.league_name || x.label} | ${x.league} | ${x.http_status ?? "-"} | ${x.event_count} | ${x.live_count} | ${x.error || ""} |`),
+            "",
+            "This is a single snapshot. HTTP 200 does not prove season activity, complete stats, historical coverage, or guaranteed uptime."
+          ];
+          fs.writeFileSync("espn-other-sports/README.md", lines.join("\n"));
+          console.log(lines.join("\n"));
+          NODE
+      - name: Upload other sports report
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-other-sports
+          path: espn-other-sports/
+          if-no-files-found: error
+          retention-days: 14
