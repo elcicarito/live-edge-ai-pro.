@@ -3632,6 +3632,7 @@
     }
     addQuickStat("SOT", quickSot);
     addQuickStat("STRELY", quickTotal);
+    addQuickStat("ROHY", statValue(match.stats || [], "corners"));
     addQuickStat("NEB. ÚTOKY", statValue(match.stats || [], "dangerous attacks"));
     if (quickStats.childElementCount) card.appendChild(quickStats);
 
