@@ -3842,7 +3842,7 @@
       collectedAt
     );
 
-    addText(diagnosticsSection, "SPOĽAHLIVOSŤ ZBERU – HISTÓRIA", "14px");
+    addText(diagnosticsSection, "HISTÓRIA PÔVODNÉHO ZELENÉHO MODELU", "14px");
     if (reliability) {
       addBadge(
         diagnosticsSection,
@@ -3852,7 +3852,7 @@
       );
       addText(
         diagnosticsSection,
-        `Vzorka: ${reliability.count} meraní | Momentum dostupné: ${reliability.momentumCoverage}% | Všetky kľúčové štatistiky: ${reliability.fullCoverage}%`
+        `Vzorka: ${reliability.count} meraní | Pôvodný model s nebezpečnými útokmi dostupný: ${reliability.momentumCoverage}% | Úplné pôvodné dáta: ${reliability.fullCoverage}%`
       );
       addText(
         diagnosticsSection,
