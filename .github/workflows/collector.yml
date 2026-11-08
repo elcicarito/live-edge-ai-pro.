@@ -280,8 +280,24 @@ jobs:
 
           function numericStat(value) {
             if (value === null || value === undefined || value === "") return null;
-            const parsed = Number.parseFloat(String(value).replace("%", "").replace(",", "."));
+            const raw = String(value).trim();
+            if (!/^-?\\d+(?:[.,]\\d+)?%?$/.test(raw)) return null;
+            const parsed = Number.parseFloat(raw.replace("%", "").replace(",", "."));
             return Number.isFinite(parsed) ? parsed : null;
+          }
+
+          function extractESPNStats(team) {
+            const out = {};
+            for (const item of team?.statistics || []) {
+              if (!item?.name) continue;
+              const display = numericStat(item.displayValue);
+              const raw = numericStat(item.value);
+              const value = item.name === "possessionPct"
+                ? (display ?? raw)
+                : (raw ?? display);
+              if (value !== null) out[item.name] = value;
+            }
+            return out;
           }
 
           function normalizeESPNEvent(event, leagueSlug, leagueName) {
@@ -305,8 +321,8 @@ jobs:
               if (clockMatch) liveMinute = Number(clockMatch[1]);
             }
 
-            const homeStats = Object.fromEntries((home.statistics || []).filter(x => x?.name).map(x => [x.name, x.displayValue ?? x.value]));
-            const awayStats = Object.fromEntries((away.statistics || []).filter(x => x?.name).map(x => [x.name, x.displayValue ?? x.value]));
+            const homeStats = extractESPNStats(home);
+            const awayStats = extractESPNStats(away);
             const statLabels = {
               shotsOnTarget: ["Shots on target", ""],
               totalShots: ["Total shots", ""],
