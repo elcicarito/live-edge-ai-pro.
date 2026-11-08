@@ -28,7 +28,8 @@ jobs:
           const fs = require("fs");
           const zlib = require("zlib");
 
-          const BASE = "https://sportscore.com/api/v1";
+          const ESPN_SITE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
+          const ESPN_DIRECTORY = "https://sports.core.api.espn.com/v2/sports/soccer/leagues";
           const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
           const ARCHIVE_PATH = "data/live-archive.json";
@@ -65,8 +66,9 @@ jobs:
           function metricEndpoint(rawUrl) {
             try {
               const pathname = new URL(rawUrl).pathname;
-              if (pathname.includes("/fixtures/")) return "fixtures";
-              if (pathname.includes("/match/")) return "match_detail";
+              if (pathname.includes("/scoreboard")) return "espn_scoreboard";
+              if (pathname.includes("/summary")) return "espn_summary";
+              if (pathname.includes("/leagues")) return "espn_directory";
               return pathname || "other";
             } catch {
               return "other";
@@ -262,40 +264,169 @@ jobs:
           }
 
           function getSlug(item) {
-            if (item.slug) return item.slug;
-            if (!item.url) return null;
-
-            const parts = new URL(
-              item.url,
-              "https://sportscore.com"
-            ).pathname.split("/").filter(Boolean);
-
-            const matchIndex = parts.indexOf("match");
-
-            if (matchIndex >= 0 && parts[matchIndex + 1]) {
-              return parts[matchIndex + 1];
-            }
-
+            if (item?.espn_event_id) return String(item.espn_event_id);
+            if (item?.match?.espn_event_id) return String(item.match.espn_event_id);
             return null;
           }
 
           function getMatchId(record) {
             const match = record?.match;
-
-            if (match?.tracker?.id) {
-              return String(match.tracker.id);
+            if (match?.tracker?.id) return String(match.tracker.id);
+            if (match?.espn_event_id && match?.espn_league_slug) {
+              return `espn:${match.espn_league_slug}:${match.espn_event_id}`;
             }
-
-            if (match?.url) {
-              const parts = new URL(
-                match.url,
-                "https://sportscore.com"
-              ).pathname.split("/").filter(Boolean);
-
-              return parts[parts.length - 1] || null;
-            }
-
             return null;
+          }
+
+          function numericStat(value) {
+            if (value === null || value === undefined || value === "") return null;
+            const parsed = Number.parseFloat(String(value).replace("%", "").replace(",", "."));
+            return Number.isFinite(parsed) ? parsed : null;
+          }
+
+          function normalizeESPNEvent(event, leagueSlug, leagueName) {
+            const competition = event?.competitions?.[0] || event?.competition || {};
+            const competitors = competition.competitors || event?.competitors || [];
+            const home = competitors.find(team => team.homeAway === "home") || competitors[0];
+            const away = competitors.find(team => team.homeAway === "away") || competitors[1];
+            if (!home || !away) return null;
+
+            const statusInfo = competition.status || event.status || {};
+            const statusType = statusInfo.type || {};
+            const state = String(statusType.state || "").toLowerCase();
+            const status = state === "in" ? "live" : state === "post" ? "finished" : state || "unknown";
+            const statusText = statusType.detail || statusType.shortDetail || statusType.description || "";
+            const clock = String(statusInfo.displayClock || "");
+            let liveMinute = null;
+            if (/half.?time|halftime/i.test(statusText)) {
+              liveMinute = "HT";
+            } else {
+              const clockMatch = clock.match(/^(\d{1,3})(?::\d{2})?/);
+              if (clockMatch) liveMinute = Number(clockMatch[1]);
+            }
+
+            const homeStats = Object.fromEntries((home.statistics || []).filter(x => x?.name).map(x => [x.name, x.displayValue ?? x.value]));
+            const awayStats = Object.fromEntries((away.statistics || []).filter(x => x?.name).map(x => [x.name, x.displayValue ?? x.value]));
+            const statLabels = {
+              shotsOnTarget: ["Shots on target", ""],
+              totalShots: ["Total shots", ""],
+              shotsOffTarget: ["Shots off target", ""],
+              wonCorners: ["Corners", ""],
+              possessionPct: ["Possession", "%"],
+              foulsCommitted: ["Fouls", ""],
+              yellowCards: ["Yellow cards", ""],
+              redCards: ["Red cards", ""],
+              offsides: ["Offsides", ""],
+              saves: ["Saves", ""],
+              blockedShots: ["Blocked shots", ""],
+              totalPasses: ["Total passes", ""],
+              accuratePasses: ["Accurate passes", ""]
+            };
+            const stats = [];
+            const statNames = new Set([...Object.keys(homeStats), ...Object.keys(awayStats)]);
+            for (const name of statNames) {
+              const label = statLabels[name]?.[0] || name.replace(/([A-Z])/g, " $1").replace(/^./, c => c.toUpperCase());
+              const suffix = statLabels[name]?.[1] || "";
+              const h = numericStat(homeStats[name]);
+              const a = numericStat(awayStats[name]);
+              if (h === null && a === null) continue;
+              stats.push({ label, home: h, away: a, suffix });
+            }
+
+            const eventId = String(event.id || event.uid || competition.id || "");
+            if (!eventId) return null;
+            const homeName = home.team?.displayName || home.team?.shortDisplayName || home.team?.name || home.displayName || "Home";
+            const awayName = away.team?.displayName || away.team?.shortDisplayName || away.team?.name || away.displayName || "Away";
+            const homeScore = numericStat(home.score);
+            const awayScore = numericStat(away.score);
+            return {
+              id: eventId,
+              espn_event_id: eventId,
+              espn_league_slug: leagueSlug,
+              tracker: { id: `espn:${leagueSlug}:${eventId}` },
+              slug: `${leagueSlug}:${eventId}`,
+              url: `https://www.espn.com/soccer/match/_/gameId/${eventId}`,
+              home: homeName,
+              away: awayName,
+              competition: leagueName || event.league?.name || event.season?.name || leagueSlug,
+              league: leagueName || leagueSlug,
+              status,
+              status_text: statusText,
+              live_minute: liveMinute,
+              home_score: homeScore,
+              away_score: awayScore,
+              stats,
+              goal_events: [],
+              source: "ESPN"
+            };
+          }
+
+          async function getESPNLeagueSlugs() {
+            const first = await getJSON(`${ESPN_DIRECTORY}?limit=100&page=1`);
+            const pages = Math.max(1, Number(first.pageCount || 1));
+            const refs = [...(first.items || [])];
+            for (let page = 2; page <= pages; page++) {
+              const data = await getJSON(`${ESPN_DIRECTORY}?limit=100&page=${page}`);
+              refs.push(...(data.items || []));
+            }
+            return [...new Set(refs.map(item => {
+              const ref = item?.$ref || item?.ref || "";
+              return ref.match(/\/leagues\/([^/?]+)/)?.[1] || null;
+            }).filter(Boolean))].filter(slug => !/ncaa/i.test(slug)).sort();
+          }
+
+          async function loadESPNLiveFixtures(errors) {
+            const leagues = await getESPNLeagueSlugs();
+            console.log("ESPN futbalové ligy:", leagues.length);
+            const fixtures = new Map();
+            let cursor = 0;
+            const workers = Array.from({ length: 8 }, async () => {
+              while (true) {
+                const index = cursor++;
+                if (index >= leagues.length) return;
+                const leagueSlug = leagues[index];
+                try {
+                  const data = await getJSON(`${ESPN_SITE}/${encodeURIComponent(leagueSlug)}/scoreboard?limit=100`);
+                  const leagueName = data.leagues?.[0]?.name || data.leagues?.[0]?.abbreviation || leagueSlug;
+                  for (const event of data.events || []) {
+                    const competition = event.competitions?.[0] || {};
+                    const state = competition.status?.type?.state || event.status?.type?.state || "";
+                    if (state !== "in") continue;
+                    const match = normalizeESPNEvent(event, leagueSlug, leagueName);
+                    if (!match || !isLive(match)) continue;
+                    fixtures.set(`${leagueSlug}:${match.espn_event_id}`, match);
+                  }
+                } catch (error) {
+                  errors.push(`${leagueSlug}: ${error.message}`);
+                  console.log("ESPN LIGA CHYBA:", leagueSlug, error.message);
+                }
+                await sleep(120);
+              }
+            });
+            await Promise.all(workers);
+            return [...fixtures.values()];
+          }
+
+          async function getESPNMatchDetail(previousMatch) {
+            const leagueSlug = previousMatch?.espn_league_slug;
+            const eventId = previousMatch?.espn_event_id;
+            if (!leagueSlug || !eventId) {
+              throw new Error("Starý SportScore záznam nemá ESPN identifikátor; ponechávam ho bez zmeny.");
+            }
+            const summary = await getJSON(`${ESPN_SITE}/${encodeURIComponent(leagueSlug)}/summary?event=${encodeURIComponent(eventId)}`);
+            const header = summary.header || summary.event || summary;
+            const competition = header.competitions?.[0] || summary.competitions?.[0];
+            if (!competition) {
+              throw new Error("ESPN summary neobsahuje súťažný detail zápasu.");
+            }
+            const normalized = normalizeESPNEvent({
+              id: eventId,
+              name: header.name || previousMatch.home + " at " + previousMatch.away,
+              competitions: [competition],
+              status: competition.status || header.status
+            }, leagueSlug, previousMatch.competition);
+            if (!normalized) throw new Error("ESPN summary neobsahuje oba tímy.");
+            return normalized;
           }
 
           function makeArchiveSnapshot(record, id) {
@@ -339,6 +470,7 @@ jobs:
               })
               .filter(item =>
                 item &&
+                item.source === "ESPN" &&
                 item.data_status === "complete" &&
                 Number.isFinite(Number(item.fixture_count))
               )
@@ -366,96 +498,19 @@ jobs:
               })
             );
 
-            const list = await getJSON(
-              `${BASE}/fixtures/?sport=football&status=live&limit=200`
-            );
-
-            if (!Array.isArray(list.matches)) {
-              throw new Error(
-                "API nevrátilo platné pole matches. Staré dáta nemením."
-              );
-            }
-
-            const fixtures = list.matches.filter(isLive);
-            const unique = new Map();
-
-            for (const item of fixtures) {
-              const slug = getSlug(item);
-              if (slug) unique.set(slug, item);
-            }
-
-            const uniqueFixtures = [...unique.values()];
-
-            console.log("LIVE zápasy podľa API:", uniqueFixtures.length);
+            const errors = [];
+            const uniqueFixtures = await loadESPNLiveFixtures(errors);
+            console.log("ESPN LIVE zápasy:", uniqueFixtures.length);
 
             const records = [];
-            const errors = [];
             let verifiedDetailCount = 0;
-
-            async function collectMatch(item) {
-              const name = `${item.home || "?"} - ${item.away || "?"}`;
-
-              try {
-                const slug = getSlug(item);
-
-                if (!slug) {
-                  throw new Error("Chýba slug zápasu");
-                }
-
-                const detail = await getJSON(
-                  `${BASE}/match/?sport=football&slug=${encodeURIComponent(slug)}`
-                );
-
-                if (!detail.match) {
-                  throw new Error("Chýba detail zápasu");
-                }
-
-                const match = detail.match;
-                verifiedDetailCount++;
-
-                if (!isLive(match)) {
-                  console.log(
-                    "VYRADENÝ:",
-                    name,
-                    "| stav:",
-                    getStatus(match) || "neznámy"
-                  );
-                  return null;
-                }
-
-                console.log(
-                  "OVERENÝ LIVE:",
-                  name,
-                  "|",
-                  match.live_minute || "?",
-                  "min |",
-                  match.home_score,
-                  ":",
-                  match.away_score
-                );
-
-                return {
-                  collected_at: new Date().toISOString(),
-                  match
-                };
-
-              } catch (error) {
-                const message = `${name}: ${error.message}`;
-                errors.push(message);
-                console.log("CHYBA:", message);
-                return null;
-              }
-            }
-
-            for (let i = 0; i < uniqueFixtures.length; i += 5) {
-              const batch = uniqueFixtures.slice(i, i + 5);
-
-              const results = await Promise.all(
-                batch.map(collectMatch)
-              );
-
-              records.push(...results.filter(Boolean));
-              await sleep(1000);
+            for (const match of uniqueFixtures) {
+              if (!match || !isLive(match)) continue;
+              verifiedDetailCount++;
+              records.push({
+                collected_at: new Date().toISOString(),
+                match
+              });
             }
 
             const complete = errors.length === 0;
@@ -472,6 +527,13 @@ jobs:
               suspect_runs: 0
             };
 
+            if (feedGuard.source !== "ESPN") {
+              feedGuard.baseline_fixture_count = null;
+              feedGuard.suspect_fixture_count = null;
+              feedGuard.suspect_runs = 0;
+            }
+            feedGuard.source = "ESPN";
+
             const baselineCandidates = [
               feedGuard.baseline_fixture_count,
               ...historyCounts
@@ -484,6 +546,7 @@ jobs:
 
             if (
               previousLatest &&
+              previousLatest.source === "ESPN" &&
               previousLatest.data_status === "complete" &&
               Number.isFinite(Number(previousLatest.fixture_count)) &&
               Number(previousLatest.fixture_count) >= MIN_BASELINE
@@ -651,8 +714,8 @@ jobs:
             const output = {
               collected_at: new Date().toISOString(),
               collection_started_at: startedAt,
-              source: "SportScore API v1",
-              collector_version: "8.5",
+              source: "ESPN public soccer API",
+              collector_version: "9.0",
               data_status: archiveSafe ? "complete" : "partial",
               collection_complete: complete,
               archive_safe: archiveSafe,
@@ -723,6 +786,7 @@ jobs:
             if (
               complete &&
               previousLatest &&
+              previousLatest.source === "ESPN" &&
               previousLatest.data_status === "complete" &&
               Array.isArray(previousLatest.records)
             ) {
@@ -746,9 +810,10 @@ jobs:
             // Pokračuj v kontrole zápasov, ktoré už zmizli z LIVE zoznamu.
             // Konečný archív vytvor až po potvrdenom FINISHED/FT stave a skóre.
             for (const [id, item] of [...pending.entries()]) {
-              const slug = getSlug(item?.last_snapshot?.match || {});
+              const pendingMatch = item?.last_snapshot?.match || {};
+              const slug = getSlug(pendingMatch);
 
-              if (!slug) {
+              if (!slug || !pendingMatch.espn_league_slug) {
                 item.final_check_error = "Chýba slug zápasu pre kontrolu konečného výsledku.";
                 item.last_final_check_at = now;
                 pending.set(id, item);
@@ -757,15 +822,7 @@ jobs:
               }
 
               try {
-                const detail = await getJSON(
-                  `${BASE}/match/?sport=football&slug=${encodeURIComponent(slug)}`
-                );
-
-                if (!detail.match) {
-                  throw new Error("Detail zápasu neobsahuje match");
-                }
-
-                const finalMatch = detail.match;
+                const finalMatch = await getESPNMatchDetail(pendingMatch);
                 const finalStatus = getStatus(finalMatch);
                 item.final_check_attempts = (item.final_check_attempts || 0) + 1;
                 item.last_final_check_at = now;
@@ -884,6 +941,7 @@ jobs:
 
               if (
                 previousLatest &&
+                previousLatest.source === "ESPN" &&
                 previousLatest.data_status === "complete" &&
                 Array.isArray(previousLatest.records)
               ) {
