@@ -46,4 +46,11 @@ r=engine.analyse({stats:stats(2,1,3,2)},[
  make(t0,stats(1,1,2,1))
 ],"2026-11-08T12:20:00Z");
 assert.equal(r.recent,null);
+// A previously valid interval must not be reused as if it were the current one.
+r=engine.analyse({stats:stats(3,1,4,2)},[
+ make(t0,stats(1,1,2,1)),
+ make(t0+300000,stats(2,1,3,2))
+],"2026-11-08T12:25:00Z");
+assert.equal(r.recent,null);
+assert.equal(r.acceleration,null);
 console.log("Momentum engine tests passed.");
