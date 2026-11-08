@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/archive-audit.yml'
       - 'scripts/archive-temporal-audit.js'
+      - 'scripts/btts-after-70-audit.js'
 
 permissions:
   contents: read
@@ -65,6 +66,7 @@ jobs:
         shell: bash
         run: |
           node scripts/archive-temporal-audit.js
+          node scripts/btts-after-70-audit.js
 
       - name: Upload audit report
         uses: actions/upload-artifact@v4
