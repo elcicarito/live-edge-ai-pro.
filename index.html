@@ -103,7 +103,7 @@ small{
   border-radius:9px;
   font-size:12px;
 }
-.sport-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}.sport-tab{background:#1b2a3e;color:#d6e2f0;border:1px solid #3a4d67;padding:13px 8px;border-radius:10px;font-weight:800}.sport-tab.active{background:#39e6a5;color:#07120f;border-color:#39e6a5}.basketball-view-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.basketball-view-tab{background:#1b2a3e;color:#d6e2f0;border:1px solid #3a4d67;padding:12px 8px;border-radius:10px;font-weight:800}.basketball-view-tab.active{background:#39e6a5;color:#07120f;border-color:#39e6a5}#basketball-view .card{border:1px solid #263b55}
+.sport-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.sport-tab{background:#1b2a3e;color:#d6e2f0;border:1px solid #3a4d67;padding:13px 8px;border-radius:10px;font-weight:800}.sport-tab.active{background:#39e6a5;color:#07120f;border-color:#39e6a5}.basketball-view-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.basketball-view-tab{background:#1b2a3e;color:#d6e2f0;border:1px solid #3a4d67;padding:12px 8px;border-radius:10px;font-weight:800}.basketball-view-tab.active{background:#39e6a5;color:#07120f;border-color:#39e6a5}#basketball-view .card{border:1px solid #263b55}
 /* LIVE EDGE compact dashboard – vizuálna vrstva bez zásahu do analytiky */
 #matches > section{
   display:grid!important;
@@ -311,7 +311,6 @@ small{
 <div class="sport-switch" role="group" aria-label="Výber športu">
   <button id="football-tab" class="sport-tab active" type="button">⚽ FUTBAL</button>
   <button id="basketball-tab" class="sport-tab" type="button">🏀 BASKETBAL</button>
-  <button id="sportscore-tab" class="sport-tab" type="button">📚 HISTÓRIA</button>
 </div>
 
 <div id="football-view">
@@ -429,53 +428,27 @@ OBNOVIŤ SKENER
 </div>
 
 
-<div id="sportscore-history-view" style="display:none">
-  <div class="card" style="border-color:#365477">
-    <h3>📚 SPORTSCORE HISTORICAL DATABASE</h3>
-    <p id="sportscore-history-meta" style="color:#9baabe">Načítavam oddelenú historickú databázu...</p>
-    <div class="archive-filters">
-      <label for="sportscore-search">Vyhľadať tím alebo súťaž</label>
-      <input id="sportscore-search" type="search" placeholder="Názov tímu alebo ligy">
-      <label for="sportscore-date">Dátum zápasu</label>
-      <input id="sportscore-date" type="date">
-      <label for="sportscore-league">Súťaž</label>
-      <select id="sportscore-league"><option value="">Všetky súťaže</option></select>
-      <button id="sportscore-reset" type="button">VYMAZAŤ FILTRE</button>
-    </div>
-    <div id="sportscore-history-results"><p>Historické zápasy sa načítavajú...</p></div>
-  </div>
-  <div class="card">
-    <h3>ℹ️ ODDIELENÝ HISTORICKÝ ZDROJ</h3>
-    <p style="color:#9baabe;font-size:12px;line-height:1.6">Táto databáza pochádza zo SportScore API. Obsahuje konečné zápasy a dostupné detaily, nie historické LIVE snímky po jednotlivých minútach. Neovplyvňuje LIVE skener, signály ani pôvodný archív.</p>
-  </div>
-</div>
-
 <p><small>Experimental version · <a href="https://sportscore.com/" rel="dofollow" style="color:#39e6a5">Powered by SportScore</a></small></p>
 
 <script>
 (() => {
   const football = document.getElementById("football-view");
   const basketball = document.getElementById("basketball-view");
-  const sportscoreHistory = document.getElementById("sportscore-history-view");
   const footballTab = document.getElementById("football-tab");
   const basketballTab = document.getElementById("basketball-tab");
-  const sportscoreTab = document.getElementById("sportscore-tab");
   function selectSport(sport) {
-    football.style.display = sport === "football" ? "block" : "none";
-    basketball.style.display = sport === "basketball" ? "block" : "none";
-    sportscoreHistory.style.display = sport === "sportscore" ? "block" : "none";
-    footballTab.classList.toggle("active", sport === "football");
-    basketballTab.classList.toggle("active", sport === "basketball");
-    sportscoreTab.classList.toggle("active", sport === "sportscore");
+    const isBasketball = sport === "basketball";
+    football.style.display = isBasketball ? "none" : "block";
+    basketball.style.display = isBasketball ? "block" : "none";
+    footballTab.classList.toggle("active", !isBasketball);
+    basketballTab.classList.toggle("active", isBasketball);
   }
   footballTab.addEventListener("click", () => selectSport("football"));
   basketballTab.addEventListener("click", () => selectSport("basketball"));
-  sportscoreTab.addEventListener("click", () => selectSport("sportscore"));
 })();
 </script>
 <script src="./scanner.js?v=80"></script>
 <script src="./basketball.js?v=12"></script>
-<script src="./sportscore-history.js?v=1"></script>
 
 </body>
 </html>
