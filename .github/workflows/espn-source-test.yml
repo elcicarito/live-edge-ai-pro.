@@ -1,0 +1,144 @@
+name: ESPN SOURCE TEST (ISOLATED)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: espn-source-test
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Probe ESPN soccer scoreboards
+        shell: bash
+        run: |
+          mkdir -p espn-test
+          node <<'NODE'
+          const fs = require("fs");
+          const leagues = [
+            ["eng.1", "Premier League"],
+            ["esp.1", "La Liga"],
+            ["ita.1", "Serie A"],
+            ["ger.1", "Bundesliga"],
+            ["fra.1", "Ligue 1"],
+            ["uefa.champions", "Champions League"],
+            ["usa.1", "MLS"],
+            ["mex.1", "Liga MX"],
+            ["por.1", "Primeira Liga"],
+            ["ned.1", "Eredivisie"],
+            ["sco.1", "Scottish Premiership"]
+          ];
+          const required = ["shotsOnTarget", "totalShots", "wonCorners", "possessionPct"];
+          const sleep = ms => new Promise(r => setTimeout(r, ms));
+          const output = {
+            tested_at: new Date().toISOString(),
+            source: "ESPN public undocumented scoreboard API",
+            requests: 0,
+            successful_requests: 0,
+            failed_requests: 0,
+            http_429: 0,
+            leagues: [],
+            live_matches: [],
+            limitations: [
+              "Manual one-shot probe only; does not establish a daily quota or guarantee.",
+              "No live polling history is collected by this test.",
+              "Only statistics present in the scoreboard payload are counted."
+            ]
+          };
+          function statsMap(competitor) {
+            const out = {};
+            for (const stat of competitor?.statistics || []) {
+              if (stat?.name) out[stat.name] = stat.displayValue ?? stat.value ?? null;
+            }
+            return out;
+          }
+          for (const [slug, name] of leagues) {
+            const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard`;
+            const row = { league: name, slug, http_status: null, event_count: 0, live_count: 0, live_with_all_required_stats: 0, error: null };
+            output.requests++;
+            try {
+              const response = await fetch(url, {
+                headers: { "accept": "application/json", "user-agent": "LIVE-EDGE-ESPN-TEST/1.0" },
+                signal: AbortSignal.timeout(18000)
+              });
+              row.http_status = response.status;
+              if (response.status === 429) output.http_429++;
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              output.successful_requests++;
+              const data = await response.json();
+              const events = Array.isArray(data.events) ? data.events : [];
+              row.event_count = events.length;
+              for (const event of events) {
+                const comp = event.competitions?.[0];
+                const state = comp?.status?.type?.state || event.status?.type?.state || "";
+                const competitors = comp?.competitors || [];
+                const live = state === "in";
+                if (!live) continue;
+                row.live_count++;
+                const home = competitors.find(x => x.homeAway === "home") || competitors[0];
+                const away = competitors.find(x => x.homeAway === "away") || competitors[1];
+                const hs = statsMap(home), as = statsMap(away);
+                const missing = [];
+                for (const key of required) {
+                  if (hs[key] == null || as[key] == null) missing.push(key);
+                }
+                const complete = missing.length === 0;
+                if (complete) row.live_with_all_required_stats++;
+                output.live_matches.push({
+                  league: name,
+                  league_slug: slug,
+                  event_id: event.id,
+                  match: event.name,
+                  state,
+                  clock: comp?.status?.displayClock || comp?.status?.type?.detail || null,
+                  home_score: home?.score ?? null,
+                  away_score: away?.score ?? null,
+                  complete_required_stats: complete,
+                  missing_stats: missing,
+                  home_stats: hs,
+                  away_stats: as
+                });
+              }
+            } catch (error) {
+              output.failed_requests++;
+              row.error = String(error.message || error);
+            }
+            output.leagues.push(row);
+            console.log(JSON.stringify(row));
+            await sleep(350);
+          }
+          output.live_match_count = output.live_matches.length;
+          output.live_complete_match_count = output.live_matches.filter(x => x.complete_required_stats).length;
+          output.required_stats = required;
+          fs.writeFileSync("espn-test/espn-source-test.json", JSON.stringify(output, null, 2));
+          const summary = [
+            "# ESPN source test",
+            "",
+            `Tested: ${output.tested_at}`,
+            `Requests: ${output.requests}; successful: ${output.successful_requests}; failed: ${output.failed_requests}; HTTP 429: ${output.http_429}`,
+            `LIVE matches: ${output.live_match_count}; with all required stats: ${output.live_complete_match_count}`,
+            "",
+            "| League | HTTP | Events | LIVE | LIVE complete | Error |",
+            "|---|---:|---:|---:|---:|---|",
+            ...output.leagues.map(x => `| ${x.league} | ${x.http_status ?? "-"} | ${x.event_count} | ${x.live_count} | ${x.live_with_all_required_stats} | ${x.error || ""} |`),
+            "",
+            "Required per-team fields: " + required.join(", "),
+            "",
+            "This is a one-shot availability probe, not proof of unlimited usage or five-minute update cadence."
+          ].join("\n");
+          fs.writeFileSync("espn-test/README.md", summary);
+          console.log(summary);
+          NODE
+      - name: Upload ESPN test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-source-test
+          path: espn-test/
+          if-no-files-found: error
+          retention-days: 14
