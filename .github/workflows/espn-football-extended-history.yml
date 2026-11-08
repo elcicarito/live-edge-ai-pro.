@@ -105,14 +105,30 @@ jobs:
                     sample.summary_http=200;
                     const box=s?.boxscore||{};
                     sample.has_boxscore=!!s?.boxscore;
-                    const teams=box.players||box.teams||[];
-                    for(const team of teams){
-                      const arr=Array.isArray(team.statistics)?team.statistics:(Array.isArray(team.statistics?.splits)?team.statistics.splits:[]);
-                      const names=new Set(arr.map(x=>x.name||x.label).filter(Boolean));
+                    // ESPN exposes team statistics in different places depending on league:
+                    // scoreboard competition competitors, summary boxscore. Merge both sources.
+                    const competitors=e.competitions?.[0]?.competitors||[];
+                    const boxTeams=[...(Array.isArray(box.teams)?box.teams:[]),...(Array.isArray(box.players)?box.players:[])];
+                    const teamRows=competitors.length?competitors:boxTeams;
+                    for(const team of teamRows){
+                      const teamId=team.id||team.team?.id;
+                      const teamName=team.team?.displayName||team.team?.name||team.displayName||team.name||null;
+                      const names=new Set();
+                      const ownStats=Array.isArray(team.statistics)?team.statistics:(Array.isArray(team.statistics?.splits)?team.statistics.splits:[]);
+                      for(const stat of ownStats) if(stat?.name||stat?.label) names.add(stat.name||stat.label);
+                      const matched=boxTeams.filter(bt=>{
+                        const bid=bt.id||bt.team?.id;
+                        const bname=bt.team?.displayName||bt.team?.name||bt.displayName||bt.name||null;
+                        return (teamId&&bid&&String(teamId)===String(bid))||(teamName&&bname&&teamName===bname);
+                      });
+                      for(const bt of matched){
+                        const arr=Array.isArray(bt.statistics)?bt.statistics:(Array.isArray(bt.statistics?.splits)?bt.statistics.splits:[]);
+                        for(const stat of arr) if(stat?.name||stat?.label) names.add(stat.name||stat.label);
+                      }
                       const missing=required.filter(k=>!names.has(k));
                       sample.teams_checked++;
                       if(!missing.length) sample.teams_with_all_required++;
-                      sample.missing_by_team.push({team:team.team?.displayName||team.team?.name||null,missing});
+                      sample.missing_by_team.push({team:teamName,stat_sources:matched.length?"scoreboard+summary":"scoreboard_or_summary",missing});
                     }
                   }catch(err){sample.summary_error=String(err?.message||err);}
                   report.summary_samples.push(sample);
