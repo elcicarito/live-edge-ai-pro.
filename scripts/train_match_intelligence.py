@@ -8,6 +8,8 @@ import pandas as pd
 import sklearn
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -135,6 +137,55 @@ def subgroup_report(frame, target, probabilities):
     return result
 
 
+
+def prepare_count_features(frame):
+    out = frame.copy()
+    elapsed = out["minute"].clip(lower=1).astype(float)
+    for key in ("sot_home", "sot_away", "shots_off_home", "shots_off_away", "shots_home", "shots_away"):
+        if key in out:
+            out[key + "_per_minute"] = out[key] / elapsed
+    gap_minutes = out["interval_seconds"].clip(lower=20) / 60.0
+    for key in ("sot_delta_home", "sot_delta_away", "shots_off_delta_home", "shots_off_delta_away", "shots_delta_home", "shots_delta_away"):
+        if key in out:
+            out[key + "_per_minute"] = out[key] / gap_minutes
+    out["remaining_minutes"] = (90 - out["minute"]).clip(lower=0)
+    return out
+
+
+def fit_poisson_count(train, target, features):
+    model = Pipeline([
+        ("impute", SimpleImputer(strategy="median", add_indicator=True)),
+        ("model", HistGradientBoostingRegressor(
+            loss="poisson", max_iter=180, learning_rate=0.05,
+            max_leaf_nodes=15, min_samples_leaf=50,
+            l2_regularization=3.0, early_stopping=False,
+            random_state=SEED
+        )),
+    ])
+    model.fit(train[features], train[target].astype(float),
+              model__sample_weight=match_weights(train))
+    return model
+
+
+def count_metrics(frame, target, prediction):
+    weights = match_weights(frame).to_numpy()
+    actual = frame[target].astype(float).to_numpy()
+    pred = np.clip(np.asarray(prediction, dtype=float), 0, None)
+    binary_target = {
+        "goals_remaining": "label_any_goal_remaining",
+        "home_goals_remaining": "label_home_goal_remaining",
+        "away_goals_remaining": "label_away_goal_remaining"
+    }[target]
+    return {
+        "rows": int(len(frame)), "matches": int(frame.match_id.nunique()),
+        "observed_mean": float(np.average(actual, weights=weights)),
+        "predicted_mean": float(np.average(pred, weights=weights)),
+        "mae": float(mean_absolute_error(actual, pred, sample_weight=weights)),
+        "rmse": float(np.sqrt(mean_squared_error(actual, pred, sample_weight=weights))),
+        "derived_any_probability_metrics": evaluate(frame, binary_target, -np.expm1(-pred))
+    }
+
+
 def main():
     if not INPUT.exists():
         raise SystemExit(f"Dataset not found: {INPUT}")
@@ -159,7 +210,7 @@ def main():
             "split": "Chronological match-level split; every snapshot from a match remains in one partition."
         },
         "weighting": "Every match contributes equal total weight in fitting and metrics.",
-        "models": {}, "comparisons": {}, "calibration_bins": {}, "subgroups": {},
+        "models": {}, "comparisons": {}, "calibration_bins": {}, "subgroups": {}, "poisson_count_models": {},
         "limitations": [
             "No bookmaker odds, market prices, or execution outcomes; no value or ROI conclusion is possible.",
             "Repeated snapshots are clustered by match for splitting, weighting, and bootstrap uncertainty.",
@@ -195,6 +246,48 @@ def main():
         output["calibration_bins"][name] = calibration_bins(test, target, pred)
         output["subgroups"][name] = subgroup_report(test, target, pred)
 
+
+    # Separate count-regression experiment: estimate expected goals remaining,
+    # then convert the Poisson mean to P(at least one) = 1 - exp(-lambda).
+    count_train = prepare_count_features(train)
+    count_test = prepare_count_features(test)
+    count_targets = {
+        "any_goal_remaining": "goals_remaining",
+        "home_goal_remaining": "home_goals_remaining",
+        "away_goal_remaining": "away_goals_remaining",
+    }
+    count_features = [
+        "minute", "remaining_minutes", "home_score", "away_score", "score_difference",
+        "sot_home", "sot_away", "sot_diff", "sot_delta_home", "sot_delta_away",
+        "sot_delta_home_per_minute", "sot_delta_away_per_minute",
+        "shots_off_home", "shots_off_away", "shots_off_diff",
+        "shots_off_delta_home", "shots_off_delta_away",
+        "shots_off_delta_home_per_minute", "shots_off_delta_away_per_minute",
+        "shots_home", "shots_away", "shots_diff", "shots_delta_home", "shots_delta_away",
+        "shots_home_per_minute", "shots_away_per_minute",
+        "shots_delta_home_per_minute", "shots_delta_away_per_minute",
+        "sot_home_per_minute", "sot_away_per_minute",
+        "shots_off_home_per_minute", "shots_off_away_per_minute",
+        "possession_home", "possession_away", "possession_diff",
+        "possession_delta_home", "possession_delta_away", "interval_seconds"
+    ]
+    for name, target in count_targets.items():
+        baseline = fit_poisson_count(count_train, target, BASE)
+        base_lambda = np.clip(baseline.predict(count_test[BASE]), 0, None)
+        model = fit_poisson_count(count_train, target, count_features)
+        pred_lambda = np.clip(model.predict(count_test[count_features]), 0, None)
+        base_metrics = count_metrics(count_test, target, base_lambda)
+        extended_metrics = count_metrics(count_test, target, pred_lambda)
+        output["poisson_count_models"][name] = {
+            "target": target,
+            "features": count_features,
+            "baseline_minute_score": base_metrics,
+            "extended_live_features": extended_metrics,
+            "delta_mae_extended_minus_baseline": float(extended_metrics["mae"] - base_metrics["mae"]),
+            "probability_conversion": "P(at least one remaining goal) = 1 - exp(-predicted_expected_goals).",
+            "model_family": "HistGradientBoostingRegressor(loss=poisson); experimental offline only."
+        }
+
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "match-intelligence-models.json").write_text(json.dumps(output, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     lines = [
@@ -217,6 +310,17 @@ def main():
     for name, c in output["comparisons"].items():
         d = c["delta_selected_minus_baseline"]
         lines.append(f"| {name} | {d['auc']:+.3f} | {d['brier']:+.3f} | {d['log_loss']:+.3f} |")
+
+    lines += ["", "## Poisson expected-goals experiment (offline only)", "",
+              "This predicts the count of goals remaining, then converts its expected count λ into P(at least one) = 1 − exp(−λ).",
+              "The count model is experimental and is not the deployed logistic model.",
+              "", "| Target | Model | Expected goals observed | Expected goals predicted | Count MAE | Count RMSE | Derived P(≥1) AUC | P(≥1) Brier |",
+              "|---|---|---:|---:|---:|---:|---:|---:|"]
+    for name, item in output["poisson_count_models"].items():
+        for label, m in (("Minute + score baseline", item["baseline_minute_score"]),
+                         ("Extended live features", item["extended_live_features"])):
+            p = m["derived_any_probability_metrics"]
+            lines.append(f"| {name} | {label} | {m['observed_mean']:.3f} | {m['predicted_mean']:.3f} | {m['mae']:.3f} | {m['rmse']:.3f} | {p['auc']:.3f} | {p['brier']:.3f} |")
     for name, bins in output["calibration_bins"].items():
         lines += ["", f"## Calibration – {name}", "",
                   "| Predicted bin | Snapshots | Mean prediction | Observed rate |",
@@ -240,7 +344,8 @@ def main():
     (OUT / "match-intelligence-training-report.md").write_text("\n".join(lines), encoding="utf-8")
     print(json.dumps({
         "status": output["model_status"], "dataset": output["dataset"],
-        "comparisons": output["comparisons"], "subgroups": output["subgroups"]
+        "comparisons": output["comparisons"], "subgroups": output["subgroups"],
+        "poisson_count_models": output["poisson_count_models"]
     }, indent=2))
 
 
