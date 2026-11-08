@@ -378,14 +378,16 @@ def main():
                       "|---|---:|---:|---:|"]
             for r in bins:
                 lines.append(f"| {r['lower']:.1f}–{r['upper']:.1f} | {r['rows']} | {r['mean_prediction']:.3f} | {r['observed_rate']:.3f} |")
-    for name, strata in output["subgroups"].items():
+    for name, variants in output["subgroups"].items():
         lines += ["", f"## Situation diagnostics – {name}", ""]
-        for field, groups in strata.items():
-            lines += [f"### {field}", "", "| Group | Snapshots | Matches | AUC | Brier | Log loss |",
-                      "|---|---:|---:|---:|---:|---:|"]
-            for label, m in groups.items():
-                auc = f"{m['auc']:.3f}" if m["auc"] is not None else "—"
-                lines.append(f"| {label} | {m['rows']} | {m['matches']} | {auc} | {m['brier']:.3f} | {m['log_loss']:.3f} |")
+        for variant, strata in variants.items():
+            lines += [f"### {variant}", ""]
+            for field, groups in strata.items():
+                lines += [f"#### {field}", "", "| Group | Snapshots | Matches | AUC | Brier | Log loss |",
+                          "|---|---:|---:|---:|---:|---:|"]
+                for label, m in groups.items():
+                    auc = f"{m['auc']:.3f}" if m["auc"] is not None else "—"
+                    lines.append(f"| {label} | {m['rows']} | {m['matches']} | {auc} | {m['brier']:.3f} | {m['log_loss']:.3f} |")
     lines += ["", "## Interpretation limits", "",
               "- AUC measures ranking/discrimination, not hit rate or profitability.",
               "- Added feature value is judged against a same-target minute+score baseline on the same held-out matches.",
