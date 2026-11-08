@@ -223,183 +223,190 @@ def main():
         raise SystemExit("Dataset is empty or missing dataset_split.")
     train = frame[frame.dataset_split == "train"].copy()
     test = frame[frame.dataset_split == "test"].copy()
-    if train.match_id.nunique() < 100 or test.match_id.nunique() < 50:
-        raise SystemExit("Insufficient independent matches for out-of-sample evaluation.")
-
+    if train.match_id.nunique() < 100:
+        raise SystemExit("Insufficient independent pre-cutoff training matches.")
+    holdout_min = int(payload.get("report", {}).get("dataset", {}).get("min_test_matches_for_metrics", 50))
+    has_forward_test = test.match_id.nunique() >= holdout_min
     rng = np.random.default_rng(SEED)
     output = {
-        "model_status": "EXPERIMENTAL_OUT_OF_SAMPLE_NOT_FOR_BETTING",
+        "model_status": "EXPERIMENTAL_FORWARD_VALIDATION" if has_forward_test else "FROZEN_CANDIDATE_AWAITING_FORWARD_HOLDOUT",
         "generated_at_utc": pd.Timestamp.now(tz="UTC").isoformat(),
         "sklearn_version": sklearn.__version__,
         "dataset": {
             "rows": int(len(frame)), "matches": int(frame.match_id.nunique()),
             "train_rows": int(len(train)), "train_matches": int(train.match_id.nunique()),
             "test_rows": int(len(test)), "test_matches": int(test.match_id.nunique()),
-            "split": "Chronological match-level split; every snapshot from a match remains in one partition."
+            "holdout_after_utc": payload.get("report", {}).get("dataset", {}).get("holdout_after_utc"),
+            "forward_test_ready": bool(has_forward_test),
+            "split": payload.get("report", {}).get("dataset", {}).get("split", "Frozen forward-only match-level split.")
         },
         "weighting": "Every match contributes equal total weight in fitting and metrics.",
         "models": {}, "comparisons": {}, "calibration_bins": {}, "subgroups": {}, "poisson_count_models": {},
         "limitations": [
+            "The frozen cutoff is never moved after inspecting forward-test results.",
             "No bookmaker odds, market prices, or execution outcomes; no value or ROI conclusion is possible.",
             "Repeated snapshots are clustered by match for splitting, weighting, and bootstrap uncertainty.",
-            "Subgroup metrics are diagnostic and can be noisy; groups under 30 snapshots or 10 matches are omitted.",
-            "Probability calibration uses out-of-fold predictions grouped by match; the final test set is never used to fit calibration.",
+            "Probability calibration uses out-of-fold predictions grouped by match; the forward test is never used to fit calibration.",
             "No dangerous-attacks feature is used; this model is not connected to production signals."
         ]
     }
 
     for name, (target, features) in TARGETS.items():
-        baseline = fit_model(train, target, BASE)
-        base_p = baseline.predict_proba(test[BASE])[:, 1]
         selected_features = features
         model = fit_model(train, target, selected_features)
-        pred = model.predict_proba(test[selected_features])[:, 1]
-        metrics = evaluate(test, target, pred)
-        metrics["auc_95pct_group_bootstrap"] = grouped_auc_interval(test, target, pred, rng)
         calibrator, oof_predictions = fit_oof_platt_calibrator(train, target, selected_features)
-        calibrated_pred = apply_platt(calibrator, pred)
-        calibrated_metrics = evaluate(test, target, calibrated_pred)
-        calibrated_metrics["auc_95pct_group_bootstrap"] = grouped_auc_interval(test, target, calibrated_pred, rng)
-        baseline_metrics = evaluate(test, target, base_p)
+        calibration_info = {
+            "method": "Platt scaling fitted on 5-fold out-of-fold predictions; folds grouped by match.",
+            "training_oof_rows": int(len(oof_predictions)),
+            "training_oof_matches": int(train.match_id.nunique()),
+            "slope": float(calibrator.coef_[0][0]),
+            "intercept": float(calibrator.intercept_[0]),
+            "inference": "Compute raw model probability p; calibrated p = sigmoid(slope * logit(p) + intercept)."
+        }
+        if has_forward_test:
+            baseline = fit_model(train, target, BASE)
+            base_p = baseline.predict_proba(test[BASE])[:, 1]
+            pred = model.predict_proba(test[selected_features])[:, 1]
+            calibrated_pred = apply_platt(calibrator, pred)
+            metrics = evaluate(test, target, pred)
+            metrics["auc_95pct_group_bootstrap"] = grouped_auc_interval(test, target, pred, rng)
+            calibrated_metrics = evaluate(test, target, calibrated_pred)
+            calibrated_metrics["auc_95pct_group_bootstrap"] = grouped_auc_interval(test, target, calibrated_pred, rng)
+            baseline_metrics = evaluate(test, target, base_p)
+            output["comparisons"][name] = {
+                "baseline_features": BASE,
+                "baseline_metrics": baseline_metrics,
+                "selected_model_metrics": {k: metrics[k] for k in ("auc", "brier", "log_loss", "accuracy_at_0_50")},
+                "delta_selected_minus_baseline": {
+                    k: (metrics[k] - baseline_metrics[k]) if metrics[k] is not None and baseline_metrics[k] is not None else None
+                    for k in ("auc", "brier", "log_loss", "accuracy_at_0_50")
+                },
+                "interpretation": "Positive AUC delta and negative Brier/log-loss deltas favour the selected model."
+            }
+            output["calibration_bins"][name] = {
+                "raw": calibration_bins(test, target, pred),
+                "platt_calibrated": calibration_bins(test, target, calibrated_pred)
+            }
+            output["subgroups"][name] = {
+                "raw": subgroup_report(test, target, pred),
+                "platt_calibrated": subgroup_report(test, target, calibrated_pred)
+            }
+        else:
+            metrics = None
+            calibrated_metrics = None
+            output["comparisons"][name] = {
+                "baseline_features": BASE, "baseline_metrics": None,
+                "selected_model_metrics": None, "delta_selected_minus_baseline": None,
+                "interpretation": f"Forward-only evaluation waits for at least {holdout_min} independent post-cutoff matches."
+            }
+            output["calibration_bins"][name] = {}
+            output["subgroups"][name] = {}
         output["models"][name] = {
             "target": target, "features": selected_features, "metrics": metrics,
-            "calibrated_metrics": calibrated_metrics,
-            "calibration": {
-                "method": "Platt scaling fitted on 5-fold out-of-fold predictions; folds grouped by match.",
-                "training_oof_rows": int(len(oof_predictions)),
-                "training_oof_matches": int(train.match_id.nunique()),
-                "slope": float(calibrator.coef_[0][0]),
-                "intercept": float(calibrator.intercept_[0]),
-                "inference": "Compute raw model probability p; calibrated p = sigmoid(slope * logit(p) + intercept)."
-            },
+            "calibrated_metrics": calibrated_metrics, "calibration": calibration_info,
             "parameters": export_model(model, selected_features)
         }
-        output["comparisons"][name] = {
-            "baseline_features": BASE,
-            "baseline_metrics": baseline_metrics,
-            "selected_model_metrics": {k: metrics[k] for k in ("auc", "brier", "log_loss", "accuracy_at_0_50")},
-            "delta_selected_minus_baseline": {
-                k: (metrics[k] - baseline_metrics[k]) if metrics[k] is not None and baseline_metrics[k] is not None else None
-                for k in ("auc", "brier", "log_loss", "accuracy_at_0_50")
-            },
-            "interpretation": "Positive AUC delta and negative Brier/log-loss deltas favour the selected model."
-        }
-        output["calibration_bins"][name] = {
-            "raw": calibration_bins(test, target, pred),
-            "platt_calibrated": calibration_bins(test, target, calibrated_pred)
-        }
-        output["subgroups"][name] = {
-            "raw": subgroup_report(test, target, pred),
-            "platt_calibrated": subgroup_report(test, target, calibrated_pred)
-        }
 
-
-    # Separate count-regression experiment: estimate expected goals remaining,
-    # then convert the Poisson mean to P(at least one) = 1 - exp(-lambda).
-    count_train = prepare_count_features(train)
-    count_test = prepare_count_features(test)
-    count_targets = {
-        "any_goal_remaining": "goals_remaining",
-        "home_goal_remaining": "home_goals_remaining",
-        "away_goal_remaining": "away_goals_remaining",
-    }
-    count_features = [
-        "minute", "remaining_minutes", "home_score", "away_score", "score_difference",
-        "sot_home", "sot_away", "sot_diff", "sot_delta_home", "sot_delta_away",
-        "sot_delta_home_per_minute", "sot_delta_away_per_minute",
-        "shots_off_home", "shots_off_away", "shots_off_diff",
-        "shots_off_delta_home", "shots_off_delta_away",
-        "shots_off_delta_home_per_minute", "shots_off_delta_away_per_minute",
-        "shots_home", "shots_away", "shots_diff", "shots_delta_home", "shots_delta_away",
-        "shots_home_per_minute", "shots_away_per_minute",
-        "shots_delta_home_per_minute", "shots_delta_away_per_minute",
-        "sot_home_per_minute", "sot_away_per_minute",
-        "shots_off_home_per_minute", "shots_off_away_per_minute",
-        "possession_home", "possession_away", "possession_diff",
-        "possession_delta_home", "possession_delta_away", "interval_seconds"
-    ]
-    for name, target in count_targets.items():
-        baseline = fit_poisson_count(count_train, target, BASE)
-        base_lambda = np.clip(baseline.predict(count_test[BASE]), 0, None)
-        model = fit_poisson_count(count_train, target, count_features)
-        pred_lambda = np.clip(model.predict(count_test[count_features]), 0, None)
-        base_metrics = count_metrics(count_test, target, base_lambda)
-        extended_metrics = count_metrics(count_test, target, pred_lambda)
-        output["poisson_count_models"][name] = {
-            "target": target,
-            "features": count_features,
-            "baseline_minute_score": base_metrics,
-            "extended_live_features": extended_metrics,
-            "delta_mae_extended_minus_baseline": float(extended_metrics["mae"] - base_metrics["mae"]),
-            "probability_conversion": "P(at least one remaining goal) = 1 - exp(-predicted_expected_goals).",
-            "model_family": "HistGradientBoostingRegressor(loss=poisson); experimental offline only."
+    # Keep the experimental expected-goals count model strictly offline and
+    # evaluate it only when the independent forward holdout is large enough.
+    if has_forward_test:
+        count_train = prepare_count_features(train)
+        count_test = prepare_count_features(test)
+        count_targets = {
+            "any_goal_remaining": "goals_remaining",
+            "home_goal_remaining": "home_goals_remaining",
+            "away_goal_remaining": "away_goals_remaining",
         }
+        count_features = [
+            "minute", "remaining_minutes", "home_score", "away_score", "score_difference",
+            "sot_home", "sot_away", "sot_diff", "sot_delta_home", "sot_delta_away",
+            "sot_delta_home_per_minute", "sot_delta_away_per_minute",
+            "shots_off_home", "shots_off_away", "shots_off_diff",
+            "shots_off_delta_home", "shots_off_delta_away",
+            "shots_off_delta_home_per_minute", "shots_off_delta_away_per_minute",
+            "shots_home", "shots_away", "shots_diff", "shots_delta_home", "shots_delta_away",
+            "shots_home_per_minute", "shots_away_per_minute",
+            "shots_delta_home_per_minute", "shots_delta_away_per_minute",
+            "sot_home_per_minute", "sot_away_per_minute",
+            "shots_off_home_per_minute", "shots_off_away_per_minute",
+            "possession_home", "possession_away", "possession_diff",
+            "possession_delta_home", "possession_delta_away", "interval_seconds"
+        ]
+        for name, target in count_targets.items():
+            baseline = fit_poisson_count(count_train, target, BASE)
+            base_lambda = np.clip(baseline.predict(count_test[BASE]), 0, None)
+            model = fit_poisson_count(count_train, target, count_features)
+            pred_lambda = np.clip(model.predict(count_test[count_features]), 0, None)
+            base_metrics = count_metrics(count_test, target, base_lambda)
+            extended_metrics = count_metrics(count_test, target, pred_lambda)
+            output["poisson_count_models"][name] = {
+                "target": target, "features": count_features,
+                "baseline_minute_score": base_metrics,
+                "extended_live_features": extended_metrics,
+                "delta_mae_extended_minus_baseline": float(extended_metrics["mae"] - base_metrics["mae"]),
+                "probability_conversion": "P(at least one remaining goal) = 1 - exp(-predicted_expected_goals).",
+                "model_family": "HistGradientBoostingRegressor(loss=poisson); experimental offline only."
+            }
 
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "match-intelligence-models.json").write_text(json.dumps(output, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     lines = [
-        "# LIVE Match Intelligence – model comparison and diagnostics", "",
+        "# LIVE Match Intelligence – frozen forward-holdout report", "",
         f"Generated UTC: {output['generated_at_utc']}",
         f"Dataset: {len(frame):,} snapshots from {frame.match_id.nunique():,} matches.",
-        f"Train/test: {len(train):,} / {len(test):,} snapshots; {train.match_id.nunique():,} / {test.match_id.nunique():,} matches.",
-        "", "Every match has equal total weight. All snapshots from one match remain in one partition.",
-        "", "## Out-of-sample model metrics",
-        "", "| Target | Model | AUC | Brier | Log loss | Observed | Predicted |",
-        "|---|---|---:|---:|---:|---:|---:|"
+        f"Training: {len(train):,} snapshots from {train.match_id.nunique():,} pre-cutoff matches.",
+        f"Forward test: {len(test):,} snapshots from {test.match_id.nunique():,} post-cutoff matches.",
+        f"Frozen cutoff UTC: {output['dataset']['holdout_after_utc']}",
+        "", "All snapshots from one match stay in one partition; every match has equal total training weight."
     ]
-    for name, item in output["models"].items():
-        target = item["target"]
-        for label, m in (("Minute + score baseline", output["comparisons"][name]["baseline_metrics"]),
-                         ("Selected model", item["metrics"])):
-            lines.append(f"| {name} | {label} | {m['auc']:.3f} | {m['brier']:.3f} | {m['log_loss']:.3f} | {m['positive_rate_match_weighted']:.3f} | {m['mean_prediction_match_weighted']:.3f} |")
-            if label == "Selected model":
-                cm = output["models"][name]["calibrated_metrics"]
-                lines.append(f"| {name} | Selected + OOF Platt calibration | {cm['auc']:.3f} | {cm['brier']:.3f} | {cm['log_loss']:.3f} | {cm['positive_rate_match_weighted']:.3f} | {cm['mean_prediction_match_weighted']:.3f} |")
-    lines += ["", "## Added feature value (selected model minus baseline)", "",
-              "| Target | Δ AUC | Δ Brier | Δ Log loss |", "|---|---:|---:|---:|"]
-    for name, c in output["comparisons"].items():
-        d = c["delta_selected_minus_baseline"]
-        lines.append(f"| {name} | {d['auc']:+.3f} | {d['brier']:+.3f} | {d['log_loss']:+.3f} |")
-
-    lines += ["", "## Poisson expected-goals experiment (offline only)", "",
-              "This predicts the count of goals remaining, then converts its expected count λ into P(at least one) = 1 − exp(−λ).",
-              "The count model is experimental and is not the deployed logistic model.",
-              "", "| Target | Model | Expected goals observed | Expected goals predicted | Count MAE | Count RMSE | Derived P(≥1) AUC | P(≥1) Brier |",
-              "|---|---|---:|---:|---:|---:|---:|---:|"]
-    for name, item in output["poisson_count_models"].items():
-        for label, m in (("Minute + score baseline", item["baseline_minute_score"]),
-                         ("Extended live features", item["extended_live_features"])):
-            p = m["derived_any_probability_metrics"]
-            lines.append(f"| {name} | {label} | {m['observed_mean']:.3f} | {m['predicted_mean']:.3f} | {m['mae']:.3f} | {m['rmse']:.3f} | {p['auc']:.3f} | {p['brier']:.3f} |")
-    for name, variants in output["calibration_bins"].items():
-        for variant, bins in variants.items():
-            lines += ["", f"## Calibration – {name} ({variant})", "",
-                      "| Predicted bin | Snapshots | Mean prediction | Observed rate |",
-                      "|---|---:|---:|---:|"]
-            for r in bins:
-                lines.append(f"| {r['lower']:.1f}–{r['upper']:.1f} | {r['rows']} | {r['mean_prediction']:.3f} | {r['observed_rate']:.3f} |")
-    for name, variants in output["subgroups"].items():
-        lines += ["", f"## Situation diagnostics – {name}", ""]
-        for variant, strata in variants.items():
-            lines += [f"### {variant}", ""]
-            for field, groups in strata.items():
-                lines += [f"#### {field}", "", "| Group | Snapshots | Matches | AUC | Brier | Log loss |",
-                          "|---|---:|---:|---:|---:|---:|"]
-                for label, m in groups.items():
-                    auc = f"{m['auc']:.3f}" if m["auc"] is not None else "—"
-                    lines.append(f"| {label} | {m['rows']} | {m['matches']} | {auc} | {m['brier']:.3f} | {m['log_loss']:.3f} |")
+    if has_forward_test:
+        lines += ["", "## Independent forward out-of-sample metrics", "",
+                  "| Target | Model | AUC | Brier | Log loss | Observed | Predicted |",
+                  "|---|---|---:|---:|---:|---:|---:|"]
+        for name, item in output["models"].items():
+            for label, m in (("Minute + score baseline", output["comparisons"][name]["baseline_metrics"]),
+                             ("Selected model", item["metrics"]),
+                             ("Selected + OOF Platt calibration", item["calibrated_metrics"])):
+                lines.append(f"| {name} | {label} | {m['auc']:.3f} | {m['brier']:.3f} | {m['log_loss']:.3f} | {m['positive_rate_match_weighted']:.3f} | {m['mean_prediction_match_weighted']:.3f} |")
+        lines += ["", "## Added feature value vs baseline", "",
+                  "| Target | Δ AUC | Δ Brier | Δ Log loss |", "|---|---:|---:|---:|"]
+        for name, c in output["comparisons"].items():
+            d = c["delta_selected_minus_baseline"]
+            lines.append(f"| {name} | {d['auc']:+.3f} | {d['brier']:+.3f} | {d['log_loss']:+.3f} |")
+        lines += ["", "## Poisson expected-goals experiment", "",
+                  "| Target | Model | Expected goals observed | Predicted | Count MAE | Count RMSE | Derived P(≥1) AUC | Brier |",
+                  "|---|---|---:|---:|---:|---:|---:|---:|"]
+        for name, item in output["poisson_count_models"].items():
+            for label, m in (("Baseline", item["baseline_minute_score"]), ("Extended", item["extended_live_features"])):
+                p = m["derived_any_probability_metrics"]
+                lines.append(f"| {name} | {label} | {m['observed_mean']:.3f} | {m['predicted_mean']:.3f} | {m['mae']:.3f} | {m['rmse']:.3f} | {p['auc']:.3f} | {p['brier']:.3f} |")
+        for name, variants in output["calibration_bins"].items():
+            for variant, bins in variants.items():
+                lines += ["", f"## Calibration – {name} ({variant})", "",
+                          "| Probability band | Snapshots | Mean predicted | Observed |",
+                          "|---|---:|---:|---:|"]
+                for row in bins:
+                    lines.append(f"| {row['lower']:.1f}–{row['upper']:.1f} | {row['rows']} | {row['mean_prediction']:.3f} | {row['observed_rate']:.3f} |")
+    else:
+        lines += ["", "## Forward validation pending", "",
+                  f"No metrics are published until at least {holdout_min} independent matches archived strictly after the frozen cutoff are available.",
+                  "Candidate models are fitted only on pre-cutoff matches. The future holdout is not used for fitting, calibration, feature selection, or threshold selection.",
+                  "Do not move the cutoff after observing future results."]
     lines += ["", "## Interpretation limits", "",
-              "- AUC measures ranking/discrimination, not hit rate or profitability.",
-              "- Added feature value is judged against a same-target minute+score baseline on the same held-out matches.",
-              "- Subgroup results are descriptive and should not be used to select betting thresholds without a fresh holdout.",
-              "- No bookmaker odds, margin, availability, or staking outcomes are present.",
-              "- Do not publish alerts or use these outputs as betting recommendations; this remains an isolated experiment.", ""]
+              "- AUC measures discrimination, not hit rate or profitability.",
+              "- Brier and log loss measure probability quality, not betting value.",
+              "- No bookmaker odds or executable market prices are included; ROI cannot be inferred.",
+              "- No dangerous-attacks feature is used. The models remain isolated from production signals.", ""]
     (OUT / "match-intelligence-training-report.md").write_text("\n".join(lines), encoding="utf-8")
     print(json.dumps({
         "status": output["model_status"], "dataset": output["dataset"],
-        "comparisons": output["comparisons"], "subgroups": output["subgroups"],
+        "comparisons": output["comparisons"],
         "poisson_count_models": output["poisson_count_models"]
     }, indent=2))
+
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":
