@@ -1,0 +1,111 @@
+name: ESPN SOCCER SITUATION REFERENCE PROBE (ISOLATED)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/espn-situation-ref-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Resolve ESPN soccer situation references and scan event statistics
+        shell: bash
+        run: |
+          mkdir -p espn-situation-probe
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const samples = [
+            ["bel.1", "401878945", "KV Kortrijk at KAA Gent"],
+            ["aut.1", "401881755", "RB Salzburg at SK Sturm Graz"],
+            ["chi.1", "401850690", "Coquimbo Unido at Audax Italiano"],
+            ["eng.1", "401879240", "Aston Villa at Manchester United"],
+            ["den.1", "401874562", "FC Nordsjælland at Randers FC"],
+            ["esp.1", "401882810", "Rayo Vallecano at Real Sociedad"],
+            ["fra.1", "401876412", "Nice at Angers"]
+          ];
+
+          const report = { started_at: new Date().toISOString(), samples: [], requests: [], note: "Isolated read-only endpoint test. No production code or data touched." };
+
+          function scan(value, path = "$", out = [], depth = 0) {
+            if (depth > 14 || value == null) return out;
+            if (Array.isArray(value)) {
+              value.slice(0, 500).forEach((v, i) => scan(v, path + "[" + i + "]", out, depth + 1));
+            } else if (typeof value === "object") {
+              for (const [k, v] of Object.entries(value)) {
+                const text = typeof v === "string" ? v : "";
+                if (/danger|attack|pressure|shots?|possession|corner|statistic|situation/i.test(k) ||
+                    /dangerous attack|attacks|pressure|shots on target|possession|corner kicks/i.test(text)) {
+                  out.push({ path: path + "." + k, value: JSON.stringify(v).slice(0, 2000) });
+                }
+                scan(v, path + "." + k, out, depth + 1);
+              }
+            } else if (typeof value === "string" && /dangerous attack|attacks|pressure/i.test(value)) {
+              out.push({ path, value: value.slice(0, 1000) });
+            }
+            return out;
+          }
+
+          async function get(label, url) {
+            const row = { label, url, status: null, bytes: 0, keys: [], matches: [], error: null };
+            try {
+              const res = await fetch(url, { headers: { accept: "application/json", "user-agent": "LIVE-EDGE-ESPN-SITUATION-PROBE/1.0" }, signal: AbortSignal.timeout(12000) });
+              row.status = res.status;
+              const raw = await res.text();
+              row.bytes = raw.length;
+              if (!res.ok) throw new Error("HTTP " + res.status + ": " + raw.slice(0, 250));
+              const data = JSON.parse(raw);
+              row.keys = Object.keys(data);
+              row.matches = scan(data).slice(0, 100);
+              row.sample = JSON.stringify(data).slice(0, 9000);
+              return { data, row };
+            } catch (e) {
+              row.error = String(e?.message || e);
+              return { data: null, row };
+            } finally {
+              report.requests.push(row);
+            }
+          }
+
+          for (const [league, id, match] of samples) {
+            const base = `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${league}/events/${id}/competitions/${id}`;
+            const item = { league, event_id: id, match, endpoints: [] };
+            const situation = await get("situation", base + "/situation?lang=en&region=us");
+            item.endpoints.push(situation.row);
+            const situationRef = situation.data?.$ref;
+            if (situationRef) {
+              const resolved = await get("situation_resolved", situationRef);
+              item.endpoints.push(resolved.row);
+            }
+            const statistics = await get("competition_statistics", base + "/statistics?lang=en&region=us");
+            item.endpoints.push(statistics.row);
+            const summary = await get("summary", `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/summary?event=${id}`);
+            item.endpoints.push(summary.row);
+            report.samples.push(item);
+          }
+
+          report.finished_at = new Date().toISOString();
+          report.summary = {
+            matches: samples.length,
+            requests: report.requests.length,
+            http_200: report.requests.filter(x => x.status === 200).length,
+            errors: report.requests.filter(x => x.error).length,
+            responses_with_attack_or_pressure_terms: report.requests.filter(x => x.matches.some(m => /danger|attack|pressure/i.test(m.path + m.value))).length,
+            responses_with_match_stats: report.requests.filter(x => x.matches.some(m => /shots?|possession|corner|statistic/i.test(m.path + m.value))).length,
+            resolved_situation_successes: report.requests.filter(x => x.label === "situation_resolved" && x.status === 200 && !x.error).length
+          };
+          fs.writeFileSync("espn-situation-probe/report.json", JSON.stringify(report, null, 2));
+          console.log(JSON.stringify(report.summary, null, 2));
+          NODE
+      - name: Upload situation probe report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-soccer-situation-probe
+          path: espn-situation-probe/
+          retention-days: 14
