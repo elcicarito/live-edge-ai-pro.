@@ -1,0 +1,35 @@
+name: Momentum Engine Validation
+
+on:
+  push:
+    paths:
+      - 'momentum-engine.js'
+      - 'scanner.js'
+      - 'index.html'
+      - 'scripts/test-momentum-engine.js'
+      - '.github/workflows/momentum-engine-check.yml'
+  pull_request:
+    paths:
+      - 'momentum-engine.js'
+      - 'scanner.js'
+      - 'index.html'
+      - 'scripts/test-momentum-engine.js'
+      - '.github/workflows/momentum-engine-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check JavaScript syntax
+        run: |
+          node --check momentum-engine.js
+          node --check scanner.js
+      - name: Test momentum calculations
+        run: node scripts/test-momentum-engine.js
