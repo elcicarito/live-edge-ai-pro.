@@ -1,0 +1,109 @@
+name: ESPN MULTI-SPORT LEAGUE DIRECTORY DISCOVERY (ISOLATED)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/espn-multisport-directory-discovery.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: espn-multisport-directory-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Discover available ESPN league directories across sports
+        shell: bash
+        run: |
+          mkdir -p espn-multisport-directory
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const sports = [
+            "basketball", "football", "baseball", "hockey", "soccer",
+            "rugby", "cricket", "golf", "tennis", "mma", "racing",
+            "lacrosse", "volleyball"
+          ];
+          const report = {
+            started_at: new Date().toISOString(),
+            source: "ESPN public undocumented Core API",
+            note: "Directory discovery only; this does not prove scoreboard availability or LIVE stat coverage.",
+            sports: []
+          };
+
+          for (const sport of sports) {
+            const row = { sport, http_status: null, reported_count: null, pages: 0, leagues: [], error: null };
+            try {
+              const url = `https://sports.core.api.espn.com/v2/sports/${sport}/leagues?limit=100&page=1`;
+              const response = await fetch(url, {
+                headers: { accept: "application/json", "user-agent": "LIVE-EDGE-ESPN-MULTISPORT-DIRECTORY/1.0" },
+                signal: AbortSignal.timeout(12000)
+              });
+              row.http_status = response.status;
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const data = await response.json();
+              row.reported_count = data.count ?? null;
+              row.pages = Number(data.pageCount || 1);
+              const refs = [...(data.items || [])];
+              for (let page = 2; page <= row.pages; page++) {
+                const p = await fetch(`https://sports.core.api.espn.com/v2/sports/${sport}/leagues?limit=100&page=${page}`, {
+                  headers: { accept: "application/json", "user-agent": "LIVE-EDGE-ESPN-MULTISPORT-DIRECTORY/1.0" },
+                  signal: AbortSignal.timeout(12000)
+                });
+                if (!p.ok) throw new Error(`page ${page}: HTTP ${p.status}`);
+                const pageData = await p.json();
+                refs.push(...(pageData.items || []));
+                await new Promise(resolve => setTimeout(resolve, 200));
+              }
+              row.leagues = refs.map(item => {
+                const ref = item?.$ref || item?.ref || "";
+                const id = ref.match(/\/leagues\/([^/?]+)/)?.[1] || null;
+                return { id, ref };
+              }).filter(x => x.id);
+            } catch (e) {
+              row.error = String(e?.message || e);
+            }
+            report.sports.push(row);
+            console.log(JSON.stringify({ sport, http_status: row.http_status, leagues: row.leagues.length, reported_count: row.reported_count, error: row.error }));
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+
+          report.finished_at = new Date().toISOString();
+          report.summary = {
+            sports_probed: report.sports.length,
+            directories_ok: report.sports.filter(x => x.http_status === 200).length,
+            directories_with_leagues: report.sports.filter(x => x.leagues.length > 0).length,
+            total_league_refs: report.sports.reduce((n, x) => n + x.leagues.length, 0)
+          };
+          fs.writeFileSync("espn-multisport-directory/report.json", JSON.stringify(report, null, 2));
+          const lines = [
+            "# ESPN multi-sport league directory discovery",
+            "",
+            `Started: ${report.started_at}`,
+            `Finished: ${report.finished_at}`,
+            `Directories OK: ${report.summary.directories_ok}/${report.summary.sports_probed}`,
+            `Directories with leagues: ${report.summary.directories_with_leagues}`,
+            `Total league references: ${report.summary.total_league_refs}`,
+            "",
+            "| Sport | HTTP | Reported count | Found refs | Error |",
+            "|---|---:|---:|---:|---|",
+            ...report.sports.map(x => `| ${x.sport} | ${x.http_status ?? "-"} | ${x.reported_count ?? "-"} | ${x.leagues.length} | ${x.error || ""} |`),
+            "",
+            "League-directory presence is not evidence of scoreboard support, current season activity, LIVE matches, or complete statistics."
+          ];
+          fs.writeFileSync("espn-multisport-directory/README.md", lines.join("\n"));
+          console.log(lines.join("\n"));
+          NODE
+      - name: Upload multi-sport directory report
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-multisport-directory
+          path: espn-multisport-directory/
+          if-no-files-found: error
+          retention-days: 14
