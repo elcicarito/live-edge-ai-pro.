@@ -283,7 +283,7 @@
 
   // Vizuálne označenie stavu zápasu.
   // Nemení vyhodnocovanie ani generovanie signálov.
-  function getStatusBadge(match, minute) {
+  function getStatusBadge(match) {
     const status = getStatus(match);
     const statusText = String(
       match?.status_text || ""
@@ -328,7 +328,7 @@
       rawMinute === "ht"
     ) {
       return {
-        label: "● PRESTÁVKA · HT",
+        label: "● PRESTÁVKA",
         background: "#92400e",
         border: "#f59e0b"
       };
@@ -3579,7 +3579,7 @@
 
     const statusBadge = staleMode
       ? { label: "ZASTARANÉ DÁTA – NIE LIVE", background: "#7f1d1d", border: "#ef4444" }
-      : getStatusBadge(match, minute);
+      : getStatusBadge(match);
 
     addBadge(
       header,
