@@ -1,0 +1,183 @@
+name: ESPN FOOTBALL HISTORICAL ARCHIVE PROBE (ISOLATED)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/espn-football-history-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: espn-football-history-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Probe historical soccer scoreboards and match summaries
+        shell: bash
+        run: |
+          mkdir -p espn-football-history
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const leagues = [
+            ["eng.1", "English Premier League", 1],
+            ["eng.2", "English Championship", 2],
+            ["esp.1", "Spanish LaLiga", 1],
+            ["esp.2", "Spanish LaLiga 2", 2],
+            ["ger.1", "German Bundesliga", 1],
+            ["ger.2", "German 2. Bundesliga", 2],
+            ["ita.1", "Italian Serie A", 1],
+            ["ita.2", "Italian Serie B", 2],
+            ["fra.1", "French Ligue 1", 1],
+            ["fra.2", "French Ligue 2", 2],
+            ["ned.1", "Dutch Eredivisie", 1],
+            ["por.1", "Portuguese Primeira Liga", 1]
+          ];
+          const dates = ["20261010", "20261017", "20261024", "20261031", "20261101", "20261107", "20261108"];
+          const sleep = ms => new Promise(r => setTimeout(r, ms));
+          const report = {
+            started_at: new Date().toISOString(),
+            source: "ESPN public undocumented soccer scoreboard and summary endpoints",
+            leagues, dates, requests: 0, successful: 0, failed: 0, http_429: 0,
+            scoreboard_results: [], event_samples: [],
+            limitations: [
+              "This is a bounded historical endpoint probe, not a complete archive export.",
+              "Historical scoreboard availability does not guarantee historical in-play snapshots.",
+              "Summary statistics may represent final match totals, not time-stamped LIVE values.",
+              "No unlimited quota or service-level guarantee is implied."
+            ]
+          };
+
+          async function getJson(url) {
+            report.requests++;
+            const response = await fetch(url, {
+              headers: { accept: "application/json", "user-agent": "LIVE-EDGE-ESPN-FOOTBALL-HISTORY-PROBE/1.0" },
+              signal: AbortSignal.timeout(12000)
+            });
+            if (response.status === 429) report.http_429++;
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            report.successful++;
+            return await response.json();
+          }
+
+          for (const [slug, name, tier] of leagues) {
+            for (const date of dates) {
+              const row = { slug, league: name, tier, date, http_status: null, event_count: 0, completed_count: 0, error: null };
+              try {
+                const data = await getJson(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${date}&limit=100`);
+                row.http_status = 200;
+                const events = Array.isArray(data.events) ? data.events : [];
+                row.event_count = events.length;
+                const completed = events.filter(e => {
+                  const c = e.competitions?.[0];
+                  const state = c?.status?.type?.state || e.status?.type?.state;
+                  return state === "post" || state === "final";
+                });
+                row.completed_count = completed.length;
+                report.scoreboard_results.push(row);
+
+                for (const event of completed.slice(0, 2)) {
+                  const eventId = event.id;
+                  const sample = {
+                    slug, league: name, tier, date, event_id: eventId,
+                    match: event.name, summary_http: null, summary_error: null,
+                    summary_top_keys: [], boxscore_keys: [], statistics_keys: [],
+                    competitor_stats: [], has_boxscore: false, has_team_stats: false,
+                    has_play_by_play: false, raw_summary: null
+                  };
+                  try {
+                    const summary = await getJson(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/summary?event=${eventId}`);
+                    sample.summary_http = 200;
+                    sample.summary_top_keys = Object.keys(summary || {});
+                    sample.boxscore_keys = Object.keys(summary?.boxscore || {});
+                    sample.has_boxscore = !!summary?.boxscore;
+                    sample.has_play_by_play = Array.isArray(summary?.plays) && summary.plays.length > 0;
+                    const box = summary?.boxscore || {};
+                    const teams = box.players || box.teams || [];
+                    sample.statistics_keys = Object.keys(box.statistics || {});
+                    for (const team of teams) {
+                      const groups = team.statistics || team.statistics?.splits || [];
+                      sample.competitor_stats.push({
+                        team: team.team?.displayName || team.team?.name || null,
+                        keys: Object.keys(team),
+                        stats: Array.isArray(groups) ? groups.map(x => ({
+                          name: x.name || x.label || null,
+                          displayValue: x.displayValue ?? x.value ?? null
+                        })) : []
+                      });
+                    }
+                    sample.has_team_stats = sample.competitor_stats.some(x => x.stats.length > 0);
+                    sample.raw_summary = summary;
+                  } catch (e) {
+                    sample.summary_error = String(e?.message || e);
+                    report.failed++;
+                  }
+                  report.event_samples.push(sample);
+                  await sleep(150);
+                }
+              } catch (e) {
+                row.error = String(e?.message || e);
+                report.failed++;
+                report.scoreboard_results.push(row);
+              }
+              await sleep(200);
+            }
+            console.log(JSON.stringify({
+              league: slug,
+              scoreboards_tested: report.scoreboard_results.filter(x => x.slug === slug).length,
+              successful: report.scoreboard_results.filter(x => x.slug === slug && x.http_status === 200).length,
+              samples: report.event_samples.filter(x => x.slug === slug).length
+            }));
+          }
+
+          const samples = report.event_samples;
+          report.summary = {
+            leagues_tested: leagues.length,
+            historical_dates_tested: dates.length,
+            scoreboard_requests: report.scoreboard_results.length,
+            scoreboards_ok: report.scoreboard_results.filter(x => x.http_status === 200).length,
+            scoreboards_failed: report.scoreboard_results.filter(x => x.http_status !== 200).length,
+            historical_events_found: report.scoreboard_results.reduce((s, x) => s + x.completed_count, 0),
+            match_summary_samples: samples.length,
+            summaries_ok: samples.filter(x => x.summary_http === 200).length,
+            summaries_failed: samples.filter(x => x.summary_http !== 200).length,
+            summaries_with_boxscore: samples.filter(x => x.has_boxscore).length,
+            summaries_with_team_stats: samples.filter(x => x.has_team_stats).length,
+            summaries_with_play_by_play: samples.filter(x => x.has_play_by_play).length,
+            http_429: report.http_429
+          };
+          report.finished_at = new Date().toISOString();
+          fs.writeFileSync("espn-football-history/espn-football-history.json", JSON.stringify(report, null, 2));
+          const md = [
+            "# ESPN football historical archive probe", "",
+            `Started: ${report.started_at}`,
+            `Finished: ${report.finished_at}`, "",
+            `Leagues: ${report.summary.leagues_tested}; dates per league: ${report.summary.historical_dates_tested}`,
+            `Historical scoreboards OK: ${report.summary.scoreboards_ok}/${report.summary.scoreboard_requests}`,
+            `Completed events found: ${report.summary.historical_events_found}`,
+            `Summary endpoints OK: ${report.summary.summaries_ok}/${report.summary.match_summary_samples}`,
+            `Summaries with boxscore: ${report.summary.summaries_with_boxscore}; with team stats: ${report.summary.summaries_with_team_stats}; with play-by-play: ${report.summary.summaries_with_play_by_play}`,
+            `HTTP 429: ${report.summary.http_429}`, "",
+            "| League | Tier | Date | HTTP | Events | Completed |",
+            "|---|---:|---|---:|---:|---:|",
+            ...report.scoreboard_results.map(x => `| ${x.league} | ${x.tier} | ${x.date} | ${x.http_status ?? "-"} | ${x.event_count} | ${x.completed_count} |`),
+            "",
+            "This probe only tests date-addressable match archives and post-match summary payloads. It does not prove historical LIVE snapshots."
+          ];
+          fs.writeFileSync("espn-football-history/README.md", md.join("\n"));
+          console.log(md.join("\n"));
+          NODE
+      - name: Upload historical probe report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-football-history-probe
+          path: espn-football-history/
+          if-no-files-found: ignore
+          retention-days: 14
