@@ -159,7 +159,7 @@ jobs:
                     : null
                 };
                 collectorMetrics.api_response_diagnostics.push(responseDiagnostic);
-                console.log("SPORTSCORE RESPONSE DIAGNOSTICS:", JSON.stringify(responseDiagnostic));
+                console.log("ESPN RESPONSE DIAGNOSTICS:", JSON.stringify(responseDiagnostic));
 
                 if (!data || typeof data !== "object") {
                   throw new Error("Neplatná JSON odpoveď");
@@ -714,7 +714,7 @@ jobs:
             const output = {
               collected_at: new Date().toISOString(),
               collection_started_at: startedAt,
-              source: "ESPN public soccer API",
+              source: "ESPN",
               collector_version: "9.0",
               data_status: archiveSafe ? "complete" : "partial",
               collection_complete: complete,
@@ -1186,7 +1186,7 @@ jobs:
                   collection_status: batch.data_status || "unknown",
                   stats_count: stats.length,
                   stats,
-                  // Úplné dáta z detailu SportScore API bez straty polí.
+                  // Úplné dostupné dáta zo zdroja ESPN bez straty polí.
                   // raw_match obsahuje aj všetky pôvodné štatistiky a ich metadáta.
                   raw_stats: Array.isArray(match.stats) ? match.stats : [],
                   raw_match: match,
@@ -1909,9 +1909,13 @@ jobs:
 
                 const sot = bttsStat(match.stats, "shots on target");
                 const off = bttsStat(match.stats, "shots off target");
-                if (!sot || !off) continue;
+                const total = bttsStat(match.stats, "total shots");
+                if (!sot || (!off && !total)) continue;
                 const combinedSot = sot.home + sot.away;
-                const combinedShots = combinedSot + off.home + off.away;
+                // ESPN exposes totalShots directly; use it when shotsOffTarget is absent.
+                const combinedShots = total
+                  ? total.home + total.away
+                  : combinedSot + off.home + off.away;
 
                 const candidates = [];
                 if (homeScore === 1 && awayScore === 0 && combinedSot >= 5) {
