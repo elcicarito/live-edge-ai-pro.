@@ -1,0 +1,134 @@
+name: ESPN LIVE 30 SECOND FRESHNESS TEST (ISOLATED)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/espn-live-30s-freshness-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: espn-live-30s-freshness-test
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Poll selected football leagues every 30 seconds for 20 minutes
+        shell: bash
+        run: |
+          mkdir -p espn-live-30s
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const site = "https://site.api.espn.com/apis/site/v2/sports/soccer";
+          const leagues = ["eng.1","esp.1","ger.1","ita.1","por.1","ned.1","bel.1","chi.1","tur.1","nor.1"];
+          const required = ["shotsOnTarget","totalShots","wonCorners","possessionPct"];
+          const cadenceMs = 30_000, durationMs = 20 * 60_000;
+          const pause = ms => new Promise(r => setTimeout(r, ms));
+          const report = { started_at: new Date().toISOString(), cadence_seconds: 30, planned_duration_minutes: 20, leagues, rounds: [], errors: [], notes: [
+            "This is a short freshness test, not a service-level guarantee.",
+            "Each round requests each selected league scoreboard once; actual provider-side update cadence may differ.",
+            "A changed value is evidence of an update, while an unchanged value does not prove the provider failed to refresh."
+          ]};
+          function stats(team) {
+            const out = {};
+            for (const x of team?.statistics || []) if (x?.name) out[x.name] = x.displayValue ?? x.value ?? null;
+            return out;
+          }
+          const started = Date.now();
+          let roundNo = 0;
+          while (Date.now() - started < durationMs) {
+            roundNo++;
+            const roundStart = Date.now();
+            const round = { round: roundNo, sampled_at: new Date().toISOString(), requests: 0, ok: 0, failed: 0, http_429: 0, live_matches: [] };
+            const results = await Promise.all(leagues.map(async slug => {
+              round.requests++;
+              try {
+                const res = await fetch(site + "/" + slug + "/scoreboard", {
+                  headers: { accept: "application/json", "user-agent": "LIVE-EDGE-ESPN-FRESHNESS-TEST/1.0" },
+                  signal: AbortSignal.timeout(12000)
+                });
+                if (res.status === 429) round.http_429++;
+                if (!res.ok) throw new Error("HTTP " + res.status);
+                const data = await res.json();
+                round.ok++;
+                const rows = [];
+                for (const event of data.events || []) {
+                  const comp = event.competitions?.[0];
+                  const state = comp?.status?.type?.state || event.status?.type?.state || "";
+                  if (state !== "in") continue;
+                  const teams = comp?.competitors || [];
+                  const home = teams.find(t => t.homeAway === "home") || teams[0];
+                  const away = teams.find(t => t.homeAway === "away") || teams[1];
+                  const hs = stats(home), as = stats(away);
+                  const allStats = {};
+                  for (const key of required) {
+                    allStats["home_" + key] = hs[key] ?? null;
+                    allStats["away_" + key] = as[key] ?? null;
+                  }
+                  rows.push({ league: slug, event_id: event.id, match: event.name, clock: comp?.status?.displayClock || comp?.status?.type?.detail || null,
+                    home_score: home?.score ?? null, away_score: away?.score ?? null, ...allStats });
+                }
+                return rows;
+              } catch (e) {
+                round.failed++;
+                if (/429/.test(String(e))) round.http_429++;
+                report.errors.push({ round: roundNo, league: slug, error: String(e?.message || e) });
+                return [];
+              }
+            }));
+            round.live_matches = results.flat();
+            round.live_count = round.live_matches.length;
+            report.rounds.push(round);
+            console.log(JSON.stringify({ round: roundNo, at: round.sampled_at, ok: round.ok, failed: round.failed, live: round.live_count, http_429: round.http_429 }));
+            if (Date.now() - started >= durationMs) break;
+            await pause(Math.max(0, cadenceMs - (Date.now() - roundStart)));
+          }
+          const histories = new Map();
+          for (const r of report.rounds) for (const m of r.live_matches) {
+            const key = m.league + ":" + m.event_id;
+            if (!histories.has(key)) histories.set(key, []);
+            histories.get(key).push({ sampled_at: r.sampled_at, ...m });
+          }
+          const matchSummary = [];
+          for (const [key, rows] of histories) {
+            const fields = ["clock","home_score","away_score", ...required.flatMap(k => ["home_"+k,"away_"+k])];
+            const changes = {};
+            for (const field of fields) {
+              let n = 0;
+              for (let i=1;i<rows.length;i++) if (rows[i][field] !== rows[i-1][field] && (rows[i][field] != null || rows[i-1][field] != null)) n++;
+              changes[field] = n;
+            }
+            matchSummary.push({ key, league: rows[0].league, match: rows[0].match, observations: rows.length, first_seen: rows[0].sampled_at, last_seen: rows.at(-1).sampled_at, first_clock: rows[0].clock, last_clock: rows.at(-1).clock, first_score: [rows[0].home_score,rows[0].away_score].join("-"), last_score: [rows.at(-1).home_score,rows.at(-1).away_score].join("-"), changes });
+          }
+          report.match_histories = Object.fromEntries(histories);
+          report.match_summary = matchSummary;
+          report.summary = {
+            leagues_tested: leagues.length, rounds: report.rounds.length,
+            scoreboard_requests: report.rounds.reduce((n,r)=>n+r.requests,0),
+            successful_requests: report.rounds.reduce((n,r)=>n+r.ok,0),
+            failed_requests: report.rounds.reduce((n,r)=>n+r.failed,0),
+            http_429: report.rounds.reduce((n,r)=>n+r.http_429,0),
+            live_snapshots: report.rounds.reduce((n,r)=>n+r.live_count,0),
+            distinct_live_matches: histories.size,
+            matches_with_clock_changes: matchSummary.filter(x=>x.changes.clock>0).length,
+            matches_with_score_changes: matchSummary.filter(x=>x.changes.home_score+x.changes.away_score>0).length,
+            matches_with_any_core_stat_change: matchSummary.filter(x=>required.some(k=>x.changes["home_"+k]+x.changes["away_"+k]>0)).length
+          };
+          report.finished_at = new Date().toISOString();
+          fs.writeFileSync("espn-live-30s/report.json", JSON.stringify(report,null,2));
+          const lines = ["# ESPN LIVE 30-second freshness test","", "Started: "+report.started_at,"Finished: "+report.finished_at,"","## Summary", ...Object.entries(report.summary).map(([k,v])=>"- "+k+": "+v),"","## Match observations","| League | Match | Samples | Clock changes | Score changes | Core-stat changes | First score | Last score |","|---|---|---:|---:|---:|---:|---|---|", ...matchSummary.map(x=>"| "+x.league+" | "+x.match+" | "+x.observations+" | "+x.changes.clock+" | "+(x.changes.home_score+x.changes.away_score)+" | "+required.reduce((n,k)=>n+x.changes["home_"+k]+x.changes["away_"+k],0)+" | "+x.first_score+" | "+x.last_score+" |")];
+          fs.writeFileSync("espn-live-30s/README.md",lines.join("\n"));
+          console.log(lines.join("\n"));
+          NODE
+      - name: Upload freshness report
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-live-30s-freshness-test
+          path: espn-live-30s/
+          if-no-files-found: error
+          retention-days: 14
