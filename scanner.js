@@ -1392,6 +1392,86 @@
     return { ready: true, sides };
   }
 
+  // New descriptive momentum display. It is intentionally separate from the legacy green signal.
+  function renderMomentumEnginePanel(target, match, historyData, collectedAt) {
+    const panel = document.createElement("div");
+    panel.style.cssText = "margin:12px 0;padding:12px;background:#0c1929;border:1px solid #344b65;border-radius:10px;";
+    const heading = document.createElement("div");
+    heading.textContent = "LIVE MOMENTUM · ESPN";
+    heading.style.cssText = "font-size:12px;font-weight:900;letter-spacing:.5px;color:#e2e8f0;margin-bottom:8px;";
+    panel.appendChild(heading);
+    const engine = window.LiveMomentumEngine;
+    const id = matchId(match);
+    const records = historyRecords(historyData, id);
+    const result = engine?.analyse(match, records, collectedAt);
+    if (!result?.ready) {
+      addText(panel, result?.reason || "Momentum engine sa ešte načítava.", "11px");
+      target.appendChild(panel);
+      return;
+    }
+    const status = document.createElement("div");
+    status.textContent = result.status;
+    status.style.cssText = "font-size:11px;font-weight:900;color:#7dd3fc;margin-bottom:8px;";
+    panel.appendChild(status);
+    if (result.pressure) {
+      addText(panel, "Kumulatívna prevaha: Domáci " + result.pressure.home + "/100 | Hostia " + result.pressure.away + "/100", "12px");
+      addText(panel, "Základ: strely na bránu, strely mimo bránu a držanie lopty podľa dostupnosti.", "10px");
+    } else {
+      addText(panel, "Kumulatívny tlak zatiaľ nemožno určiť – chýbajú použiteľné štatistiky.", "11px");
+    }
+    if (result.recent) {
+      addText(panel, "Tlak v poslednom intervale (" + result.recent.minutes + " min): Domáci " + result.recent.home + "/100 | Hostia " + result.recent.away + "/100", "13px");
+      addText(panel, "Aktivita za 10 min: Domáci " + result.recent.homeRate.toFixed(1) + " | Hostia " + result.recent.awayRate.toFixed(1));
+      const used = result.recent.used.map(x => {
+        const label = x.key === "sot" ? "SOT" : x.key === "off" ? "strely mimo" : "rohy";
+        return label + " " + x.home + ":" + x.away;
+      }).join(" · ");
+      addText(panel, "Nové udalosti: " + used, "10px");
+    } else {
+      addText(panel, "Čakám na platné porovnanie dvoch meraní v intervale 3–15 minút. Bez nových striel/rohov sa tlak nevymýšľa.", "11px");
+    }
+    if (result.acceleration) {
+      addText(panel, "Zrýchlenie: domáci " + result.acceleration.homeState + " (" + result.acceleration.homePreviousRate + " → " + result.acceleration.homeLatestRate + "), hostia " + result.acceleration.awayState + " (" + result.acceleration.awayPreviousRate + " → " + result.acceleration.awayLatestRate + ")", "11px");
+    } else {
+      addText(panel, "Zrýchlenie/spomalenie: čakám na ďalší platný interval.", "10px");
+    }
+    if (result.trend.length >= 2) {
+      const svgNS = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(svgNS, "svg");
+      svg.setAttribute("viewBox", "0 0 320 116");
+      svg.setAttribute("width", "100%");
+      svg.setAttribute("role", "img");
+      svg.setAttribute("aria-label", "Vývoj relatívneho momenta domácich a hostí");
+      svg.style.cssText = "display:block;max-width:100%;margin:7px 0;";
+      [18,57,96].forEach((y,j)=>{
+        const line=document.createElementNS(svgNS,"line");
+        line.setAttribute("x1","24");line.setAttribute("x2","310");
+        line.setAttribute("y1",String(y));line.setAttribute("y2",String(y));
+        line.setAttribute("stroke","#64748b");line.setAttribute("opacity",".25");
+        line.setAttribute("stroke-dasharray","3 4");svg.appendChild(line);
+        const t=document.createElementNS(svgNS,"text");
+        t.setAttribute("x","18");t.setAttribute("y",String(y+3));
+        t.setAttribute("text-anchor","end");t.setAttribute("fill","#94a3b8");
+        t.setAttribute("font-size","8");t.textContent=j===0?"100":j===1?"50":"0";svg.appendChild(t);
+      });
+      const points=result.trend,first=points[0].time,last=points[points.length-1].time;
+      const px=t=>last===first?24:24+(t-first)/(last-first)*286;
+      const py=v=>96-Math.max(0,Math.min(100,v))*.78;
+      for(const [key,color] of [["home","#22c55e"],["away","#94a3b8"]]){
+        const line=document.createElementNS(svgNS,"polyline");
+        line.setAttribute("points",points.map(p=>px(p.time).toFixed(1)+","+py(p[key]).toFixed(1)).join(" "));
+        line.setAttribute("fill","none");line.setAttribute("stroke",color);
+        line.setAttribute("stroke-width","2.5");line.setAttribute("stroke-linecap","round");
+        line.setAttribute("stroke-linejoin","round");svg.appendChild(line);
+      }
+      panel.appendChild(svg);
+    }
+    const q=result.reliability;
+    addText(panel, "Pokrytie archívnych meraní: základné strelecké dáta " + q.coreCoverage + "% | SOT aj strely mimo " + q.shotCoverage + "% | držanie lopty " + q.possessionCoverage + "% | platné intervaly " + q.intervalCount + ".", "10px");
+    addText(panel, "Index momenta opisuje relatívnu aktivitu, nie pravdepodobnosť gólu. Rohy sú iba doplnkový údaj, ak ich ESPN poskytne. Dangerous Attacks sa nepoužívajú.", "10px");
+    target.appendChild(panel);
+  }
+
   function renderMomentumOverview(target, pressure, snapshot, threat, trend, reliability, acceleration, collectedAt, match, historyData) {
     const panel = document.createElement("div");
     panel.style.cssText = "margin:12px 0;padding:12px;background:#0c1929;border:1px solid #344b65;border-radius:10px;";
@@ -3825,59 +3905,13 @@
       });
     }
 
+    // Legacy green signal remains isolated during validation; its logic is not used for the new momentum panel.
     const pressure = calculatePressure(match.stats || []);
     const snapshot = getSnapshot(match, historyData, collectedAt);
     const threat = calculateThreat(pressure, snapshot);
-
-    if (pressure) {
-      addText(
-        momentumSection,
-        `Tlak: Domáci ${pressure.home}/100 | Hostia ${pressure.away}/100`
-      );
-    } else {
-      addText(momentumSection, "Tlak: čakám na štatistiky.");
-    }
-
-    if (snapshot.ready) {
-      addText(
-        momentumSection,
-        `Porovnávané merania: ${snapshot.oldTime} | Rozdiel ${snapshot.minutes} min`
-      );
-
-      addText(
-        momentumSection,
-        `Nové strely na bránu: ${snapshot.homeShots} : ${snapshot.awayShots}`
-      );
-
-      addText(
-        momentumSection,
-        `Nové nebezpečné útoky: ${snapshot.homeAttacks} : ${snapshot.awayAttacks}`
-      );
-
-      addText(
-        momentumSection,
-        `Aktivita spolu: Domáci ${snapshot.homeActivity} | Hostia ${snapshot.awayActivity}`
-      );
-
-      addText(
-        momentumSection,
-        `Aktivita za 10 min: Domáci ${snapshot.homeActivityRate.toFixed(1)} | Hostia ${snapshot.awayActivityRate.toFixed(1)}`
-      );
-    } else {
-      addText(momentumSection, snapshot.text);
-    }
-
-    if (threat) {
-      addText(
-        momentumSection,
-        `GOAL THREAT: Domáci ${threat.home}/100 | Hostia ${threat.away}/100`,
-        "15px"
-      );
-    }
-    const momentumTrend = renderMomentumTrend(momentumSection, match, historyData, collectedAt, threat);
     const momentumReliability = getMatchReliability(match, historyData, collectedAt);
     const pressureAcceleration = calculatePressureAcceleration(match, historyData, collectedAt);
-    renderMomentumOverview(momentumSection, pressure, snapshot, threat, momentumTrend, momentumReliability, pressureAcceleration, collectedAt, match, historyData);
+    renderMomentumEnginePanel(momentumSection, match, historyData, collectedAt);
 
     if (!allowSignals) {
       addSignalPanel(signalSection, {
