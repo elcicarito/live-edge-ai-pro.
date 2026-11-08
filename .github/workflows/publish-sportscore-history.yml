@@ -1,0 +1,64 @@
+name: Publish SportScore historical database
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Successful SportScore last-30-days archive run ID"
+        required: true
+        default: "42419077891"
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: publish-sportscore-history
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout application
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Download existing archive artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sportscore-last-30-days
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          path: /tmp/sportscore-artifact
+
+      - name: Prepare separate compressed historical data
+        run: |
+          set -euo pipefail
+          mkdir -p data/sportscore-history
+          unzip -o /tmp/sportscore-artifact/sportscore-last-30-days.zip -d /tmp/sportscore-source
+          gzip -9 -c /tmp/sportscore-source/fixtures.jsonl > data/sportscore-history/fixtures.jsonl.gz
+          gzip -9 -c /tmp/sportscore-source/match_details.jsonl > data/sportscore-history/match_details.jsonl.gz
+          cp /tmp/sportscore-source/summary.json data/sportscore-history/summary.json
+          cp /tmp/sportscore-source/daily_summary.csv data/sportscore-history/daily_summary.csv
+          cp /tmp/sportscore-source/errors.json data/sportscore-history/errors.json
+          echo "Published files:"
+          ls -lh data/sportscore-history
+          echo "Fixture rows: $(gzip -cd data/sportscore-history/fixtures.jsonl.gz | wc -l)"
+          echo "Detail rows: $(gzip -cd data/sportscore-history/match_details.jsonl.gz | wc -l)"
+
+      - name: Commit isolated SportScore archive
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/sportscore-history/
+          if git diff --cached --quiet; then
+            echo "No archive changes to publish."
+            exit 0
+          fi
+          git commit -m "Publish separate SportScore 30-day historical database"
+          git push origin HEAD:main
