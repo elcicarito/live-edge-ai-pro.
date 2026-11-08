@@ -12,6 +12,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 from sklearn.pipeline import Pipeline
+from sklearn.model_selection import GroupKFold
 from sklearn.preprocessing import StandardScaler
 
 INPUT = Path("audit-output/match-intelligence-dataset.json")
@@ -62,6 +63,33 @@ def export_model(model, features):
         "intercept": float(logistic.intercept_[0]),
         "inference": "Impute null features with medians; append missing flags in listed feature-index order; standardise; sigmoid(intercept + dot(coefficients, vector)).",
     }
+
+
+
+def logit(p):
+    clipped = np.clip(np.asarray(p, dtype=float), 1e-6, 1 - 1e-6)
+    return np.log(clipped / (1 - clipped)).reshape(-1, 1)
+
+
+def fit_oof_platt_calibrator(train, target, features):
+    groups = train["match_id"].to_numpy()
+    oof = np.full(len(train), np.nan, dtype=float)
+    splitter = GroupKFold(n_splits=5)
+    for fit_idx, calibration_idx in splitter.split(train, train[target], groups):
+        fold_train = train.iloc[fit_idx]
+        fold_valid = train.iloc[calibration_idx]
+        fold_model = fit_model(fold_train, target, features)
+        oof[calibration_idx] = fold_model.predict_proba(fold_valid[features])[:, 1]
+    if not np.isfinite(oof).all():
+        raise RuntimeError("OOF calibration predictions are incomplete.")
+    calibrator = LogisticRegression(C=1e6, max_iter=2000)
+    calibrator.fit(logit(oof), train[target].astype(int),
+                   sample_weight=match_weights(train))
+    return calibrator, oof
+
+
+def apply_platt(calibrator, probabilities):
+    return calibrator.predict_proba(logit(probabilities))[:, 1]
 
 
 def grouped_auc_interval(frame, target, probabilities, rng):
@@ -215,7 +243,7 @@ def main():
             "No bookmaker odds, market prices, or execution outcomes; no value or ROI conclusion is possible.",
             "Repeated snapshots are clustered by match for splitting, weighting, and bootstrap uncertainty.",
             "Subgroup metrics are diagnostic and can be noisy; groups under 30 snapshots or 10 matches are omitted.",
-            "No probability calibration layer is fitted yet; calibration bins are diagnostics only.",
+            "Probability calibration uses out-of-fold predictions grouped by match; the final test set is never used to fit calibration.",
             "No dangerous-attacks feature is used; this model is not connected to production signals."
         ]
     }
@@ -228,9 +256,22 @@ def main():
         pred = model.predict_proba(test[selected_features])[:, 1]
         metrics = evaluate(test, target, pred)
         metrics["auc_95pct_group_bootstrap"] = grouped_auc_interval(test, target, pred, rng)
+        calibrator, oof_predictions = fit_oof_platt_calibrator(train, target, selected_features)
+        calibrated_pred = apply_platt(calibrator, pred)
+        calibrated_metrics = evaluate(test, target, calibrated_pred)
+        calibrated_metrics["auc_95pct_group_bootstrap"] = grouped_auc_interval(test, target, calibrated_pred, rng)
         baseline_metrics = evaluate(test, target, base_p)
         output["models"][name] = {
             "target": target, "features": selected_features, "metrics": metrics,
+            "calibrated_metrics": calibrated_metrics,
+            "calibration": {
+                "method": "Platt scaling fitted on 5-fold out-of-fold predictions; folds grouped by match.",
+                "training_oof_rows": int(len(oof_predictions)),
+                "training_oof_matches": int(train.match_id.nunique()),
+                "slope": float(calibrator.coef_[0][0]),
+                "intercept": float(calibrator.intercept_[0]),
+                "inference": "Compute raw model probability p; calibrated p = sigmoid(slope * logit(p) + intercept)."
+            },
             "parameters": export_model(model, selected_features)
         }
         output["comparisons"][name] = {
@@ -243,8 +284,14 @@ def main():
             },
             "interpretation": "Positive AUC delta and negative Brier/log-loss deltas favour the selected model."
         }
-        output["calibration_bins"][name] = calibration_bins(test, target, pred)
-        output["subgroups"][name] = subgroup_report(test, target, pred)
+        output["calibration_bins"][name] = {
+            "raw": calibration_bins(test, target, pred),
+            "platt_calibrated": calibration_bins(test, target, calibrated_pred)
+        }
+        output["subgroups"][name] = {
+            "raw": subgroup_report(test, target, pred),
+            "platt_calibrated": subgroup_report(test, target, calibrated_pred)
+        }
 
 
     # Separate count-regression experiment: estimate expected goals remaining,
@@ -305,6 +352,9 @@ def main():
         for label, m in (("Minute + score baseline", output["comparisons"][name]["baseline_metrics"]),
                          ("Selected model", item["metrics"])):
             lines.append(f"| {name} | {label} | {m['auc']:.3f} | {m['brier']:.3f} | {m['log_loss']:.3f} | {m['positive_rate_match_weighted']:.3f} | {m['mean_prediction_match_weighted']:.3f} |")
+            if label == "Selected model":
+                cm = output["models"][name]["calibrated_metrics"]
+                lines.append(f"| {name} | Selected + OOF Platt calibration | {cm['auc']:.3f} | {cm['brier']:.3f} | {cm['log_loss']:.3f} | {cm['positive_rate_match_weighted']:.3f} | {cm['mean_prediction_match_weighted']:.3f} |")
     lines += ["", "## Added feature value (selected model minus baseline)", "",
               "| Target | Δ AUC | Δ Brier | Δ Log loss |", "|---|---:|---:|---:|"]
     for name, c in output["comparisons"].items():
@@ -321,20 +371,23 @@ def main():
                          ("Extended live features", item["extended_live_features"])):
             p = m["derived_any_probability_metrics"]
             lines.append(f"| {name} | {label} | {m['observed_mean']:.3f} | {m['predicted_mean']:.3f} | {m['mae']:.3f} | {m['rmse']:.3f} | {p['auc']:.3f} | {p['brier']:.3f} |")
-    for name, bins in output["calibration_bins"].items():
-        lines += ["", f"## Calibration – {name}", "",
-                  "| Predicted bin | Snapshots | Mean prediction | Observed rate |",
-                  "|---|---:|---:|---:|"]
-        for r in bins:
-            lines.append(f"| {r['lower']:.1f}–{r['upper']:.1f} | {r['rows']} | {r['mean_prediction']:.3f} | {r['observed_rate']:.3f} |")
-    for name, strata in output["subgroups"].items():
+    for name, variants in output["calibration_bins"].items():
+        for variant, bins in variants.items():
+            lines += ["", f"## Calibration – {name} ({variant})", "",
+                      "| Predicted bin | Snapshots | Mean prediction | Observed rate |",
+                      "|---|---:|---:|---:|"]
+            for r in bins:
+                lines.append(f"| {r['lower']:.1f}–{r['upper']:.1f} | {r['rows']} | {r['mean_prediction']:.3f} | {r['observed_rate']:.3f} |")
+    for name, variants in output["subgroups"].items():
         lines += ["", f"## Situation diagnostics – {name}", ""]
-        for field, groups in strata.items():
-            lines += [f"### {field}", "", "| Group | Snapshots | Matches | AUC | Brier | Log loss |",
-                      "|---|---:|---:|---:|---:|---:|"]
-            for label, m in groups.items():
-                auc = f"{m['auc']:.3f}" if m["auc"] is not None else "—"
-                lines.append(f"| {label} | {m['rows']} | {m['matches']} | {auc} | {m['brier']:.3f} | {m['log_loss']:.3f} |")
+        for variant, strata in variants.items():
+            lines += [f"### {variant}", ""]
+            for field, groups in strata.items():
+                lines += [f"#### {field}", "", "| Group | Snapshots | Matches | AUC | Brier | Log loss |",
+                          "|---|---:|---:|---:|---:|---:|"]
+                for label, m in groups.items():
+                    auc = f"{m['auc']:.3f}" if m["auc"] is not None else "—"
+                    lines.append(f"| {label} | {m['rows']} | {m['matches']} | {auc} | {m['brier']:.3f} | {m['log_loss']:.3f} |")
     lines += ["", "## Interpretation limits", "",
               "- AUC measures ranking/discrimination, not hit rate or profitability.",
               "- Added feature value is judged against a same-target minute+score baseline on the same held-out matches.",
