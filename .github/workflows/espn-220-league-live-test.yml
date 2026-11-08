@@ -1,0 +1,222 @@
+name: ESPN FOOTBALL 220 LEAGUE LIVE COVERAGE TEST (ISOLATED)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/espn-220-league-live-test.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: espn-220-league-live-test
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Poll all discovered soccer leagues three times
+        shell: bash
+        run: |
+          mkdir -p espn-220-live
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const directory = "https://sports.core.api.espn.com/v2/sports/soccer/leagues";
+          const site = "https://site.api.espn.com/apis/site/v2/sports/soccer";
+          const required = ["shotsOnTarget", "totalShots", "wonCorners", "possessionPct"];
+          const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+          const report = {
+            started_at: new Date().toISOString(),
+            source: "ESPN public undocumented soccer APIs",
+            planned_rounds: 3,
+            cadence_minutes: 5,
+            directory: {},
+            rounds: [],
+            errors: [],
+            limitations: [
+              "Three snapshots at five-minute intervals are a short stability sample, not an uptime guarantee.",
+              "A scoreboard HTTP 200 does not mean the league has active fixtures or a live match at that time.",
+              "Core statistics are complete only when all four named fields exist for both teams.",
+              "The directory and scoreboard endpoints are public but undocumented; no unlimited quota or SLA is assumed."
+            ]
+          };
+          async function json(url) {
+            const r = await fetch(url, {
+              headers: { accept: "application/json", "user-agent": "LIVE-EDGE-ESPN-220-FOOTBALL-TEST/1.0" },
+              signal: AbortSignal.timeout(15000)
+            });
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return await r.json();
+          }
+          const first = await json(directory + "?limit=100&page=1");
+          const pages = Math.max(1, Number(first.pageCount || 1));
+          const refs = [...(first.items || [])];
+          let directoryRequests = 1;
+          for (let p = 2; p <= pages; p++) {
+            const page = await json(directory + "?limit=100&page=" + p);
+            refs.push(...(page.items || []));
+            directoryRequests++;
+          }
+          const slugs = [...new Set(refs.map(x => {
+            const ref = x?.$ref || x?.ref || "";
+            return ref.match(/\/leagues\/([^/?]+)/)?.[1] || null;
+          }).filter(Boolean))].sort();
+          report.directory = {
+            requested_at: new Date().toISOString(),
+            reported_count: first.count ?? null,
+            pages,
+            directory_requests: directoryRequests,
+            refs_found: refs.length,
+            unique_leagues: slugs.length
+          };
+          function stats(team) {
+            const out = {};
+            for (const x of team?.statistics || []) if (x?.name) out[x.name] = x.displayValue ?? x.value ?? null;
+            return out;
+          }
+          for (let roundNo = 1; roundNo <= 3; roundNo++) {
+            const started = Date.now();
+            const round = { round: roundNo, sampled_at: new Date().toISOString(), requests: 0, ok: 0, failed: 0, http_429: 0, leagues: [], live_matches: [] };
+            let cursor = 0;
+            const workers = Array.from({ length: 8 }, async () => {
+              while (true) {
+                const i = cursor++;
+                if (i >= slugs.length) return;
+                const slug = slugs[i];
+                round.requests++;
+                const row = { slug, status: null, event_count: 0, live_count: 0, complete_live_count: 0, error: null };
+                try {
+                  const response = await fetch(site + "/" + encodeURIComponent(slug) + "/scoreboard", {
+                    headers: { accept: "application/json", "user-agent": "LIVE-EDGE-ESPN-220-FOOTBALL-TEST/1.0" },
+                    signal: AbortSignal.timeout(15000)
+                  });
+                  row.status = response.status;
+                  if (response.status === 429) round.http_429++;
+                  if (!response.ok) throw new Error("HTTP " + response.status);
+                  const data = await response.json();
+                  round.ok++;
+                  row.event_count = Array.isArray(data.events) ? data.events.length : 0;
+                  row.league_name = data.leagues?.[0]?.name || data.leagues?.[0]?.abbreviation || null;
+                  for (const event of data.events || []) {
+                    const comp = event.competitions?.[0];
+                    const state = comp?.status?.type?.state || event.status?.type?.state || "";
+                    if (state !== "in") continue;
+                    const teams = comp?.competitors || [];
+                    const home = teams.find(t => t.homeAway === "home") || teams[0];
+                    const away = teams.find(t => t.homeAway === "away") || teams[1];
+                    const hs = stats(home), as = stats(away);
+                    const missing = required.filter(k => hs[k] == null || as[k] == null);
+                    const match = {
+                      slug, league: row.league_name, event_id: event.id, name: event.name,
+                      sampled_at: round.sampled_at,
+                      clock: comp?.status?.displayClock || comp?.status?.type?.detail || null,
+                      home_score: home?.score ?? null, away_score: away?.score ?? null,
+                      complete_core_stats: missing.length === 0, missing_stats: missing,
+                      home_stats: hs, away_stats: as
+                    };
+                    round.live_matches.push(match);
+                    row.live_count++;
+                    if (missing.length === 0) row.complete_live_count++;
+                  }
+                } catch (e) {
+                  round.failed++;
+                  row.error = String(e?.message || e);
+                  if (/HTTP 429/.test(row.error) && row.status !== 429) round.http_429++;
+                  report.errors.push({ round: roundNo, slug, error: row.error });
+                }
+                round.leagues.push(row);
+                await pause(120);
+              }
+            });
+            await Promise.all(workers);
+            round.leagues.sort((a,b) => a.slug.localeCompare(b.slug));
+            round.live_count = round.live_matches.length;
+            round.complete_live_count = round.live_matches.filter(x => x.complete_core_stats).length;
+            round.leagues_ok = round.leagues.filter(x => x.status === 200).length;
+            report.rounds.push(round);
+            console.log(JSON.stringify({
+              round: roundNo, requests: round.requests, ok: round.ok, failed: round.failed,
+              http_429: round.http_429, live: round.live_count, live_complete: round.complete_live_count
+            }));
+            if (roundNo < 3) await pause(Math.max(0, 5 * 60 * 1000 - (Date.now() - started)));
+          }
+          const all = report.rounds.flatMap(x => x.live_matches);
+          const distinct = new Map();
+          for (const m of all) {
+            const key = m.slug + ":" + m.event_id;
+            if (!distinct.has(key)) distinct.set(key, []);
+            distinct.get(key).push(m);
+          }
+          const perLeague = slugs.map(slug => {
+            const rows = report.rounds.flatMap(r => r.leagues).filter(x => x.slug === slug);
+            const matches = all.filter(x => x.slug === slug);
+            return {
+              slug, name: rows.find(x => x.league_name)?.league_name || null,
+              successful_rounds: rows.filter(x => x.status === 200).length,
+              failed_rounds: rows.filter(x => x.status !== 200).length,
+              live_snapshots: matches.length,
+              complete_live_snapshots: matches.filter(x => x.complete_core_stats).length,
+              distinct_live_matches: new Set(matches.map(x => x.event_id)).size
+            };
+          });
+          report.league_summary = perLeague;
+          report.summary = {
+            discovered_leagues: slugs.length,
+            rounds: report.rounds.length,
+            scoreboard_requests: report.rounds.reduce((n,x) => n+x.requests,0),
+            successful_scoreboards: report.rounds.reduce((n,x) => n+x.ok,0),
+            failed_scoreboards: report.rounds.reduce((n,x) => n+x.failed,0),
+            http_429: report.rounds.reduce((n,x) => n+x.http_429,0),
+            leagues_successful_all_rounds: perLeague.filter(x => x.successful_rounds === 3).length,
+            leagues_with_any_live_match: perLeague.filter(x => x.live_snapshots > 0).length,
+            live_snapshots: all.length,
+            distinct_live_matches: distinct.size,
+            repeated_live_matches: [...distinct.values()].filter(x => x.length > 1).length,
+            complete_core_stat_snapshots: all.filter(x => x.complete_core_stats).length,
+            core_stat_snapshot_completeness_pct: all.length ? Number((100*all.filter(x => x.complete_core_stats).length/all.length).toFixed(1)) : null
+          };
+          report.finished_at = new Date().toISOString();
+          fs.writeFileSync("espn-220-live/report.json", JSON.stringify(report, null, 2));
+          const lines = [
+            "# ESPN football 220-league LIVE coverage test",
+            "",
+            "Started: " + report.started_at,
+            "Finished: " + report.finished_at,
+            "",
+            "Discovered leagues: " + report.summary.discovered_leagues,
+            "Rounds: " + report.summary.rounds,
+            "Scoreboard requests: " + report.summary.scoreboard_requests,
+            "Successful: " + report.summary.successful_scoreboards,
+            "Failed: " + report.summary.failed_scoreboards,
+            "HTTP 429: " + report.summary.http_429,
+            "Leagues successful in all rounds: " + report.summary.leagues_successful_all_rounds + "/" + slugs.length,
+            "Leagues with LIVE matches: " + report.summary.leagues_with_any_live_match,
+            "LIVE snapshots: " + report.summary.live_snapshots,
+            "Distinct LIVE matches: " + report.summary.distinct_live_matches,
+            "Repeated LIVE matches: " + report.summary.repeated_live_matches,
+            "Complete core-stat snapshots: " + report.summary.complete_core_stat_snapshots,
+            "Core-stat completeness: " + (report.summary.core_stat_snapshot_completeness_pct ?? "n/a") + "%",
+            "",
+            "| Round | Time | Scoreboards OK | Failed | 429 | LIVE | Complete stats |",
+            "|---:|---|---:|---:|---:|---:|---:|",
+            ...report.rounds.map(r => "| " + r.round + " | " + r.sampled_at + " | " + r.ok + "/" + r.requests + " | " + r.failed + " | " + r.http_429 + " | " + r.live_count + " | " + r.complete_live_count + " |"),
+            "",
+            "| League | Slug | OK rounds | LIVE snapshots | Complete stats | Distinct matches |",
+            "|---|---|---:|---:|---:|---:|",
+            ...perLeague.map(x => "| " + (x.name || "Unknown") + " | " + x.slug + " | " + x.successful_rounds + "/3 | " + x.live_snapshots + " | " + x.complete_live_snapshots + " | " + x.distinct_live_matches + " |"),
+            "",
+            "See report.json for per-match score, clock, and statistics. This short test does not prove historical coverage or unlimited API access."
+          ];
+          fs.writeFileSync("espn-220-live/README.md", lines.join("\n"));
+          console.log(lines.join("\n"));
+          NODE
+      - name: Upload 220-league report
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-220-league-live-test
+          path: espn-220-live/
+          if-no-files-found: error
+          retention-days: 14
