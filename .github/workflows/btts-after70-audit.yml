@@ -1,0 +1,122 @@
+name: BTTS AFTER 70 ANALYSIS
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/btts-after70-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Analyze BTTS goal timing (read-only)
+        shell: bash
+        run: |
+          mkdir -p btts-output
+          node <<'NODE'
+          const fs = require("fs");
+          const file = "data/btts-signal-archive.json";
+          const archive = JSON.parse(fs.readFileSync(file, "utf8"));
+          const signals = Array.isArray(archive.signals) ? archive.signals : [];
+          const minuteOf = e => {
+            const raw = String(e?.minute ?? e?.time ?? "");
+            const m = raw.match(/^(\\d+)(?:\\+\\d+)?$/);
+            return m ? Number(m[1]) : null;
+          };
+          const eventSide = e => {
+            const s = String(e?.side || "").toLowerCase();
+            if (["home","1","h"].includes(s)) return "home";
+            if (["away","2","a"].includes(s)) return "away";
+            return null;
+          };
+          const rows = signals.map(s => {
+            const events = Array.isArray(s.goalEvents) ? s.goalEvents : [];
+            const sideGoals = events
+              .filter(e => eventSide(e) === s.predictedSide)
+              .map(e => ({ minute: minuteOf(e), raw: e.minute ?? e.time ?? null }))
+              .filter(e => Number.isFinite(e.minute))
+              .sort((a,b) => a.minute-b.minute);
+            const first = sideGoals[0] || null;
+            const timingAvailable = s.goalTimingAvailable === true;
+            const settled = ["WIN","LOSS"].includes(s.status);
+            let classification = "UNVERIFIED";
+            if (settled && timingAvailable) {
+              if (!first) classification = "NO_GOAL";
+              else if (first.minute > 70) classification = "AFTER_70";
+              else classification = "BY_70";
+            }
+            return {
+              signalId:s.signalId, matchId:String(s.matchId), home:s.home, away:s.away,
+              competition:s.competition || "", tier:s.tier || "", startMinute:s.startMinute,
+              startScore:s.startScore, predictedSide:s.predictedSide, status:s.status,
+              firstPredictedGoalMinute:first?.minute ?? null,
+              firstPredictedGoalRaw:first?.raw ?? null, classification,
+              goalTimingAvailable:timingAvailable
+            };
+          });
+          const settled = rows.filter(r => ["WIN","LOSS"].includes(r.status));
+          const timed = rows.filter(r => r.classification !== "UNVERIFIED");
+          const unique = new Map();
+          for (const r of timed) {
+            if (!unique.has(r.matchId)) unique.set(r.matchId, []);
+            unique.get(r.matchId).push(r);
+          }
+          const afterSignals = timed.filter(r => r.classification === "AFTER_70");
+          const uniqueAfter = [...unique.entries()].filter(([id,rs]) => rs.some(r=>r.classification==="AFTER_70"));
+          const band = (m) => m <= 70 ? "≤70" : m <= 75 ? "71–75" : m <= 80 ? "76–80" : m <= 85 ? "81–85" : m <= 90 ? "86–90" : "90+";
+          const bands = {};
+          for (const r of timed) if (r.classification === "AFTER_70") {
+            const b=band(r.firstPredictedGoalMinute); bands[b]=(bands[b]||0)+1;
+          }
+          const matchRows = [...unique.entries()].map(([matchId,rs]) => {
+            const representative = rs.slice().sort((a,b)=>(a.startMinute||0)-(b.startMinute||0))[0];
+            const firsts = rs.filter(r=>r.firstPredictedGoalMinute!=null).map(r=>r.firstPredictedGoalMinute);
+            const minFirst = firsts.length ? Math.min(...firsts) : null;
+            return {...representative, signalCount:rs.length, earliestPredictedGoalMinute:minFirst,
+              matchClassification:rs.some(r=>r.classification==="AFTER_70")?"AFTER_70":
+                rs.some(r=>r.classification==="BY_70")?"BY_70":"NO_GOAL"};
+          });
+          const pct=(n,d)=>d?Number((100*n/d).toFixed(2)):null;
+          const summary = {
+            generatedAt:new Date().toISOString(), archiveUpdatedAt:archive.updated_at || null,
+            totalSignals:signals.length, settledSignals:settled.length,
+            settledWins:settled.filter(r=>r.status==="WIN").length,
+            settledLosses:settled.filter(r=>r.status==="LOSS").length,
+            signalsWithVerifiedGoalTiming:timed.length,
+            signalsUnverified:rows.filter(r=>r.classification==="UNVERIFIED").length,
+            perSignal:{
+              after70:afterSignals.length, denominator:timed.length,
+              percent:pct(afterSignals.length,timed.length),
+              by70:timed.filter(r=>r.classification==="BY_70").length,
+              noGoal:timed.filter(r=>r.classification==="NO_GOAL").length
+            },
+            perUniqueMatch:{
+              evaluatedMatches:unique.size, after70:uniqueAfter.length,
+              percent:pct(uniqueAfter.length,unique.size),
+              by70:matchRows.filter(r=>r.matchClassification==="BY_70").length,
+              noGoal:matchRows.filter(r=>r.matchClassification==="NO_GOAL").length
+            },
+            after70MinuteBands:bands,
+            note:"After 70 means the predicted/previously scoreless team scored its first goal after minute 70. Repeated signals are counted separately in perSignal and once per match in perUniqueMatch. Added-time notation is grouped by its base minute."
+          };
+          fs.writeFileSync("btts-output/btts-after70-summary.json",JSON.stringify(summary,null,2)+"\\n");
+          const cols=Object.keys(rows[0]||{signalId:"",matchId:"",home:"",away:"",competition:"",tier:"",startMinute:"",startScore:"",predictedSide:"",status:"",firstPredictedGoalMinute:"",firstPredictedGoalRaw:"",classification:"",goalTimingAvailable:""});
+          const csv=(data,keys)=>[keys.join(","),...data.map(r=>keys.map(k=>'"'+String(r[k]??"").replace(/"/g,'""')+'"').join(","))].join("\\n")+"\\n";
+          fs.writeFileSync("btts-output/btts-after70-signals.csv",csv(rows,cols));
+          const mcols=Object.keys(matchRows[0]||{matchId:"",home:"",away:"",competition:"",tier:"",startMinute:"",startScore:"",predictedSide:"",status:"",firstPredictedGoalMinute:"",firstPredictedGoalRaw:"",classification:"",goalTimingAvailable:"",signalCount:"",earliestPredictedGoalMinute:"",matchClassification:""});
+          fs.writeFileSync("btts-output/btts-after70-unique-matches.csv",csv(matchRows,mcols));
+          console.log("BTTS AFTER 70 SUMMARY",JSON.stringify(summary,null,2));
+          NODE
+      - name: Upload analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: btts-after70-analysis
+          path: btts-output/
+          if-no-files-found: error
+          retention-days: 14
