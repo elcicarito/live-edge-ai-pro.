@@ -1,0 +1,308 @@
+name: ESPN TIER 1-2 LIVE STABILITY TEST (ISOLATED)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: espn-tier1-tier2-polling
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Poll all discovered first and second tier scoreboards every 5 minutes
+        shell: bash
+        run: |
+          mkdir -p espn-tier-poll
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          // The 60 slugs below were discovered from ESPN's soccer league directory
+          // and returned HTTP 200 in the isolated directory-discovery run.
+          const leagues = [
+            ["arg.1", "Argentine Liga Profesional de Fútbol", 1],
+            ["arg.2", "Argentine Nacional B", 2],
+            ["aus.1", "Australian A-League Men", 1],
+            ["aus.w.1", "Australian A-League Women", 1],
+            ["aut.1", "Austrian Bundesliga", 1],
+            ["bel.1", "Belgian Pro League", 1],
+            ["bol.1", "Bolivian Liga Profesional", 1],
+            ["bra.1", "Brazilian Serie A", 1],
+            ["bra.2", "Brazilian Serie B", 2],
+            ["chi.1", "Chilean Primera División", 1],
+            ["chn.1", "Chinese Super League", 1],
+            ["col.1", "Colombian Primera A", 1],
+            ["crc.1", "Costa Rican Primera Division", 1],
+            ["den.1", "Danish Superliga", 1],
+            ["ecu.1", "LigaPro Ecuador", 1],
+            ["eng.1", "English Premier League", 1],
+            ["eng.2", "English League Championship", 2],
+            ["eng.w.1", "English Women's Super League", 1],
+            ["esp.1", "Spanish LALIGA", 1],
+            ["esp.2", "Spanish LALIGA 2", 2],
+            ["esp.w.1", "Spanish Liga F", 1],
+            ["fra.1", "French Ligue 1", 1],
+            ["fra.2", "French Ligue 2", 2],
+            ["fra.w.1", "French Première Ligue", 1],
+            ["ger.1", "German Bundesliga", 1],
+            ["ger.2", "German 2. Bundesliga", 2],
+            ["gre.1", "Greek Super League", 1],
+            ["gua.1", "Guatemalan Liga Nacional", 1],
+            ["hon.1", "Honduran Liga Nacional", 1],
+            ["ind.1", "Indian Super League", 1],
+            ["ind.2", "Indian Football League", 2],
+            ["ita.1", "Italian Serie A", 1],
+            ["ita.2", "Italian Serie B", 2],
+            ["jpn.1", "Japanese J.League", 1],
+            ["ksa.1", "Saudi Pro League", 1],
+            ["mex.1", "Mexican Liga BBVA MX", 1],
+            ["mex.2", "Mexican Liga de Expansión MX", 2],
+            ["mex.w.1", "Mexican Liga BBVA MX Femenil", 1],
+            ["ned.1", "Dutch Eredivisie", 1],
+            ["ned.2", "Dutch Keuken Kampioen Divisie", 2],
+            ["ned.w.1", "Dutch Vrouwen Eredivisie", 1],
+            ["nor.1", "Norwegian Eliteserien", 1],
+            ["par.1", "Paraguayan Primera División", 1],
+            ["per.1", "Peruvian Liga 1", 1],
+            ["por.1", "Portuguese Primeira Liga", 1],
+            ["rsa.1", "South African Premiership", 1],
+            ["rus.1", "Russian Premier League", 1],
+            ["sco.1", "Scottish Premiership", 1],
+            ["sco.2", "Scottish Championship", 2],
+            ["slv.1", "Salvadoran Primera Division", 1],
+            ["swe.1", "Swedish Allsvenskan", 1],
+            ["tur.1", "Turkish Super Lig", 1],
+            ["uru.1", "Liga AUF Uruguaya", 1],
+            ["uru.2", "Segunda División de Uruguay", 2],
+            ["usa.1", "MLS", 1],
+            ["usa.ncaa.m.1", "NCAA Men's Soccer", 1],
+            ["usa.ncaa.w.1", "NCAA Women's Soccer", 1],
+            ["usa.usl.1", "USL Championship", 1],
+            ["usa.w.usl.1", "USL Super League", 1],
+            ["ven.1", "Venezuelan Primera División", 1]
+          ];
+
+          const required = ["shotsOnTarget", "totalShots", "wonCorners", "possessionPct"];
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+          const report = {
+            started_at: new Date().toISOString(),
+            source: "ESPN public undocumented soccer scoreboard API",
+            cadence_minutes: 5,
+            planned_rounds: 6,
+            league_count: leagues.length,
+            requests: 0,
+            successful_requests: 0,
+            failed_requests: 0,
+            http_429: 0,
+            rounds: [],
+            limitations: [
+              "Six snapshots are collected at approximately five-minute intervals.",
+              "A single run tests endpoint stability and observed LIVE stat completeness, not historical coverage or guaranteed future uptime.",
+              "Only the four configured core statistics are evaluated.",
+              "The ESPN endpoints are public but undocumented; no unlimited quota or SLA is assumed.",
+              "The tier labels follow the ESPN directory slug conventions; NCAA and women's competitions are included where the directory classifies them as tier 1."
+            ]
+          };
+
+          function statsMap(team) {
+            const out = {};
+            for (const stat of team?.statistics || []) {
+              if (stat?.name) out[stat.name] = stat.displayValue ?? stat.value ?? null;
+            }
+            return out;
+          }
+
+          for (let roundNo = 1; roundNo <= 6; roundNo++) {
+            const roundStart = Date.now();
+            const round = {
+              round: roundNo,
+              sampled_at: new Date().toISOString(),
+              league_results: [],
+              live_matches: []
+            };
+
+            for (const [slug, league, tier] of leagues) {
+              const row = {
+                league,
+                slug,
+                tier,
+                http_status: null,
+                event_count: 0,
+                live_count: 0,
+                live_complete_count: 0,
+                error: null
+              };
+              report.requests++;
+
+              try {
+                const response = await fetch(
+                  `https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard`,
+                  {
+                    headers: {
+                      accept: "application/json",
+                      "user-agent": "LIVE-EDGE-ESPN-TIER-POLL/1.0"
+                    },
+                    signal: AbortSignal.timeout(12000)
+                  }
+                );
+                row.http_status = response.status;
+                if (response.status === 429) report.http_429++;
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                report.successful_requests++;
+
+                const data = await response.json();
+                const events = Array.isArray(data.events) ? data.events : [];
+                row.event_count = events.length;
+
+                for (const event of events) {
+                  const competition = event.competitions?.[0];
+                  const state = competition?.status?.type?.state || event.status?.type?.state || "";
+                  if (state !== "in") continue;
+
+                  const teams = competition?.competitors || [];
+                  const home = teams.find(team => team.homeAway === "home") || teams[0];
+                  const away = teams.find(team => team.homeAway === "away") || teams[1];
+                  const homeStats = statsMap(home);
+                  const awayStats = statsMap(away);
+                  const missing = required.filter(key =>
+                    homeStats[key] == null || awayStats[key] == null
+                  );
+                  const complete = missing.length === 0;
+
+                  row.live_count++;
+                  if (complete) row.live_complete_count++;
+
+                  round.live_matches.push({
+                    league,
+                    slug,
+                    tier,
+                    event_id: event.id,
+                    match: event.name,
+                    clock: competition?.status?.displayClock || competition?.status?.type?.detail || null,
+                    home_score: home?.score ?? null,
+                    away_score: away?.score ?? null,
+                    complete_required_stats: complete,
+                    missing_stats: missing,
+                    home_stats: homeStats,
+                    away_stats: awayStats
+                  });
+                }
+              } catch (error) {
+                report.failed_requests++;
+                row.error = String(error?.message || error);
+              }
+
+              round.league_results.push(row);
+              await sleep(150);
+            }
+
+            round.live_match_count = round.live_matches.length;
+            round.live_complete_match_count =
+              round.live_matches.filter(match => match.complete_required_stats).length;
+            report.rounds.push(round);
+
+            console.log(JSON.stringify({
+              round: roundNo,
+              requests: report.requests,
+              successful: report.successful_requests,
+              failed: report.failed_requests,
+              http_429: report.http_429,
+              live_matches: round.live_match_count,
+              complete_live_matches: round.live_complete_match_count
+            }));
+
+            if (roundNo < 6) {
+              const remaining = Math.max(0, 5 * 60 * 1000 - (Date.now() - roundStart));
+              await sleep(remaining);
+            }
+          }
+
+          const allMatches = report.rounds.flatMap(round => round.live_matches);
+          const distinct = new Map();
+          for (const match of allMatches) {
+            const key = `${match.slug}:${match.event_id}`;
+            if (!distinct.has(key)) distinct.set(key, []);
+            distinct.get(key).push(match);
+          }
+
+          const leagueSummary = leagues.map(([slug, league, tier]) => {
+            const rows = report.rounds.flatMap(round => round.league_results)
+              .filter(row => row.slug === slug);
+            const matches = allMatches.filter(match => match.slug === slug);
+            return {
+              slug, league, tier,
+              successful_rounds: rows.filter(row => row.http_status === 200).length,
+              failed_rounds: rows.filter(row => row.http_status !== 200).length,
+              live_snapshots: matches.length,
+              complete_live_snapshots: matches.filter(match => match.complete_required_stats).length,
+              distinct_live_matches: new Set(matches.map(match => match.event_id)).size
+            };
+          });
+
+          report.league_summary = leagueSummary;
+          report.summary = {
+            total_rounds: report.rounds.length,
+            leagues: leagues.length,
+            requests: report.requests,
+            successful_requests: report.successful_requests,
+            failed_requests: report.failed_requests,
+            http_429: report.http_429,
+            rounds_with_live_matches: report.rounds.filter(round => round.live_match_count > 0).length,
+            total_live_match_snapshots: allMatches.length,
+            distinct_live_matches: distinct.size,
+            repeated_live_matches: [...distinct.values()].filter(items => items.length > 1).length,
+            matches_with_complete_stats_snapshots: allMatches.filter(match => match.complete_required_stats).length,
+            leagues_successful_all_rounds: leagueSummary.filter(row => row.successful_rounds === 6).length,
+            leagues_with_any_live_match: leagueSummary.filter(row => row.live_snapshots > 0).length,
+            leagues_with_any_complete_live_stats: leagueSummary.filter(row => row.complete_live_snapshots > 0).length
+          };
+
+          report.finished_at = new Date().toISOString();
+          fs.writeFileSync(
+            "espn-tier-poll/espn-tier1-tier2-polling.json",
+            JSON.stringify(report, null, 2)
+          );
+
+          const lines = [
+            "# ESPN first and second tier LIVE stability test",
+            "",
+            `Started: ${report.started_at}`,
+            `Finished: ${report.finished_at}`,
+            "",
+            `Leagues: ${report.summary.leagues}; rounds: ${report.summary.total_rounds}`,
+            `Requests: ${report.summary.requests}; successful: ${report.summary.successful_requests}; failed: ${report.summary.failed_requests}; HTTP 429: ${report.summary.http_429}`,
+            `LIVE snapshots: ${report.summary.total_live_match_snapshots}; distinct LIVE matches: ${report.summary.distinct_live_matches}; repeated matches: ${report.summary.repeated_live_matches}`,
+            `Complete core-stat snapshots: ${report.summary.matches_with_complete_stats_snapshots}`,
+            `Leagues successful in all six rounds: ${report.summary.leagues_successful_all_rounds}/${report.summary.leagues}`,
+            `Leagues with any LIVE match: ${report.summary.leagues_with_any_live_match}; with any complete LIVE stats: ${report.summary.leagues_with_any_complete_live_stats}`,
+            "",
+            "| Round | Sampled at | Requests OK | LIVE matches | Complete LIVE stats |",
+            "|---:|---|---:|---:|---:|",
+            ...report.rounds.map(round => {
+              const ok = round.league_results.filter(row => row.http_status === 200).length;
+              return `| ${round.round} | ${round.sampled_at} | ${ok}/${leagues.length} | ${round.live_match_count} | ${round.live_complete_match_count} |`;
+            }),
+            "",
+            "| Tier | League | Slug | Successful rounds | LIVE snapshots | Complete stats snapshots | Distinct LIVE matches |",
+            "|---:|---|---|---:|---:|---:|---:|",
+            ...leagueSummary.map(row =>
+              `| ${row.tier} | ${row.league} | ${row.slug} | ${row.successful_rounds}/6 | ${row.live_snapshots} | ${row.complete_live_snapshots} | ${row.distinct_live_matches} |`
+            ),
+            "",
+            "The test does not establish unlimited use or guaranteed service availability."
+          ];
+          fs.writeFileSync("espn-tier-poll/README.md", lines.join("\n"));
+          console.log(lines.join("\n"));
+          NODE
+
+      - name: Upload ESPN tier polling report
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-tier1-tier2-polling
+          path: espn-tier-poll/
+          retention-days: 14
