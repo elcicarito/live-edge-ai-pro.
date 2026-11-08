@@ -1,0 +1,248 @@
+name: ESPN POLLING TEST (ISOLATED)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: espn-polling-test
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Poll ESPN scoreboards every 5 minutes for 30 minutes
+        shell: bash
+        run: |
+          mkdir -p espn-poll-test
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const leagues = [
+            ["eng.1", "Premier League"],
+            ["esp.1", "La Liga"],
+            ["ita.1", "Serie A"],
+            ["ger.1", "Bundesliga"],
+            ["fra.1", "Ligue 1"],
+            ["uefa.champions", "Champions League"],
+            ["usa.1", "MLS"],
+            ["mex.1", "Liga MX"],
+            ["por.1", "Primeira Liga"],
+            ["ned.1", "Eredivisie"],
+            ["sco.1", "Scottish Premiership"]
+          ];
+          const required = ["shotsOnTarget", "totalShots", "wonCorners", "possessionPct"];
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+          const report = {
+            started_at: new Date().toISOString(),
+            source: "ESPN public undocumented scoreboard API",
+            cadence_minutes: 5,
+            planned_rounds: 6,
+            requests: 0,
+            successful_requests: 0,
+            failed_requests: 0,
+            http_429: 0,
+            rounds: [],
+            limitations: [
+              "Manual controlled polling test only; not proof of unlimited usage.",
+              "Six snapshots are collected at approximately five-minute intervals.",
+              "Coverage is limited to the eleven configured league scoreboards."
+            ]
+          };
+
+          function statsMap(team) {
+            const out = {};
+            for (const stat of team?.statistics || []) {
+              if (stat?.name) out[stat.name] = stat.displayValue ?? stat.value ?? null;
+            }
+            return out;
+          }
+
+          for (let roundNo = 1; roundNo <= 6; roundNo++) {
+            const round = {
+              round: roundNo,
+              sampled_at: new Date().toISOString(),
+              league_results: [],
+              live_matches: []
+            };
+
+            for (const [slug, league] of leagues) {
+              const row = {
+                league,
+                slug,
+                http_status: null,
+                event_count: 0,
+                live_count: 0,
+                live_complete_count: 0,
+                error: null
+              };
+              report.requests++;
+
+              try {
+                const response = await fetch(
+                  `https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard`,
+                  {
+                    headers: {
+                      accept: "application/json",
+                      "user-agent": "LIVE-EDGE-ESPN-POLL-TEST/1.0"
+                    },
+                    signal: AbortSignal.timeout(18000)
+                  }
+                );
+                row.http_status = response.status;
+                if (response.status === 429) report.http_429++;
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                report.successful_requests++;
+
+                const data = await response.json();
+                const events = Array.isArray(data.events) ? data.events : [];
+                row.event_count = events.length;
+
+                for (const event of events) {
+                  const competition = event.competitions?.[0];
+                  const state = competition?.status?.type?.state || event.status?.type?.state || "";
+                  if (state !== "in") continue;
+
+                  const teams = competition?.competitors || [];
+                  const home = teams.find(team => team.homeAway === "home") || teams[0];
+                  const away = teams.find(team => team.homeAway === "away") || teams[1];
+                  const homeStats = statsMap(home);
+                  const awayStats = statsMap(away);
+                  const missing = required.filter(key =>
+                    homeStats[key] == null || awayStats[key] == null
+                  );
+                  const complete = missing.length === 0;
+
+                  row.live_count++;
+                  if (complete) row.live_complete_count++;
+
+                  round.live_matches.push({
+                    league,
+                    slug,
+                    event_id: event.id,
+                    match: event.name,
+                    clock: competition?.status?.displayClock || competition?.status?.type?.detail || null,
+                    home_score: home?.score ?? null,
+                    away_score: away?.score ?? null,
+                    complete_required_stats: complete,
+                    missing_stats: missing,
+                    home_stats: homeStats,
+                    away_stats: awayStats
+                  });
+                }
+              } catch (error) {
+                report.failed_requests++;
+                row.error = String(error?.message || error);
+              }
+
+              round.league_results.push(row);
+              await sleep(250);
+            }
+
+            round.live_match_count = round.live_matches.length;
+            round.live_complete_match_count =
+              round.live_matches.filter(match => match.complete_required_stats).length;
+            report.rounds.push(round);
+
+            console.log(JSON.stringify({
+              round: roundNo,
+              requests: report.requests,
+              successful: report.successful_requests,
+              failed: report.failed_requests,
+              http_429: report.http_429,
+              live_matches: round.live_match_count,
+              complete_live_matches: round.live_complete_match_count
+            }));
+
+            if (roundNo < 6) await sleep(5 * 60 * 1000);
+          }
+
+          const firstSeen = new Map();
+          const repeated = new Map();
+          const changed = new Map();
+
+          for (const round of report.rounds) {
+            for (const match of round.live_matches) {
+              const key = `${match.slug}:${match.event_id}`;
+              if (!firstSeen.has(key)) firstSeen.set(key, match);
+              else {
+                repeated.set(key, (repeated.get(key) || 0) + 1);
+                const previous = [...report.rounds]
+                  .slice(0, round.round - 1)
+                  .flatMap(item => item.live_matches)
+                  .filter(item => `${item.slug}:${item.event_id}` === key)
+                  .at(-1);
+                if (previous) {
+                  const fields = [...required, "home_score", "away_score", "clock"];
+                  if (fields.some(field =>
+                    JSON.stringify(previous[field] ?? previous.home_stats?.[field] ?? null) !==
+                    JSON.stringify(match[field] ?? match.home_stats?.[field] ?? null)
+                  )) changed.set(key, (changed.get(key) || 0) + 1);
+                  else {
+                    const statsChanged = [...required].some(field =>
+                      previous.home_stats?.[field] !== match.home_stats?.[field] ||
+                      previous.away_stats?.[field] !== match.away_stats?.[field]
+                    );
+                    if (statsChanged) changed.set(key, (changed.get(key) || 0) + 1);
+                  }
+                }
+              }
+            }
+          }
+
+          report.summary = {
+            total_rounds: report.rounds.length,
+            requests: report.requests,
+            successful_requests: report.successful_requests,
+            failed_requests: report.failed_requests,
+            http_429: report.http_429,
+            rounds_with_live_matches: report.rounds.filter(round => round.live_match_count > 0).length,
+            total_live_match_snapshots: report.rounds.reduce((sum, round) => sum + round.live_match_count, 0),
+            distinct_live_matches: firstSeen.size,
+            repeated_live_matches: repeated.size,
+            matches_with_observed_changes: changed.size,
+            matches_with_complete_stats_snapshots: report.rounds
+              .flatMap(round => round.live_matches)
+              .filter(match => match.complete_required_stats).length
+          };
+
+          report.finished_at = new Date().toISOString();
+          fs.writeFileSync(
+            "espn-poll-test/espn-polling-test.json",
+            JSON.stringify(report, null, 2)
+          );
+
+          const lines = [
+            "# ESPN 5-minute polling test",
+            "",
+            `Started: ${report.started_at}`,
+            `Finished: ${report.finished_at}`,
+            "",
+            `Rounds: ${report.summary.total_rounds}`,
+            `Requests: ${report.summary.requests}; successful: ${report.summary.successful_requests}; failed: ${report.summary.failed_requests}; HTTP 429: ${report.summary.http_429}`,
+            `LIVE snapshots: ${report.summary.total_live_match_snapshots}; distinct LIVE matches: ${report.summary.distinct_live_matches}`,
+            `Repeated LIVE matches: ${report.summary.repeated_live_matches}; matches with observed changes: ${report.summary.matches_with_observed_changes}`,
+            "",
+            "| Round | Sampled at | Requests OK | LIVE matches | Complete LIVE stats |",
+            "|---:|---|---:|---:|---:|",
+            ...report.rounds.map(round => {
+              const ok = round.league_results.filter(row => row.http_status === 200).length;
+              return `| ${round.round} | ${round.sampled_at} | ${ok}/11 | ${round.live_match_count} | ${round.live_complete_match_count} |`;
+            }),
+            "",
+            "This test does not establish unlimited use or guaranteed service availability."
+          ];
+          fs.writeFileSync("espn-poll-test/README.md", lines.join("\n"));
+          console.log(lines.join("\n"));
+          NODE
+
+      - name: Upload ESPN polling report
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-polling-test
+          path: espn-poll-test/
+          retention-days: 14
