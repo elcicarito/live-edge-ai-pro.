@@ -38,6 +38,16 @@ const server = http.createServer((req, res) => {
           stage: "2nd Half",
           available_tabs: ["statistics", "commentary"],
           has_statistics: true
+        }, {
+          id: "test-match-special",
+          home: { id: "home-2", name: "Kings Home" },
+          away: { id: "away-2", name: "Kings Away" },
+          home_score: 1,
+          away_score: 1,
+          status: "live",
+          stage: "2nd Half",
+          available_tabs: ["commentary"],
+          has_statistics: false
         }]
       }]
     }));
@@ -64,12 +74,19 @@ const server = http.createServer((req, res) => {
       id: "test-match-1",
       status: "live",
       stage: "2nd Half",
-      live_clock_metadata: {
-        stage_start_epoch: Math.floor(Date.now() / 1000) - (10 * 60 + 20),
-        stage_id: 13,
-        stage_type_id: 2,
-        format: null
-      }
+      live_clock_metadata: req.url.includes("test-match-special")
+        ? {
+            stage_start_epoch: Math.floor(Date.now() / 1000) - (11 * 60 + 20),
+            stage_id: 13,
+            stage_type_id: 2,
+            format: "Played with special rules. Format: 2x20 minutes."
+          }
+        : {
+            stage_start_epoch: Math.floor(Date.now() / 1000) - (10 * 60 + 20),
+            stage_id: 13,
+            stage_type_id: 2,
+            format: null
+          }
     }));
     return;
   }
@@ -126,16 +143,21 @@ function runCollector() {
     const index = JSON.parse(fs.readFileSync(path.join(dataDir, "flashscore-timeline-index.json"), "utf8"));
 
     assert.equal(current.source, "Flashscore");
-    assert.equal(current.live_count, 1);
-    assert.equal(current.records[0].match.live_minute, 55, "second-half clock must include the 45-minute first half");
-    assert.match(current.records[0].match.live_clock, /^55:\d{2}$/, "clock must preserve seconds");
-    assert.equal(current.records[0].match.minute_source, "Flashscore eventStageStartTime");
-    assert.equal(current.records[0].match.status_text, "2nd Half");
-    assert.equal(current.records[0].match.last_event_minute, "57'");
-    assert.equal(current.records[0].match.last_event_minute_source, "Flashscore commentary MB");
-    assert.equal(current.records[0].match.commentary_count, 1);
-    assert.equal(current.records[0].match.stats[0].name, "Shots on target");
+    assert.equal(current.live_count, 2);
+    const standardMatch = current.records.find(record => record.match.id === "test-match-1").match;
+    const specialMatch = current.records.find(record => record.match.id === "test-match-special").match;
+    assert.equal(standardMatch.live_minute, 55, "standard second-half clock must include the 45-minute first half");
+    assert.match(standardMatch.live_clock, /^55:\d{2}$/, "standard clock must preserve seconds");
+    assert.equal(standardMatch.minute_source, "Flashscore eventStageStartTime");
+    assert.equal(standardMatch.status_text, "2nd Half");
+    assert.equal(standardMatch.last_event_minute, "57'");
+    assert.equal(standardMatch.last_event_minute_source, "Flashscore commentary MB");
+    assert.equal(standardMatch.commentary_count, 1);
+    assert.equal(standardMatch.stats[0].name, "Shots on target");
+    assert.equal(specialMatch.live_minute, 31, "2x20 special-rules match must use its 20-minute half");
+    assert.match(specialMatch.live_clock, /^31:\d{2}$/, "special-rules clock must preserve seconds");
     assert.equal(archive.matches["test-match-1"].snapshots_count, 2);
+    assert.equal(archive.matches["test-match-special"].snapshots_count, 2);
     assert.equal(archive.matches["test-match-1"].score_change_count, 1);
     assert.equal(archive.matches["test-match-1"].stat_change_count, 1);
     assert.ok(index.weeks.some(item => item.week === previousWeek), "previous indexed week must be retained");
@@ -147,12 +169,16 @@ function runCollector() {
     const timelinePath = path.join(dataDir, currentWeekEntry.file);
     const lines = zlib.gunzipSync(fs.readFileSync(timelinePath), { finishFlush: zlib.constants.Z_FINISH })
       .toString("utf8").trim().split("\n").map(line => JSON.parse(line));
-    assert.equal(lines.length, 2);
-    assert.equal(lines[0].snapshot.live_minute, 55);
-    assert.match(lines[0].snapshot.live_clock, /^55:\d{2}$/);
-    assert.equal(lines[0].snapshot.last_event_minute, "57'");
-    assert.equal(lines[1].score_changed, true);
-    assert.equal(lines[1].stat_changes.length, 1);
+    assert.equal(lines.length, 4);
+    const standardTimeline = lines.filter(line => line.match_id === "test-match-1");
+    const specialTimeline = lines.filter(line => line.match_id === "test-match-special");
+    assert.equal(standardTimeline[0].snapshot.live_minute, 55);
+    assert.match(standardTimeline[0].snapshot.live_clock, /^55:\d{2}$/);
+    assert.equal(standardTimeline[0].snapshot.last_event_minute, "57'");
+    assert.equal(standardTimeline[1].score_changed, true);
+    assert.equal(standardTimeline[1].stat_changes.length, 1);
+    assert.equal(specialTimeline[0].snapshot.live_minute, 31);
+    assert.match(specialTimeline[0].snapshot.live_clock, /^31:\d{2}$/);
 
     process.stdout.write("Flashscore collector integration test passed: two snapshots, separate event/live minute fields, stats, score/stat changes, gzip timeline and index.\n");
   } finally {
