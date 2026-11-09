@@ -435,7 +435,7 @@ jobs:
           const history = read(PREDICTIONS, { sport: "basketball", predictions: [] });
           // Keep all existing v3 predictions and all half-model v4 records.
           const predictions = (Array.isArray(history.predictions) ? history.predictions : [])
-            .filter(p => (p.model_version === 3 && p.training_scope === "league") || p.model_version === 4);
+            .filter(p => (p.model_version === 3 && p.training_scope === "league") || p.model_version === 4 || p.model_version === 5);
           const keyOf = m => String(m.id || m.slug || m.url || [m.home, m.away, m.time].join("|"));
           const leagueOf = m => String(m.competition?.name || m.league?.name || m.competition || m.league || "Liga neznáma").trim();
           const formatOf = m => {
@@ -519,6 +519,51 @@ jobs:
             });
             created++;
           }
+          // Experimental v5 challenger: 80% same-league historical quarter + 20% current-game pace.
+          // Use only completed games that started before this LIVE match and were archived before prediction time.
+          const predictionTime = Date.now();
+          for (const m of live) {
+            if (formatOf(m) !== "quarters") continue;
+            const period = periodOf(m);
+            if (period < 2 || period > 4) continue;
+            const target = period;
+            if (![...Array(target - 1)].every((_,i) => complete(m,i+1))) continue;
+            const matchKey = keyOf(m);
+            if (predictions.some(p => p.match_key === matchKey && p.model_version === 5 && p.target_quarter === target)) continue;
+            const league = leagueOf(m);
+            const liveStart = Date.parse(m.time || m.start_time || m.startTime || "");
+            if (!Number.isFinite(liveStart)) continue;
+            const selected = quarterTraining.filter(x => {
+              const historicalStart = Date.parse(x.time || x.start_time || x.startTime || "");
+              const archivedAt = Date.parse(x.archived_at || "");
+              return leagueOf(x) === league && complete(x,target) &&
+                Number.isFinite(historicalStart) && historicalStart < liveStart &&
+                Number.isFinite(archivedAt) && archivedAt <= predictionTime;
+            });
+            if (selected.length < 10) {
+              console.log("V5 SKIPPED: as-of same-league sample below 10", league, selected.length);
+              continue;
+            }
+            const historicalAverage = selected.reduce((sum,x)=>sum+qTotal(x,target),0) / selected.length;
+            const previous = Array.from({length:target-1},(_,i)=>qTotal(m,i+1));
+            const previousAverage = previous.reduce((sum,v)=>sum+v,0) / previous.length;
+            const predicted = Math.round(previousAverage * 0.20 + historicalAverage * 0.80);
+            predictions.push({
+              id: matchKey + "::Q" + target + "::V5", model_version: 5, match_key: matchKey,
+              home: m.home || m.home_name || "Domáci", away: m.away || m.away_name || "Hostia",
+              league, target_quarter: target, predicted_total: predicted,
+              range_low: Math.max(0,predicted-5), range_high: predicted+5,
+              historical_average: Number(historicalAverage.toFixed(2)),
+              previous_quarters_average: Number(previousAverage.toFixed(2)),
+              training_sample: selected.length, training_scope: "league-as-of",
+              historical_cutoff: new Date(predictionTime).toISOString(),
+              previous_quarters: previous, observed_at: new Date(predictionTime).toISOString(),
+              model_note: "V5 challenger: 80% historický priemer rovnakej ligy + 20% tempo zápasu; iba skoršie a už archivované zápasy.",
+              actual_total: null, absolute_error: null
+            });
+            created++;
+            console.log("V5 CHALLENGER:", m.home, "-", m.away, "Q"+target, predicted, "sample", selected.length);
+          }
           // New v4 model for men's NCAA: forecast the second half from the completed first half
           // plus the historical second-half average from the same competition only.
           for (const m of live) {
@@ -552,7 +597,7 @@ jobs:
           const trimmed = predictions.sort((a,b)=>String(b.observed_at).localeCompare(String(a.observed_at))).slice(0,1000);
           fs.writeFileSync(PREDICTIONS, JSON.stringify({
             sport: "basketball", updated_at: new Date().toISOString(),
-            model: "v3: 4 štvrtiny; v4: mužské NCAA, 2 polčasy; oba modely používajú 65% predchádzajúce obdobie aktuálneho zápasu + 35% historický priemer cieľového obdobia iba z rovnakej ligy; bez kurzov",
+            model: "v3: 4 štvrtiny (65/35); v4: mužské NCAA, 2 polčasy; v5: experimentálny challenger pre 4 štvrtiny (80% historická liga + 20% tempo zápasu), iba skoršie zápasy archivované pred predikciou.",
             complete_training_games: quarterTraining.length,
             complete_half_training_games: halfTraining.length,
             settled_this_run: settled, created_this_run: created, predictions: trimmed
