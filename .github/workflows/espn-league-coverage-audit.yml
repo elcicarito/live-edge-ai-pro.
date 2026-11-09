@@ -1,0 +1,150 @@
+name: ESPN League Coverage Audit
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/collector.yml'
+      - '.github/workflows/espn-league-coverage-audit.yml'
+  push:
+    branches:
+      - 'fix/espn-no-live-feed-state'
+    paths:
+      - '.github/workflows/espn-league-coverage-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Audit every ESPN soccer league, including NCAA
+        shell: bash
+        run: |
+          mkdir -p audit
+          node <<'NODE'
+          const fs = require("fs");
+          const ROOT = "https://sports.core.api.espn.com/v2/sports/soccer/leagues";
+          const SITE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+          async function json(url) {
+            const response = await fetch(url, {
+              headers: { "User-Agent": "LIVE-EDGE-ESPN-COVERAGE-AUDIT/1.0", "Accept": "application/json" },
+              signal: AbortSignal.timeout(15000),
+              cache: "no-store"
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+          }
+
+          (async () => {
+            const first = await json(`${ROOT}?limit=100&page=1`);
+            const pages = Math.max(1, Number(first.pageCount || 1));
+            const refs = [...(first.items || [])];
+            for (let page = 2; page <= pages; page++) {
+              const data = await json(`${ROOT}?limit=100&page=${page}`);
+              refs.push(...(data.items || []));
+            }
+
+            const slugs = [...new Set(refs.map(item => {
+              const ref = item?.$ref || item?.ref || "";
+              return ref.match(/\/leagues\/([^/?]+)/)?.[1] || null;
+            }).filter(Boolean))].sort();
+
+            if (!slugs.length) throw new Error("ESPN directory returned zero league slugs.");
+
+            const results = new Array(slugs.length);
+            let cursor = 0;
+            const workers = Array.from({ length: 4 }, async () => {
+              while (true) {
+                const index = cursor++;
+                if (index >= slugs.length) return;
+                const slug = slugs[index];
+                const row = {
+                  slug,
+                  group: /ncaa/i.test(slug) ? "NCAA" : "NON_NCAA",
+                  ok: false,
+                  league_name: "",
+                  events: 0,
+                  live: 0,
+                  live_with_team_stats: 0,
+                  error: ""
+                };
+                try {
+                  const data = await json(`${SITE}/${encodeURIComponent(slug)}/scoreboard?limit=100`);
+                  if (!Array.isArray(data.events)) throw new Error("events is not an array");
+                  row.ok = true;
+                  row.league_name = data.leagues?.[0]?.name || data.leagues?.[0]?.abbreviation || "";
+                  row.events = data.events.length;
+                  for (const event of data.events) {
+                    const competition = event?.competitions?.[0] || {};
+                    const state = competition.status?.type?.state || event?.status?.type?.state || "";
+                    if (state !== "in") continue;
+                    row.live++;
+                    const teams = competition.competitors || [];
+                    const hasStats = teams.length >= 2 && teams.every(team =>
+                      Array.isArray(team.statistics) && team.statistics.length > 0
+                    );
+                    if (hasStats) row.live_with_team_stats++;
+                  }
+                } catch (error) {
+                  row.error = String(error?.message || error);
+                }
+                results[index] = row;
+                await sleep(250);
+              }
+            });
+            await Promise.all(workers);
+
+            const totals = {
+              directory_pages: pages,
+              directory_items: refs.length,
+              unique_leagues: slugs.length,
+              ncaa_leagues: results.filter(x => x.group === "NCAA").length,
+              non_ncaa_leagues: results.filter(x => x.group === "NON_NCAA").length,
+              scoreboard_ok: results.filter(x => x.ok).length,
+              scoreboard_failed: results.filter(x => !x.ok).length,
+              leagues_with_live: results.filter(x => x.live > 0).length,
+              live_events: results.reduce((n, x) => n + x.live, 0),
+              live_events_with_team_stats: results.reduce((n, x) => n + x.live_with_team_stats, 0)
+            };
+
+            fs.writeFileSync("audit/espn-league-coverage.json", JSON.stringify({ audited_at: new Date().toISOString(), totals, leagues: results }, null, 2));
+            const csv = [
+              "slug,group,ok,league_name,events,live,live_with_team_stats,error",
+              ...results.map(x => [x.slug,x.group,x.ok,x.league_name,x.events,x.live,x.live_with_team_stats,x.error]
+                .map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))
+            ].join("\n");
+            fs.writeFileSync("audit/espn-league-coverage.csv", csv);
+
+            const lines = [
+              "## ESPN soccer league coverage audit",
+              "",
+              ...Object.entries(totals).map(([key, value]) => `- **${key}:** ${value}`),
+              "",
+              "NCAA slugs were tested, not filtered out. This audit does not modify the production collector."
+            ];
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+            console.log(JSON.stringify(totals, null, 2));
+            if (totals.scoreboard_failed > 0) {
+              console.log("Some scoreboard feeds failed; inspect the uploaded per-league report.");
+            }
+          })().catch(error => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          NODE
+      - name: Upload per-league audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: espn-all-leagues-coverage
+          path: audit/
+          if-no-files-found: warn
