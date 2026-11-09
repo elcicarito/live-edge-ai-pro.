@@ -62,7 +62,7 @@ jobs:
           p = Path(".flashscore-scraper/flashscore/matches.py")
           source = p.read_text()
           marker = '            stage_id = P.to_int(record.get("AC"))'
-          injected = marker + '\n              bx = P.to_int(record.get("BX"))\n              if bx is not None:\n                  entry["diagnostic_bx"] = bx'
+          injected = marker + '\n            bx = P.to_int(record.get("BX"))\n            if bx is not None:\n                entry["diagnostic_bx"] = bx'
           if marker not in source:
               raise SystemExit("live update parse marker not found; refusing unsafe patch")
           if 'entry["diagnostic_bx"]' not in source:
