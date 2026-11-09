@@ -295,7 +295,8 @@
     const query = String(flashscoreArchiveSearchEl?.value || "").trim().toLocaleLowerCase("sk");
     const rows = flashscoreArchiveRows.filter(entry => {
       const snapshot = entry.snapshot || {};
-      if (String(snapshot.collected_at || "").slice(0, 10) !== selectedDate) return false;
+      const snapshotDate = snapshot.collected_at ? localDateKey(new Date(snapshot.collected_at)) : "";
+      if (snapshotDate !== selectedDate) return false;
       const haystack = [
         entry.home, entry.away, entry.competition, snapshot.live_minute,
         snapshot.stage, snapshot.home_score, snapshot.away_score
