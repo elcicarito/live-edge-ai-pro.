@@ -467,24 +467,24 @@
 
   function getDisplayedMinute(match, collectedAt) {
     const raw = String(match.live_minute ?? "").trim();
-
-    if (!raw) return "?";
-
-    const base = parseInt(raw, 10);
-
-    if (!Number.isFinite(base)) return raw;
-
-    const statusText = String(
-      match.status_text || ""
-    ).toLowerCase();
+    const statusText = String(match.status_text || "").toLowerCase();
 
     if (
       statusText.includes("half-time") ||
+      statusText.includes("half time") ||
       statusText === "ht" ||
       raw.toLowerCase().includes("ht")
     ) {
       return "HT";
     }
+
+    if (!raw) return "?";
+    // Flashscore's clock is estimated from kickoff + match stage, not a live timer.
+    if (raw.startsWith("~")) return raw;
+
+    const base = parseInt(raw, 10);
+
+    if (!Number.isFinite(base)) return raw;
 
     const timestamp = Date.parse(collectedAt || "");
 
