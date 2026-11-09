@@ -98,6 +98,7 @@ jobs:
 
           inspected = []
           usable_statistics = None
+          statistics_matches = []
           for match in [m for m in live_matches if m.get("id")][:8]:
               item = {
                   "id": match.get("id"),
@@ -138,7 +139,10 @@ jobs:
                           "sample_rows": stat_rows[:20]
                       }
                       if stats_status == 200 and stat_count > 0:
-                          usable_statistics = {"match_id": match["id"], "kind": "match", **item["match_statistics"]}
+                          candidate = {"match_id": match["id"], "kind": "match", **item["match_statistics"]}
+                          statistics_matches.append(candidate)
+                          if usable_statistics is None:
+                              usable_statistics = candidate
                   except Exception as exc:
                       item["match_statistics_error"] = type(exc).__name__ + ": " + str(exc)[:250]
                       report["errors"].append("match statistics " + str(match.get("id")) + ": " + item["match_statistics_error"])
@@ -162,11 +166,38 @@ jobs:
                   item["details_error"] = type(exc).__name__ + ": " + str(exc)[:250]
                   report["errors"].append("details " + str(match.get("id")) + ": " + item["details_error"])
               inspected.append(item)
-              if usable_statistics:
-                  break
 
           report["inspected_live_matches"] = inspected
+          report["matches_with_statistics"] = len(statistics_matches)
+          report["statistics_coverage_checked"] = len(inspected)
           report["usable_statistics_found"] = usable_statistics
+
+          # Re-fetch the first match with statistics after 30 seconds to verify
+          # that values are refreshed rather than being a static snapshot.
+          if usable_statistics:
+              time.sleep(30)
+              try:
+                  refreshed, refreshed_bytes, refreshed_status = get_json(
+                      "/matches/statistics", {"match": usable_statistics["match_id"]}
+                  )
+                  refreshed_periods = refreshed.get("periods", []) if isinstance(refreshed, dict) else []
+                  refreshed_rows = [
+                      {"period": period.get("period"), "category": group.get("category"),
+                       "name": row.get("name"), "home": row.get("home"), "away": row.get("away")}
+                      for period in refreshed_periods if isinstance(period, dict)
+                      for group in period.get("groups", []) if isinstance(group, dict)
+                      for row in group.get("statistics", []) if isinstance(row, dict)
+                  ]
+                  report["live_refresh_check"] = {
+                      "match_id": usable_statistics["match_id"],
+                      "http": refreshed_status,
+                      "bytes": refreshed_bytes,
+                      "statistic_count": len(refreshed_rows),
+                      "sample_rows": refreshed_rows[:20],
+                      "values_changed": refreshed_rows != usable_statistics.get("sample_rows", [])
+                  }
+              except Exception as exc:
+                  report["live_refresh_check"] = {"error": type(exc).__name__ + ": " + str(exc)[:250]}
           if not live_matches:
               report["sample_statistics"] = {"skipped": "no live football match at probe time"}
           elif not usable_statistics:
