@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: live-edge-collector
+  group: live-data-collectors
   cancel-in-progress: false
 
 jobs:
@@ -19,6 +19,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Restore latest live data snapshot
+        run: |
+          git fetch origin live-data
+          git checkout origin/live-data -- data/
 
       - name: Checkout pinned Flashscore scraper source
         uses: actions/checkout@v4
@@ -2587,12 +2592,12 @@ jobs:
             echo "Žiadne nové zmeny na uloženie."
           else
             git commit -m "Update LIVE football data"
-            # The basketball collector may push to main at the same time.
+            # All live-data writers share one concurrency lock.
             # Retry fetch/rebase/push so fresh football data is not lost on a ref race.
             for attempt in 1 2 3 4 5; do
-              git fetch origin main
-              git rebase origin/main
-              if git push origin HEAD:main; then
+              git fetch origin live-data
+              git rebase origin/live-data
+              if git push origin HEAD:live-data; then
                 exit 0
               fi
               echo "Push conflict, retry ${attempt}/5"
