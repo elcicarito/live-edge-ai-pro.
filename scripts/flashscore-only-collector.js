@@ -210,6 +210,8 @@ async function main() {
     source: "Flashscore", live_count: records.length,
     stats_match_count: current.stats_match_count,
     stats_error_count: errors.length,
+    live_minute_count: records.filter(x => x.live_minute !== null && x.live_minute !== undefined && x.live_minute !== "").length,
+    live_minute_samples: records.filter(x => x.live_minute !== null && x.live_minute !== undefined && x.live_minute !== "").slice(0, 8).map(x => ({ match: x.home + " - " + x.away, minute: x.live_minute, minute_source: x.minute_source })),
     archive_matches: Object.keys(archive.matches).length,
     timeline_file: path.basename(TIMELINE_PATH),
     timeline_snapshots_written: timelineLines.length,
