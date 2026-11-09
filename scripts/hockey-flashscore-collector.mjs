@@ -7,7 +7,6 @@ const headers = { accept: "application/json", "user-agent": "LIVE-EDGE-AI-PRO-HO
 const get = async (path, params = {}) => {
   const url = new URL(path, API);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
-  url.searchParams.set("_t", String(Date.now()));
   const response = await fetch(url, { headers, cache: "no-store", signal: AbortSignal.timeout(45000) });
   if (!response.ok) throw new Error(`Flashscore ${path}: HTTP ${response.status}`);
   const data = await response.json();
