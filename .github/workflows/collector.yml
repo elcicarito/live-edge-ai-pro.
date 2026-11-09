@@ -82,6 +82,8 @@ jobs:
           const HISTORY_FRONTEND_LIMIT = 288;
           const SIGNAL_ARCHIVE_PATH = "data/signal-archive.json";
           const BTTS_ARCHIVE_PATH = "data/btts-signal-archive.json";
+          const PREDICTION_OBSERVATIONS_PATH = "data/live-prediction-observations.jsonl.gz";
+          const PREDICTION_OUTCOMES_PATH = "data/live-prediction-outcomes.jsonl.gz";
 
           const REQUIRED_MISSES = 3;
           const DROP_RATIO = 0.5;
@@ -1603,6 +1605,88 @@ jobs:
               }
             }
 
+
+            // =========================================
+            // LIVE PREDICTION DATA LOGGER – SHADOW MODE
+            // Zaznamenáva LIVE pozorovania pre budúci model.
+            // Zatiaľ nevydáva pravdepodobnosti ani stávkové odporúčania.
+            // =========================================
+            const predictionObservationRows = [];
+            const predictionStatPair = (stats, terms) => {
+              const item = (Array.isArray(stats) ? stats : []).find(stat =>
+                terms.some(term => String(stat.label || "").toLowerCase().includes(term))
+              );
+              if (!item) return null;
+              const home = item.home === null || item.home === undefined || item.home === "" ? null : Number(item.home);
+              const away = item.away === null || item.away === undefined || item.away === "" ? null : Number(item.away);
+              return {
+                home: Number.isFinite(home) ? home : null,
+                away: Number.isFinite(away) ? away : null
+              };
+            };
+
+            for (const item of timelineById.values()) {
+              if (!item?.id || !Array.isArray(item.snapshots)) continue;
+              const lastLogged = Date.parse(item.prediction_last_logged_at || "");
+              const newSnapshots = item.snapshots
+                .filter(snapshot => {
+                  const stamp = Date.parse(snapshot?.collected_at || "");
+                  return Number.isFinite(stamp) && (!Number.isFinite(lastLogged) || stamp > lastLogged);
+                })
+                .sort((a, b) => Date.parse(a.collected_at) - Date.parse(b.collected_at));
+
+              for (const snapshot of newSnapshots) {
+                const stats = Array.isArray(snapshot.stats) ? snapshot.stats : [];
+                predictionObservationRows.push({
+                  schema_version: 1,
+                  observation_id: String(item.id) + "|" + String(snapshot.collected_at),
+                  model_track: "LIVE_MATCH_DEVELOPMENT",
+                  model_version: "shadow-data-v1",
+                  record_type: "observation",
+                  match_id: String(item.id),
+                  home: item.home || "",
+                  away: item.away || "",
+                  competition: item.competition || "",
+                  source: snapshot.stats_source || "unknown",
+                  collected_at: snapshot.collected_at,
+                  minute: snapshot.minute ?? null,
+                  minute_label: snapshot.minute_label || null,
+                  score: { home: snapshot.home_score ?? null, away: snapshot.away_score ?? null },
+                  features: {
+                    possession: predictionStatPair(stats, ["possession"]),
+                    total_shots: predictionStatPair(stats, ["total shots"]),
+                    shots_on_target: predictionStatPair(stats, ["shots on target"]),
+                    shots_off_target: predictionStatPair(stats, ["shots off target"]),
+                    dangerous_attacks: predictionStatPair(stats, ["dangerous attacks"]),
+                    attacks: predictionStatPair(stats, ["attacks"]),
+                    corners: predictionStatPair(stats, ["corners"]),
+                    fouls: predictionStatPair(stats, ["fouls"]),
+                    yellow_cards: predictionStatPair(stats, ["yellow cards"]),
+                    red_cards: predictionStatPair(stats, ["red cards"])
+                  },
+                  stats_count: snapshot.stats_count || 0,
+                  stats_available: snapshot.stats_available === true,
+                  stats_changes: Array.isArray(snapshot.stats_changes) ? snapshot.stats_changes : [],
+                  changed_stats_count: snapshot.changed_stats_count || 0,
+                  collection_status: snapshot.collection_status || "unknown",
+                  forecast_status: "DATA_COLLECTION_ONLY",
+                  forecast: null,
+                  outcome_status: "PENDING_CONFIRMED_FINAL"
+                });
+                item.prediction_last_logged_at = snapshot.collected_at;
+              }
+            }
+
+            if (predictionObservationRows.length) {
+              const observationText = predictionObservationRows.map(row => JSON.stringify(row)).join("\n") + "\n";
+              fs.appendFileSync(PREDICTION_OBSERVATIONS_PATH, zlib.gzipSync(observationText));
+            }
+            console.log("LIVE PREDICTION OBSERVATIONS:", JSON.stringify({
+              inserted: predictionObservationRows.length,
+              matches: new Set(predictionObservationRows.map(row => row.match_id)).size,
+              mode: "shadow-data-only"
+            }));
+
             const matchTimeline = {
               schema_version: 2,
               retention_days: 7,
@@ -1649,6 +1733,7 @@ jobs:
             // ako ďalší gzip člen. Existujúce snímky nikdy nemažeme; dopĺňame
             // nové podľa collected_at a deduplikujeme ich podľa tohto času.
             const permanentRecords = [];
+            const predictionOutcomeRows = [];
             for (const item of archive.archived_matches || []) {
               if (
                 item?.status_confirmation !== "confirmed_finished" ||
@@ -1691,12 +1776,42 @@ jobs:
                 )
               };
 
+              // Výsledok pripíš raz; presné gólové udalosti len ak ich zdroj poskytol.
+              if (!previous?.prediction_outcome_logged_at) {
+                merged.prediction_outcome_logged_at = output.collected_at;
+                predictionOutcomeRows.push({
+                  schema_version: 1,
+                  model_track: "LIVE_MATCH_DEVELOPMENT",
+                  model_version: "shadow-data-v1",
+                  record_type: "confirmed_outcome",
+                  match_id: id,
+                  home: merged.home,
+                  away: merged.away,
+                  competition: merged.competition,
+                  outcome_recorded_at: output.collected_at,
+                  final_score: merged.final_score,
+                  final_status: merged.final_status,
+                  goal_timing_available: Array.isArray(merged.final_match?.incidents),
+                  incidents: Array.isArray(merged.final_match?.incidents) ? merged.final_match.incidents : null,
+                  observation_times: merged.snapshots.map(snapshot => snapshot.collected_at).filter(Boolean)
+                });
+              }
+
               // Append only when the record is new or has gained/updated data.
               if (!previous || JSON.stringify(merged) !== JSON.stringify(previous)) {
                 permanentRecords.push(merged);
                 permanentById.set(id, merged);
               }
             }
+
+            if (predictionOutcomeRows.length) {
+              const outcomeText = predictionOutcomeRows.map(row => JSON.stringify(row)).join("\n") + "\n";
+              fs.appendFileSync(PREDICTION_OUTCOMES_PATH, zlib.gzipSync(outcomeText));
+            }
+            console.log("LIVE PREDICTION OUTCOMES:", JSON.stringify({
+              inserted: predictionOutcomeRows.length,
+              goal_timing_available: predictionOutcomeRows.filter(row => row.goal_timing_available).length
+            }));
 
             const permanentAppendText = permanentRecords.map(item => JSON.stringify(item)).join("\n") + (permanentRecords.length ? "\n" : "");
             if (fs.existsSync(PERMANENT_MATCH_HISTORY_PATH)) {
