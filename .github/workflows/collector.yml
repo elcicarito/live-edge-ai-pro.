@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: live-data-v2-football-writer
+  group: flashscore-live-clock-diagnostics
   cancel-in-progress: false
 
 jobs:
@@ -2735,21 +2735,9 @@ jobs:
         run: |
           node scripts/build-live-prediction-dataset.js
 
-      - name: Save collected data
+      - name: Keep diagnostic run isolated (do not publish data)
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch --depth=1 origin live-data-v2
-          # Move the data commit onto the dedicated snapshot branch without merging
-          # historical JSON snapshots (which intentionally change on every poll).
-          git reset --mixed origin/live-data-v2
-          git add -A -- data/
-          if git diff --cached --quiet; then
-            echo "Žiadne nové zmeny na uloženie."
-          else
-            git commit -m "Update LIVE football data"
-            git push origin HEAD:live-data-v2
-          fi
+          echo "Diagnostic-only run: collected files remain temporary and will not be pushed to live-data-v2."
 
       - name: Stop Flashscore API
         if: always()
