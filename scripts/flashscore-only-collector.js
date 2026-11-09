@@ -75,9 +75,54 @@ function commentaryInfo(payload) {
     availableTabs: Array.isArray(payload?.available_tabs) ? payload.available_tabs : []
   };
 }
-function makeMatch(raw, competition, stats, statsError, commentary, commentaryError) {
+function deriveLiveClock(detail, fallbackStage, nowMs = Date.now()) {
+  const stage = String(detail?.stage || fallbackStage || "").trim().toLowerCase();
+  if (/half\s*time|halftime/.test(stage)) {
+    return { live_minute: "HT", live_clock: "HT", source: "Flashscore stage status" };
+  }
+  if (/penalt/.test(stage)) {
+    return { live_minute: "PEN", live_clock: "PEN", source: "Flashscore stage status" };
+  }
+  if (/finished|full.?time|\bft\b|after extra time/.test(stage)) return null;
+
+  const metadata = detail?.live_clock_metadata;
+  const stageStart = Number(metadata?.stage_start_epoch);
+  if (!Number.isFinite(stageStart) || stageStart <= 0) return null;
+  let elapsed = Math.floor(nowMs / 1000 - stageStart);
+  if (!Number.isFinite(elapsed) || elapsed < -5) return null;
+  elapsed = Math.max(0, elapsed);
+
+  let halfMinutes = 45;
+  const format = String(metadata?.format || "");
+  const customFormat = format.match(/(\d+)\s*[x×]\s*(\d+)\s*(?:minutes?|mins?)/i);
+  if (customFormat) halfMinutes = Number(customFormat[2]);
+  if (!Number.isFinite(halfMinutes) || halfMinutes < 1 || halfMinutes > 90) return null;
+
+  let offset = 0;
+  if (/2nd\s*half|second\s*half/.test(stage)) {
+    offset = halfMinutes * 60;
+  } else if (/extra\s*time.*2nd|extra\s*time.*second/.test(stage)) {
+    offset = halfMinutes * 120 + 15 * 60;
+  } else if (/extra\s*time/.test(stage)) {
+    offset = halfMinutes * 120;
+  } else if (!/1st\s*half|first\s*half/.test(stage)) {
+    return null;
+  }
+
+  const totalSeconds = offset + elapsed;
+  const minute = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return {
+    live_minute: minute,
+    live_clock: String(minute) + ":" + String(seconds).padStart(2, "0"),
+    source: "Flashscore eventStageStartTime"
+  };
+}
+
+function makeMatch(raw, competition, stats, statsError, commentary, commentaryError, detail, detailError) {
   const home = nameOf(raw.home), away = nameOf(raw.away);
-  const stage = String(raw.stage || raw.status || "LIVE");
+  const stage = String(detail?.stage || raw.stage || raw.status || "LIVE");
+  const clock = deriveLiveClock(detail, stage);
   return {
     id: String(raw.id),
     url: raw.link || "https://www.flashscore.com/match/" + String(raw.id) + "/",
@@ -88,9 +133,12 @@ function makeMatch(raw, competition, stats, statsError, commentary, commentaryEr
     country: competition?.country?.name || null,
     status: raw.status || "live",
     stage,
-    // Commentary MB is the minute of the latest event, NOT the live match clock.
-    live_minute: null,
-    minute_source: null,
+    // The current clock is derived only from Flashscore's current-stage start timestamp.
+    // Commentary MB remains a separate last-event field and is never used as the live clock.
+    live_minute: clock?.live_minute ?? null,
+    live_clock: clock?.live_clock ?? null,
+    minute_source: clock?.source ?? null,
+    clock_error: detailError || null,
     last_event_minute: commentary.lastEventMinute,
     last_event_minute_source: commentary.lastEventMinute ? "Flashscore commentary MB" : null,
     commentary_count: commentary.count,
@@ -113,6 +161,8 @@ function snapshotOf(match) {
     live_minute: match.live_minute,
     last_event_minute: match.last_event_minute,
     stage: match.stage,
+    live_clock: match.live_clock,
+    minute_source: match.minute_source,
     home_score: match.home_score,
     away_score: match.away_score,
     stats: match.stats
@@ -145,7 +195,16 @@ async function main() {
       let stats = [], statsError = null;
       let commentary = { lastEventMinute: null, count: 0, availableTabs: [] };
       let commentaryError = null;
+      let detail = null, detailError = null;
       const tasks = [];
+      tasks.push((async () => {
+        try {
+          detail = await getJSON("/matches/details", { match: String(raw.id) });
+        } catch (error) {
+          detailError = error.message;
+          errors.push(String(raw.id) + " details/clock: " + detailError);
+        }
+      })());
       if (raw.has_statistics === true) {
         tasks.push((async () => {
           try {
@@ -167,7 +226,7 @@ async function main() {
         }
       })());
       await Promise.all(tasks);
-      records.push(makeMatch(raw, competition, stats, statsError, commentary, commentaryError));
+      records.push(makeMatch(raw, competition, stats, statsError, commentary, commentaryError, detail, detailError));
     }
   });
   await Promise.all(workers);
@@ -231,6 +290,8 @@ async function main() {
     stats_match_count: records.filter(x => x.stats_available).length,
     stats_error_count: records.filter(x => x.stats_error).length,
     commentary_error_count: records.filter(x => x.commentary_error).length,
+    clock_match_count: records.filter(x => x.live_clock !== null).length,
+    clock_error_count: records.filter(x => x.clock_error).length,
     errors: errors.slice(0, 30),
     records: records.map(match => ({ collected_at: now, match }))
   };
@@ -271,6 +332,7 @@ async function main() {
     stats_error_count: records.filter(x => x.stats_error).length,
     commentary_error_count: records.filter(x => x.commentary_error).length,
     live_minute_count: records.filter(x => x.live_minute !== null && x.live_minute !== undefined && x.live_minute !== "").length,
+    live_clock_count: records.filter(x => Boolean(x.live_clock)).length,
     last_event_minute_count: records.filter(x => Boolean(x.last_event_minute)).length,
     commentary_samples: records.slice(0, 8).map(x => ({
       match: x.home + " - " + x.away,
