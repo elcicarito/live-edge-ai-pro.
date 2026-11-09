@@ -61,6 +61,34 @@ jobs:
           print("Read-only HTML clock diagnostics patched into temporary scraper checkout.")
           PY
 
+      - name: Instrument raw live-feed records (temporary only)
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path(".flashscore-scraper/flashscore/fetch.py")
+          source = p.read_text()
+          marker = '    text = (text or "").strip()\n    return "" if text in EMPTY_BODIES else text'
+          injected = '''    text = (text or "").strip()
+              if name in ("r_1_1", "u_1_1") or name.startswith(("dc_1_", "df_lc_1_", "df_sui_1_")):
+                  import json
+                  rows = []
+                  for chunk in text.split("~")[:30]:
+                      row = {}
+                      for pair in chunk.split("¬"):
+                          key, sep, value = pair.partition("÷")
+                          if sep and key not in row:
+                              row[key] = value
+                      if row:
+                          rows.append(row)
+                  print("RAW_CLOCK_FEED:", json.dumps({"feed": name, "bytes": len(text), "records": rows}, ensure_ascii=False), flush=True)
+              return "" if text in EMPTY_BODIES else text'''
+          if marker not in source:
+              raise SystemExit("get_feed normalization marker not found; refusing unsafe patch")
+          if "RAW_CLOCK_FEED:" not in source:
+              source = source.replace(marker, injected, 1)
+              p.write_text(source)
+          print("Temporary raw-feed instrumentation installed; repository source remains unchanged.")
+          PY
       - name: Build and start isolated Flashscore API
         run: |
           docker build -t flashscore-clock-diagnostic .flashscore-scraper
@@ -120,8 +148,28 @@ jobs:
                   }, ensure_ascii=False))
               except Exception as exc:
                   print("MATCH DETAIL ERROR:", match_id, repr(exc))
+          with urllib.request.urlopen(base + "/matches/live-updates?sport=football", timeout=30) as response:
+              updates = json.loads(response.read().decode("utf-8"))
+          print("PARSED LIVE UPDATES:", json.dumps(updates, ensure_ascii=False))
+          for match_id in ids[:5]:
+              for endpoint in ("matches/details", "matches/commentary", "matches/summary"):
+                  try:
+                      query = urllib.parse.urlencode({"match": match_id})
+                      with urllib.request.urlopen(base + "/" + endpoint + "?" + query, timeout=25) as response:
+                          payload = json.loads(response.read().decode("utf-8"))
+                      if endpoint.endswith("commentary"):
+                          payload = {k: payload.get(k) for k in ("id", "stage", "count", "comments")}
+                      elif endpoint.endswith("summary"):
+                          payload = {k: payload.get(k) for k in ("id", "stage", "period_count", "incident_count", "periods")}
+                      print("CLOCK RELATED ENDPOINT:", endpoint, match_id, json.dumps(payload, ensure_ascii=False))
+                  except Exception as exc:
+                      print("CLOCK ENDPOINT ERROR:", endpoint, match_id, repr(exc))
           PY
 
+      - name: Print raw live-feed diagnostics
+        if: always()
+        run: |
+          docker logs flashscore-clock-diagnostic 2>&1 | grep -E 'RAW_CLOCK_FEED|PARSED LIVE UPDATES|CLOCK RELATED ENDPOINT|CLOCK ENDPOINT ERROR' | tail -c 50000 || true
       - name: Stop isolated Flashscore API
         if: always()
         run: docker stop flashscore-clock-diagnostic 2>/dev/null || true
