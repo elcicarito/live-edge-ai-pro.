@@ -54,7 +54,17 @@ jobs:
           if 'diagnostic_core_fields' not in block:
               if marker not in block:
                   raise SystemExit("get_details return marker not found; refusing unsafe patch")
-              block = block.replace(marker, '    summary["diagnostic_core_fields"] = core\n    summary["diagnostic_environment_keys"] = sorted(environment.keys())\n    summary["diagnostic_event_info"] = info\n    summary["diagnostic_environment_values"] = {k: environment.get(k) for k in ("eventStageStartTime", "event_stage_time", "eventStageTypeId", "eventStageId", "lastEventInfo", "final_stage")}\n    import re\n    summary["diagnostic_html_clock_markers"] = [html[max(0, m.start()-180):m.end()+260] for m in list(re.finditer(r"displayClock|clock|minute|timer|timeElapsed|matchTime|elapsed|eventStageStartTime|event_stage_time", html, re.I))[:30]]
+              injected = """
+    summary["diagnostic_core_fields"] = core
+    summary["diagnostic_environment_keys"] = sorted(environment.keys())
+    summary["diagnostic_event_info"] = info
+    summary["diagnostic_environment_values"] = {k: environment.get(k) for k in ("eventStageStartTime", "event_stage_time", "eventStageTypeId", "eventStageId", "lastEventInfo", "final_stage")}
+    import re
+    summary["diagnostic_html_clock_markers"] = [html[max(0, m.start()-180):m.end()+260] for m in list(re.finditer(r"displayClock|clock|minute|timer|timeElapsed|matchTime|elapsed|eventStageStartTime|event_stage_time", html, re.I))[:30]]
+    summary["diagnostic_clock_elements"] = [html[max(0, m.start()-500):m.end()+900] for m in list(re.finditer(r"class=\\"[^"]*(?:event__stage|event__time|detailScore__status|matchTime|clock|timer|stage__time)[^"]*\\"|data-testid=\\"[^"]*(?:time|clock|stage)[^"]*\\"", html, re.I))[:25]]
+    summary["diagnostic_minute_text"] = [html[max(0, m.start()-160):m.end()+220] for m in list(re.finditer(r">\\s*(?:\\d{1,3}(?:\\+\\d{1,2})?|HT|Half Time|Break Time|FT)\\s*(?:&#39;|′)?\\s*<", html, re.I))[:35]]
+"""
+              block = block.replace(marker, injected + marker)
     # Inspect rendered match-clock containers separately from environment metadata.
     summary["diagnostic_clock_elements"] = [html[max(0, m.start()-500):m.end()+900] for m in list(re.finditer(r'class="[^"]*(?:event__stage|event__time|detailScore__status|matchTime|clock|timer|stage__time)[^"]*"|data-testid="[^"]*(?:time|clock|stage)[^"]*"', html, re.I))[:25]]
     summary["diagnostic_minute_text"] = [html[max(0, m.start()-160):m.end()+220] for m in list(re.finditer(r'>\s*(?:\d{1,3}(?:\+\d{1,2})?|HT|Half Time|Break Time|FT)\s*(?:&#39;|′)?\s*<', html, re.I))[:35]]
