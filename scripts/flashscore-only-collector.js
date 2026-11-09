@@ -140,6 +140,24 @@ async function main() {
     }
   }
 
+  // Temporary diagnostic only: inspect the raw Flashscore common_feed
+  // fields for a few live matches. This is not persisted into app data.
+  const clockDiagnosticSamples = await Promise.all(rawMatches.slice(0, 3).map(async ({ raw }) => {
+    try {
+      const detail = await getJSON("/matches/details", { match: String(raw.id) });
+      const fields = detail?.diagnostic_core_fields || {};
+      const candidates = Object.fromEntries(Object.entries(fields).filter(([key, value]) =>
+        /clock|timer|minute|elapsed|period|phase|time|status|stage/i.test(key) ||
+        (typeof value === "string" && /\d{1,3}\s*[:']\s*\d{1,2}/.test(value))
+      ));
+      return { id: String(raw.id), stage: raw.stage || raw.status || null,
+        core_keys: Object.keys(fields), clock_candidates: candidates };
+    } catch (error) {
+      return { id: String(raw.id), error: error.message };
+    }
+  }));
+  console.log("FLASHSCORE RAW CLOCK DIAGNOSTICS:", JSON.stringify(clockDiagnosticSamples));
+
   const records = [];
   const errors = [];
   let cursor = 0;
