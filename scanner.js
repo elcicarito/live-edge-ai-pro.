@@ -3958,7 +3958,7 @@
     )[0];
     if (bttsOpenSignals.length) {
       bttsOpenSignals.forEach((signal, index) => addSignalPanel(signalSection, {
-        heading: "🔵 BTTS – " + (signal.tier || "PODMIENKA"),
+        heading: "🔵 BTTS " + (signal.source || "ESPN") + " – " + (signal.tier || "PODMIENKA"),
         title: signal.predictedTeam || (signal.predictedSide === "home" ? match.home : match.away),
         detail: `Podmienky: ${signal.tier} | ${signal.combinedSot} SOT spolu | ${signal.combinedShots} striel spolu | vstup ${signal.startMinute}'. Skóre pri signále: ${signal.startScore}. Cieľ: predikovaný tím skóruje do konca zápasu.`,
         background: "#102d4a",
@@ -3997,10 +3997,10 @@
       addSignalPanel(signalSection, {
         heading: "LIVE SIGNÁL",
         title: match.source === "Flashscore"
-          ? "SIGNÁLY Z FLASHSCORE ZATIAĽ VYPNUTÉ"
+          ? "ZELENÝ MODEL Z FLASHSCORE VYPNUTÝ"
           : staleMode ? "SIGNÁLY VYPNUTÉ – ZASTARANÉ DÁTA" : "ZBER DÁT NIE JE KOMPLETNÝ",
         detail: match.source === "Flashscore"
-          ? "Zápas aj štatistiky sa zobrazujú, ale predikčné modely a BTTS zostávajú zatiaľ iba na overenom ESPN feede."
+          ? "Zápas aj štatistiky sa zobrazujú. Samostatný BTTS model je povolený aj pre Flashscore; zelený model zostáva iba na ESPN."
           : staleMode ? "Z tohto záznamu sa nevytvára ani nevyhodnocuje žiadny LIVE signál." : "Nové signály sú momentálne zablokované.",
         background: "#292524",
         border: "#78716c",
