@@ -79,6 +79,7 @@ const server = http.createServer((req, res) => {
             stage_start_epoch: Math.floor(Date.now() / 1000) - (11 * 60 + 20),
             stage_id: 13,
             stage_type_id: 2,
+            core_minute: 31,
             format: "Played with special rules. Format: 2x20 minutes."
           }
         : {
@@ -155,7 +156,8 @@ function runCollector() {
     assert.equal(standardMatch.commentary_count, 1);
     assert.equal(standardMatch.stats[0].name, "Shots on target");
     assert.equal(specialMatch.live_minute, 31, "2x20 special-rules match must use its 20-minute half");
-    assert.match(specialMatch.live_clock, /^31:\d{2}$/, "special-rules clock must preserve seconds");
+    assert.equal(specialMatch.live_clock, "31'", "minute-only special-rules clock must use Flashscore's direct minute");
+    assert.equal(specialMatch.minute_source, "Flashscore core DI (minute-only clock)");
     assert.equal(archive.matches["test-match-1"].snapshots_count, 2);
     assert.equal(archive.matches["test-match-special"].snapshots_count, 2);
     assert.equal(archive.matches["test-match-1"].score_change_count, 1);
@@ -178,7 +180,7 @@ function runCollector() {
     assert.equal(standardTimeline[1].score_changed, true);
     assert.equal(standardTimeline[1].stat_changes.length, 1);
     assert.equal(specialTimeline[0].snapshot.live_minute, 31);
-    assert.match(specialTimeline[0].snapshot.live_clock, /^31:\d{2}$/);
+    assert.equal(specialTimeline[0].snapshot.live_clock, "31'");
 
     process.stdout.write("Flashscore collector integration test passed: standard and 2x20 clocks, seconds, separate event/live minute fields, stats, score/stat changes, gzip timeline and index.\n");
   } finally {
