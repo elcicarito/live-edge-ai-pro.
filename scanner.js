@@ -3688,6 +3688,10 @@
     const minute = staleMode
       ? String(match.live_minute ?? "?").trim() || "?"
       : getDisplayedMinute(match, collectedAt);
+    const matchAllowsSignals = allowSignals && match.source !== "Flashscore";
+    const displayStats = Array.isArray(match.stats) && match.stats.length
+      ? match.stats
+      : (Array.isArray(match.flashscore_stats) ? match.flashscore_stats : []);
 
     // Hlavička zápasu a farebný stavový štítok.
     const header = document.createElement("div");
@@ -3745,6 +3749,11 @@
     leagueLine.textContent = `${getCompetitionFlag(match)} ${match.competition || "Neznáma súťaž"}`;
     leagueLine.style.cssText = "font-size:12px;color:#a8b8cc;margin:2px 0 9px;";
     card.appendChild(leagueLine);
+    if (match.source === "Flashscore") {
+      addText(card, "ZDROJ: FLASHSCORE · DOPLNKOVÝ LIVE FEED · SIGNÁLY ZATIAĽ VYPNUTÉ", "10px");
+    } else if (match.stats_source === "Flashscore") {
+      addText(card, "ŠTATISTIKY DOPLNENÉ Z FLASHSCORE · MODEL POUŽÍVA PÔVODNÉ ESPN DÁTA", "10px");
+    }
 
     if (noSignal && !staleMode) {
       const expandButton = document.createElement("button");
@@ -3772,9 +3781,9 @@
       chip.style.cssText = "font-size:11px;font-weight:800;color:#cbd5e1;background:#142338;border:1px solid #2b4059;border-radius:8px;padding:6px 8px;font-variant-numeric:tabular-nums;";
       quickStats.appendChild(chip);
     };
-    const quickSot = statValue(match.stats || [], "shots on target");
-    const quickOff = statValue(match.stats || [], "shots off target");
-    let quickTotal = statValue(match.stats || [], "total shots");
+    const quickSot = statValue(displayStats, "shots on target");
+    const quickOff = statValue(displayStats, "shots off target");
+    let quickTotal = statValue(displayStats, "total shots");
     if (!quickTotal && quickSot && quickOff) {
       quickTotal = {
         home: quickSot.home + quickOff.home,
@@ -3783,11 +3792,11 @@
     }
     addQuickStat("SOT", quickSot);
     addQuickStat("STRELY", quickTotal);
-    addQuickStat("ROHY", statValue(match.stats || [], "corners"));
-    addQuickStat("NEB. ÚTOKY", statValue(match.stats || [], "dangerous attacks"));
+    addQuickStat("ROHY", statValue(displayStats, "corners"));
+    addQuickStat("NEB. ÚTOKY", statValue(displayStats, "dangerous attacks"));
     if (quickStats.childElementCount) card.appendChild(quickStats);
 
-    const priority = getMatchPriority(match, historyData, collectedAt, allowSignals, staleMode, signalArchive, bttsArchive);
+    const priority = getMatchPriority(match, historyData, collectedAt, matchAllowsSignals, staleMode, signalArchive, bttsArchive);
 
     if (priority.label) {
       const priorityTag = document.createElement("div");
@@ -3937,7 +3946,7 @@
       "Ukazovateľ vychádza z uložených kompletných zberov (približne posledných 24 hodín); je iba informačný."
     );
 
-    renderCurrentStats(statsSection, match.stats || []);
+    renderCurrentStats(statsSection, displayStats);
 
     // BTTS je samostatný modrý model; jeho história sa nemieša so zeleným gólovým modelom.
     const bttsSignals = Array.isArray(bttsArchive?.signals)
@@ -3984,11 +3993,15 @@
     const pressureAcceleration = calculatePressureAcceleration(match, historyData, collectedAt);
     renderMomentumEnginePanel(momentumSection, match, historyData, collectedAt);
 
-    if (!allowSignals) {
+    if (!matchAllowsSignals) {
       addSignalPanel(signalSection, {
-        heading: staleMode ? "LIVE SIGNÁL" : "LIVE SIGNÁL",
-        title: staleMode ? "SIGNÁLY VYPNUTÉ – ZASTARANÉ DÁTA" : "ZBER DÁT NIE JE KOMPLETNÝ",
-        detail: staleMode ? "Z tohto záznamu sa nevytvára ani nevyhodnocuje žiadny LIVE signál." : "Nové signály sú momentálne zablokované.",
+        heading: "LIVE SIGNÁL",
+        title: match.source === "Flashscore"
+          ? "SIGNÁLY Z FLASHSCORE ZATIAĽ VYPNUTÉ"
+          : staleMode ? "SIGNÁLY VYPNUTÉ – ZASTARANÉ DÁTA" : "ZBER DÁT NIE JE KOMPLETNÝ",
+        detail: match.source === "Flashscore"
+          ? "Zápas aj štatistiky sa zobrazujú, ale predikčné modely a BTTS zostávajú zatiaľ iba na overenom ESPN feede."
+          : staleMode ? "Z tohto záznamu sa nevytvára ani nevyhodnocuje žiadny LIVE signál." : "Nové signály sú momentálne zablokované.",
         background: "#292524",
         border: "#78716c",
         titleColor: "#d6d3d1"
@@ -4068,7 +4081,8 @@
     const pressure = calculatePressure(match.stats || []);
     const snapshot = getSnapshot(match, historyData, collectedAt);
     const threat = calculateThreat(pressure, snapshot);
-    const currentGreen = allowSignals && Boolean(makeSignal(match, threat, snapshot, collectedAt));
+    const currentGreen = allowSignals && match.source !== "Flashscore" &&
+      Boolean(makeSignal(match, threat, snapshot, collectedAt));
     const confirmed = currentGreen || hasOpenGreen || hasOpenBtts;
     const score = threat ? Math.max(threat.home, threat.away) : 0;
 
@@ -4266,7 +4280,7 @@
       engine.innerHTML = "";
 
       addText(engine, "SMART SIGNAL ENGINE v14", "18px");
-      addText(engine, `Zdroj: ${current.source || "neznámy"}`);
+      addText(engine, `Zdroj: ${(current.source_providers || [current.source || "neznámy"]).join(" + ")}`);
       addText(engine, `Dáta: ${current.collected_at || "neznámy čas"}`);
       addText(engine, `Posledná kontrola: ${new Date().toLocaleTimeString("sk-SK")}`);
 
