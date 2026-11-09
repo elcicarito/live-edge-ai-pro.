@@ -54,7 +54,7 @@ jobs:
           if 'diagnostic_core_fields' not in block:
               if marker not in block:
                   raise SystemExit("get_details return marker not found; refusing unsafe patch")
-              block = block.replace(marker, '    summary["diagnostic_core_fields"] = core\n' + marker, 1)
+              block = block.replace(marker, '    summary["diagnostic_core_fields"] = core\n    summary["diagnostic_environment_keys"] = sorted(environment.keys())\n    summary["diagnostic_event_info"] = info\n    import re\n    summary["diagnostic_html_clock_markers"] = [html[max(0, m.start()-180):m.end()+260] for m in list(re.finditer(r"displayClock|clock|minute|timer|timeElapsed|matchTime|elapsed", html, re.I))[:12]]\n' + marker, 1)
               source = source[:start] + block + source[end:]
               p.write_text(source)
           # Expose raw rows from the LIVE list feed before parser normalization.
@@ -190,6 +190,31 @@ jobs:
               print("FLASHSCORE BX TO MATCH DETAIL CORRELATION:", json.dumps(correlated[:30], ensure_ascii=False))
           except Exception as exc:
               print("FLASHSCORE BX CORRELATION ERROR:", repr(exc))
+          PY
+
+      - name: Inspect Flashscore match-page clock metadata
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import json
+          import urllib.parse
+          import urllib.request
+          base = "http://127.0.0.1:8000"
+          ids = ["bg0mAPYO", "WdH8ONtT", "fuxuWAcU", "Yo7rQRPP", "URZMok5F", "SpjGMmuf"]
+          for match_id in ids:
+              try:
+                  query = urllib.parse.urlencode({"match": match_id})
+                  with urllib.request.urlopen(base + "/matches/details?" + query, timeout=25) as response:
+                      detail = json.loads(response.read().decode("utf-8"))
+                  print("FLASHSCORE MATCH PAGE CLOCK METADATA:", json.dumps({
+                      "id": match_id,
+                      "stage": detail.get("stage"),
+                      "environment_keys": detail.get("diagnostic_environment_keys"),
+                      "event_info": detail.get("diagnostic_event_info"),
+                      "html_clock_markers": detail.get("diagnostic_html_clock_markers"),
+                  }, ensure_ascii=False))
+              except Exception as exc:
+                  print("FLASHSCORE MATCH PAGE CLOCK ERROR:", match_id, repr(exc))
           PY
 
       - name: Collect fresh LIVE football data
