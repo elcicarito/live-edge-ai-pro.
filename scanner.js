@@ -4339,11 +4339,8 @@
           console.warn("BTTS archív zatiaľ nie je dostupný:", error);
           return null;
         }),
-        getCachedJSON(MATCH_ARCHIVE_URL, 10 * 60 * 1000).catch(error => {
-          console.warn("Archív zápasov nie je dostupný:", error);
-          return null;
-        }),
-        loadPermanentMatchHistory()
+        Promise.resolve(null), // Starý ESPN/SportScore archív je odpojený; nový Flashscore archív sa doplní samostatne.
+        Promise.resolve([]) // Nenačítavaj starú históriu zápasov.
       ]);
 
       matchHistoryData = Array.isArray(permanentMatchHistory) ? permanentMatchHistory : [];
