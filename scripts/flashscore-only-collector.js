@@ -86,6 +86,14 @@ function deriveLiveClock(detail, fallbackStage, nowMs = Date.now()) {
   if (/finished|full.?time|\bft\b|after extra time/.test(stage)) return null;
 
   const metadata = detail?.live_clock_metadata;
+  const coreMinute = Number(metadata?.core_minute);
+  if (Number.isInteger(coreMinute) && coreMinute > 0 && coreMinute < 180) {
+    return {
+      live_minute: coreMinute,
+      live_clock: String(coreMinute) + "'",
+      source: "Flashscore core DI (minute-only clock)"
+    };
+  }
   const stageStart = Number(metadata?.stage_start_epoch);
   if (!Number.isFinite(stageStart) || stageStart <= 0) return null;
   let elapsed = Math.floor(nowMs / 1000 - stageStart);
