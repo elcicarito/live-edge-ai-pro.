@@ -96,36 +96,53 @@ jobs:
               "errors": []
           }
 
-          sample = next((m for m in live_matches if m.get("id")), None)
-          if sample:
-              details, details_bytes, details_status = get_json("/matches/details", {"match": sample["id"]})
-              available_tabs = details.get("available_tabs", []) if isinstance(details, dict) else []
-              report["sample_live_match"] = {
-                  "id": sample.get("id"),
-                  "home": (sample.get("home") or {}).get("name") if isinstance(sample.get("home"), dict) else sample.get("home"),
-                  "away": (sample.get("away") or {}).get("name") if isinstance(sample.get("away"), dict) else sample.get("away"),
-                  "home_score": sample.get("home_score"),
-                  "away_score": sample.get("away_score"),
-                  "status": sample.get("status"),
-                  "details_http": details_status,
-                  "details_bytes": details_bytes,
-                  "available_tabs": available_tabs
+          inspected = []
+          statistics_success = None
+          for match in [m for m in live_matches if m.get("id")][:8]:
+              item = {
+                  "id": match.get("id"),
+                  "home": (match.get("home") or {}).get("name") if isinstance(match.get("home"), dict) else match.get("home"),
+                  "away": (match.get("away") or {}).get("name") if isinstance(match.get("away"), dict) else match.get("away"),
+                  "home_score": match.get("home_score"),
+                  "away_score": match.get("away_score"),
+                  "status": match.get("status")
               }
-              if "statistics" in available_tabs:
-                  try:
-                      stats, stats_bytes, stats_status = get_json("/matches/statistics", {"match": sample["id"]})
-                      report["sample_statistics"] = {
-                          "http": stats_status,
-                          "bytes": stats_bytes,
-                          "top_level_keys": list(stats.keys())[:25] if isinstance(stats, dict) else [],
-                          "has_data": bool(stats)
-                      }
-                  except Exception as exc:
-                      report["errors"].append("statistics: " + type(exc).__name__ + ": " + str(exc)[:300])
-              else:
-                  report["sample_statistics"] = {"skipped": "statistics tab not advertised for sample match"}
-          else:
+              try:
+                  details, details_bytes, details_status = get_json("/matches/details", {"match": match["id"]})
+                  available_tabs = details.get("available_tabs", []) if isinstance(details, dict) else []
+                  item["details_http"] = details_status
+                  item["details_bytes"] = details_bytes
+                  item["available_tabs"] = available_tabs
+                  if "statistics" in available_tabs:
+                      try:
+                          stats, stats_bytes, stats_status = get_json("/matches/statistics", {"match": match["id"]})
+                          stats_info = {
+                              "http": stats_status,
+                              "bytes": stats_bytes,
+                              "top_level_keys": list(stats.keys())[:25] if isinstance(stats, dict) else [],
+                              "has_data": bool(stats)
+                          }
+                          item["statistics"] = stats_info
+                          if stats_status == 200 and bool(stats):
+                              statistics_success = {"match_id": match["id"], **stats_info}
+                      except Exception as exc:
+                          item["statistics_error"] = type(exc).__name__ + ": " + str(exc)[:300]
+                          report["errors"].append("statistics " + str(match.get("id")) + ": " + item["statistics_error"])
+              except Exception as exc:
+                  item["details_error"] = type(exc).__name__ + ": " + str(exc)[:300]
+                  report["errors"].append("details " + str(match.get("id")) + ": " + item["details_error"])
+              inspected.append(item)
+              if statistics_success:
+                  break
+
+          report["inspected_live_matches"] = inspected
+          report["statistics_match_found"] = statistics_success
+          if not live_matches:
               report["sample_statistics"] = {"skipped": "no live football match at probe time"}
+          elif not statistics_success:
+              report["sample_statistics"] = {"skipped": "none of the inspected live matches advertised usable statistics"}
+          else:
+              report["sample_statistics"] = statistics_success
 
           print("FLASHSCORE_PROBE_REPORT=" + json.dumps(report, ensure_ascii=False))
           if health_status != 200 or live_status != 200 or today_status != 200:
