@@ -212,8 +212,7 @@
         const response = await fetch(
           candidate + (candidate.includes("?") ? "&" : "?") + "t=" + Date.now(),
           {
-            cache: "no-store",
-            headers: { "Accept": "application/vnd.github+json" }
+            cache: "no-store"
           }
         );
         if (!response.ok) throw new Error("HTTP " + response.status);
