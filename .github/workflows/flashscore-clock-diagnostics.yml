@@ -151,6 +151,17 @@ jobs:
           with urllib.request.urlopen(base + "/matches/live-updates?sport=football", timeout=30) as response:
               updates = json.loads(response.read().decode("utf-8"))
           print("PARSED LIVE UPDATES:", json.dumps(updates, ensure_ascii=False))
+          import time
+          for poll in range(1, 4):
+              if poll > 1:
+                  time.sleep(60)
+              with urllib.request.urlopen(base + "/matches/live-updates?sport=football", timeout=30) as response:
+                  sample = json.loads(response.read().decode("utf-8"))
+              print("REPEATED LIVE POLL:", json.dumps({
+                  "poll": poll,
+                  "count": sample.get("count"),
+                  "updates": sample.get("updates")
+              }, ensure_ascii=False))
           for match_id in ids[:5]:
               for endpoint in ("matches/details", "matches/commentary", "matches/summary"):
                   try:
