@@ -1,0 +1,45 @@
+name: ESPN Collector Validation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/collector.yml'
+      - '.github/workflows/espn-collector-check.yml'
+  push:
+    branches:
+      - 'fix/espn-no-live-feed-state'
+    paths:
+      - '.github/workflows/collector.yml'
+      - '.github/workflows/espn-collector-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Extract and syntax-check collector JavaScript
+        shell: bash
+        run: |
+          awk '
+            /^[[:space:]]*node <<'\''NODE'\''[[:space:]]*$/ { inside=1; next }
+            /^[[:space:]]*NODE[[:space:]]*$/ && inside { exit }
+            inside {
+              sub(/^          /, "");
+              print
+            }
+          ' .github/workflows/collector.yml > /tmp/espn-collector-inline.js
+          test -s /tmp/espn-collector-inline.js
+          node --check /tmp/espn-collector-inline.js
+      - name: Verify NO_LIVE guard and output contract
+        run: |
+          grep -F 'const noLiveFeed = complete && uniqueFixtures.length === 0;' .github/workflows/collector.yml
+          grep -F 'classifyESPNFeedState' .github/workflows/collector.yml
+          node scripts/test-espn-feed-state.js
+          grep -F '"NO_LIVE"' scripts/espn-feed-state.js
+          grep -F 'Array.isArray(data?.events)' .github/workflows/collector.yml

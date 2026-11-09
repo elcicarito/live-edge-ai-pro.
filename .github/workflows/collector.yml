@@ -26,6 +26,7 @@ jobs:
 
           node <<'NODE'
           const fs = require("fs");
+          const { classifyESPNFeedState } = require("./scripts/espn-feed-state.js");
           const zlib = require("zlib");
 
           const ESPN_SITE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
@@ -393,6 +394,9 @@ jobs:
 
           async function loadESPNLiveFixtures(errors) {
             const leagues = await getESPNLeagueSlugs();
+            if (!leagues.length) {
+              throw new Error("ESPN directory nevrátil žiadne ligy; prázdny adresár nie je platný NO_LIVE stav.");
+            }
             console.log("ESPN futbalové ligy:", leagues.length);
             const fixtures = new Map();
             let cursor = 0;
@@ -403,8 +407,14 @@ jobs:
                 const leagueSlug = leagues[index];
                 try {
                   const data = await getJSON(`${ESPN_SITE}/${encodeURIComponent(leagueSlug)}/scoreboard?limit=100`);
+                  if (!Array.isArray(data?.events)) {
+                    throw new Error("ESPN scoreboard neobsahuje platné pole events.");
+                  }
+                  if (data.events.some(event => !event || typeof event !== "object")) {
+                    throw new Error("ESPN scoreboard obsahuje neplatnú udalosť.");
+                  }
                   const leagueName = data.leagues?.[0]?.name || data.leagues?.[0]?.abbreviation || leagueSlug;
-                  for (const event of data.events || []) {
+                  for (const event of data.events) {
                     const competition = event.competitions?.[0] || {};
                     const state = competition.status?.type?.state || event.status?.type?.state || "";
                     if (state !== "in") continue;
@@ -584,7 +594,21 @@ jobs:
             console.log("Overené detaily:", verifiedDetailCount, "/", uniqueFixtures.length);
             console.log("Aktuálne LIVE zápasy z overených detailov:", records.length);
 
-            if (baseline === null) {
+            const noLiveFeed = complete && uniqueFixtures.length === 0;
+
+            if (noLiveFeed) {
+              // Platná odpoveď všetkých líg bez práve prebiehajúcich zápasov
+              // nie je výpadok feedu. Zachovaj historickú základňu a povoľ
+              // bezpečné potvrdenie neprítomnosti; výsledok sa stále overuje
+              // samostatným ESPN summary endpointom.
+              archiveSafe = true;
+              feedDataSafe = true;
+              feedGuard.suspect_fixture_count = null;
+              feedGuard.suspect_runs = 0;
+
+              console.log("PLATNÝ NO_LIVE STAV: všetky scoreboardy sú kompletné, LIVE zápasy sa momentálne nehrajú.");
+
+            } else if (baseline === null) {
               console.log(
                 "VAROVANIE: Chýba dôveryhodná historická základňa."
               );
@@ -727,11 +751,19 @@ jobs:
 
             archive.feed_guard = feedGuard;
 
+            const feedState = classifyESPNFeedState({
+              complete,
+              liveFixtureCount: uniqueFixtures.length,
+              archiveSafe,
+              baseline
+            });
+
             const output = {
               collected_at: new Date().toISOString(),
               collection_started_at: startedAt,
               source: "ESPN",
-              collector_version: "9.0",
+              collector_version: "9.1",
+              feed_state: feedState,
               data_status: archiveSafe ? "complete" : "partial",
               collection_complete: complete,
               archive_safe: archiveSafe,
@@ -1054,7 +1086,7 @@ jobs:
                   ? "current_verified_live"
                   : "current_verified_live_partial",
                 archive_safe: archiveSafe,
-                feed_guard_warning: !archiveSafe
+                feed_guard_warning: feedState === "SUSPECTED_DROP" || feedState === "BASELINE_PENDING"
               };
 
               fs.writeFileSync(
