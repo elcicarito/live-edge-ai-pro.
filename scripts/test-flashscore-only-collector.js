@@ -61,7 +61,7 @@ const server = http.createServer((req, res) => {
   }
   if (req.url.startsWith("/matches/commentary")) {
     res.end(JSON.stringify({
-      comments: [{ minute: "57'", text: "Test commentary" }]
+      comments: [{ minute: "57'", clock: "56:42", text: "Test commentary" }]
     }));
     return;
   }
@@ -117,6 +117,9 @@ function runCollector() {
     assert.equal(current.records[0].match.minute_source, null);
     assert.equal(current.records[0].match.last_event_minute, "57'");
     assert.equal(current.records[0].match.last_event_minute_source, "Flashscore commentary MB");
+    assert.equal(current.records[0].match.last_event_clock, "56:42");
+    assert.equal(current.records[0].match.last_event_clock_source, "Flashscore commentary MK (event clock)");
+    assert.equal(current.records[0].match.live_minute, null, "event clock must not be mislabeled as current live minute");
     assert.equal(current.records[0].match.commentary_count, 1);
     assert.equal(current.records[0].match.stats[0].name, "Shots on target");
     assert.equal(archive.matches["test-match-1"].snapshots_count, 2);
