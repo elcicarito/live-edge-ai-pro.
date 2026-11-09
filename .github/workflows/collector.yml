@@ -1506,8 +1506,9 @@ jobs:
                 const minuteLabel = String(
                   match.live_minute ?? match.status_text ?? ""
                 ).trim() || null;
-                const minuteMatch = minuteLabel?.match(/\d+/);
-                const numericMinute = minuteMatch ? Number(minuteMatch[0]) : null;
+                const minuteValue = String(match.live_minute ?? "").trim();
+                const minuteMatch = minuteValue.match(/^~?(\d+)(?:\+\d+)?$/);
+                const numericMinute = minuteMatch ? Number(minuteMatch[1]) : null;
                 const previousSnapshot = [...item.snapshots]
                   .filter(existing => Date.parse(existing.collected_at || "") < stamp)
                   .sort((a, b) => Date.parse(b.collected_at || "") - Date.parse(a.collected_at || ""))[0] || null;
