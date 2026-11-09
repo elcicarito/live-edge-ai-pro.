@@ -1,6 +1,6 @@
 (() => {
-  const DATA_URL = "./data/basketball-current.json";
-  const ARCHIVE_URL = "./data/basketball-archive.json";
+  const DATA_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./basketball-data/data/basketball-current.json";
+  const ARCHIVE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./basketball-data/data/basketball-archive.json";
   const root = document.getElementById("basketball-view");
   const list = document.getElementById("basketball-matches");
   const meta = document.getElementById("basketball-meta");
@@ -370,7 +370,7 @@
     if (!predictorMeta || !predictorList) return;
     try {
       const [response, archiveResponse] = await Promise.all([
-        fetch("./data/basketball-predictions.json?t=" + Date.now(), { cache: "no-store" }),
+        fetch("https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./basketball-data/data/basketball-predictions.json?t=" + Date.now(), { cache: "no-store" }),
         fetch(ARCHIVE_URL + "?t=" + Date.now(), { cache: "no-store" })
       ]);
       if (!response.ok) throw new Error("HTTP " + response.status);
