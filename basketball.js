@@ -401,7 +401,7 @@
         const card = document.createElement("div");
         card.style.cssText = "background:#0d1929;border:1px solid #354d69;border-radius:9px;padding:11px;margin:8px 0";
         const name = document.createElement("div");
-        name.textContent = (p.league || "Liga neznáma") + " · " + p.home + " – " + p.away + " · " + (p.model_version===4?"H"+p.target_half:"Q"+p.target_quarter) + (p.model_version===5?" · V5 test":" · V3");
+        name.textContent = (p.league || "Liga neznáma") + " · " + p.home + " – " + p.away + " · " + (p.model_version===4?"H"+p.target_half+" · V4":"Q"+p.target_quarter+(p.model_version===5?" · V5 test":" · V3"));
         name.style.cssText = "font-size:12px;color:#a9bdd4;line-height:1.4";
         const value = document.createElement("div");
         value.textContent = p.predicted_total + " bodov";
