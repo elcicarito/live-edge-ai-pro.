@@ -2584,27 +2584,16 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add data/live-current.json data/live-latest.json data/live-history.json data/live-history.jsonl.gz data/live-match-timeline.json.gz data/live-match-history.jsonl.gz data/live-archive.json data/signal-archive.json data/btts-signal-archive.json data/football-collector-metrics.jsonl
+          git fetch --depth=1 origin live-data-v2
+          # Move the data commit onto the dedicated snapshot branch without merging
+          # historical JSON snapshots (which intentionally change on every poll).
+          git reset --mixed origin/live-data-v2
           git add -A -- data/
-
           if git diff --cached --quiet; then
             echo "Žiadne nové zmeny na uloženie."
           else
             git commit -m "Update LIVE football data"
-            # Football collector runs are serialized to preserve the newest snapshot.
-            # Retry fetch/rebase/push so fresh football data is not lost on a ref race.
-            for attempt in 1 2 3 4 5; do
-              git fetch --depth=1 origin live-data-v2
-              git rebase --onto origin/live-data-v2 HEAD~1
-              if git push origin HEAD:live-data-v2; then
-                exit 0
-              fi
-              echo "Push conflict, retry ${attempt}/5"
-              sleep $((attempt * 2))
-            done
-            echo "Unable to push football data after five retries."
-            exit 1
+            git push origin HEAD:live-data-v2
           fi
 
       - name: Stop Flashscore API
