@@ -12,6 +12,15 @@ const collectorPath = path.join(__dirname, "flashscore-only-collector.js");
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "flashscore-collector-test-"));
 let liveRun = 0;
 
+function isoWeekKey(date) {
+  const d = new Date(date);
+  const day = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - day + 3);
+  const first = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((d - first) / 86400000 - 3 + ((first.getUTCDay() + 6) % 7)) / 7);
+  return d.getUTCFullYear() + "-W" + String(week).padStart(2, "0");
+}
+
 const server = http.createServer((req, res) => {
   res.setHeader("content-type", "application/json");
   if (req.url.startsWith("/matches/live")) {
@@ -86,6 +95,13 @@ function runCollector() {
       server.listen(8000, "127.0.0.1", resolve);
     });
     fs.mkdirSync(path.join(tempDir, "data"), { recursive: true });
+    const previousWeek = isoWeekKey(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+    const previousTimeline = "flashscore-match-timeline-" + previousWeek + ".jsonl.gz";
+    fs.writeFileSync(path.join(tempDir, "data", previousTimeline), zlib.gzipSync(Buffer.from("")));
+    fs.writeFileSync(path.join(tempDir, "data", "flashscore-timeline-index.json"), JSON.stringify({
+      schema_version: 1, source: "Flashscore",
+      weeks: [{ week: previousWeek, file: previousTimeline }, "invalid-week-entry"]
+    }));
 
     await runCollector();
     await runCollector();
@@ -103,7 +119,8 @@ function runCollector() {
     assert.equal(archive.matches["test-match-1"].snapshots_count, 2);
     assert.equal(archive.matches["test-match-1"].score_change_count, 1);
     assert.equal(archive.matches["test-match-1"].stat_change_count, 1);
-    assert.equal(index.weeks.length, 1);
+    assert.ok(index.weeks.some(item => item.week === previousWeek), "previous indexed week must be retained");
+    assert.ok(index.weeks.some(item => item.week !== previousWeek), "current indexed week must be added");
 
     const timelinePath = path.join(dataDir, index.weeks[0].file);
     const lines = zlib.gunzipSync(fs.readFileSync(timelinePath), { finishFlush: zlib.constants.Z_FINISH })
