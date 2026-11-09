@@ -57,24 +57,26 @@ jobs:
               block = block.replace(marker, '    summary["diagnostic_core_fields"] = core\n' + marker, 1)
               source = source[:start] + block + source[end:]
               p.write_text(source)
-          # Also expose the raw LIVE list-feed rows. The candidate key BA
-          # is ambiguous in public notes; inspect its actual values alongside
-          # the other row fields before treating it as a clock.
+          # Expose raw rows from the LIVE list feed before parser normalization.
           p = Path(".flashscore-scraper/flashscore/matches.py")
           source = p.read_text()
-          marker = "    return {" + chr(10) + '        "sport": refs.sport_ref(sport_id),'
-          replacement = '''    diagnostic_rows = [
-        row for row in P.parse_records(text)
-        if row.get("AA") and P.to_int(row.get("AB")) == 2
-    ][:5]
-    return {
-        "_diagnostic_raw_live_rows": [
-            {"id": row.get("AA"), "fields": row} for row in diagnostic_rows
-        ],
-        "sport": refs.sport_ref(sport_id),'''
-          if marker not in source:
-              raise SystemExit("get_matches return marker not found; refusing unsafe patch")
-          source = source.replace(marker, replacement, 1)
+          feed_line = '    rows = P.match_list(text, sport_id=sport_id, leaderboard=True)' + chr(10)
+          if feed_line not in source:
+              raise SystemExit("get_matches feed marker not found; refusing unsafe patch")
+          if "diagnostic_raw_live_rows" not in source:
+              source = source.replace(
+                  feed_line,
+                  feed_line + '    diagnostic_raw_live_rows = [r for r in P.parse_records(text) if r.get("AA") and refs.status_of(P.to_int(r.get("AB"))) == "live"][:5]' + chr(10),
+                  1
+              )
+          return_marker = '    return {' + chr(10) + '        "sport": refs.sport_ref(sport_id),'
+          if return_marker not in source:
+              raise SystemExit("get_matches response marker not found; refusing unsafe patch")
+          source = source.replace(
+              return_marker,
+              '    return {' + chr(10) + '        "_diagnostic_raw_live_rows": diagnostic_raw_live_rows,' + chr(10) + '        "sport": refs.sport_ref(sport_id),',
+              1
+          )
           p.write_text(source)
           print("Temporary raw common_feed and LIVE list-feed diagnostics enabled.")
           PY
