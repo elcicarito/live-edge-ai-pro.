@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: espn-hockey-live-collector
+  group: live-data-collectors
   cancel-in-progress: false
 
 jobs:
@@ -17,6 +17,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Restore latest live data snapshot
+        run: |
+          git fetch origin live-data
+          git checkout origin/live-data -- data/
       - name: Collect ESPN hockey competitions
         run: node scripts/hockey-collector.mjs
       - name: Commit hockey data
