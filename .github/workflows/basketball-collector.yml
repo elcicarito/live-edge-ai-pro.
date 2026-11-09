@@ -20,7 +20,7 @@ jobs:
 
       - name: Restore latest live data snapshot
         run: |
-          git fetch origin basketball-data
+          git fetch --depth=1 origin basketball-data
           git checkout origin/basketball-data -- data/
 
       - name: Collect LIVE basketball data
@@ -625,8 +625,8 @@ jobs:
           # Football and basketball collectors can commit near-simultaneously.
           # Rebase our basketball-only data commit onto the latest live-data snapshot before pushing.
           for attempt in 1 2 3; do
-            git fetch origin basketball-data
-            git rebase origin/basketball-data
+            git fetch --depth=1 origin basketball-data
+            git rebase --onto origin/basketball-data HEAD~1
             if git push origin HEAD:basketball-data; then
               exit 0
             fi
