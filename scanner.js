@@ -212,9 +212,48 @@
 
   async function loadPermanentMatchHistory() {
     if (!matchHistoryPromise) {
-      const parseLines = content => content.split("\n").filter(Boolean).map(line => {
-        try { return JSON.parse(line); } catch { return null; }
-      }).filter(Boolean);
+      const parseLines = content => {
+        const byMatchId = new Map();
+        const unkeyed = [];
+        for (const line of content.split("\n").filter(Boolean)) {
+          let entry;
+          try { entry = JSON.parse(line); } catch { continue; }
+          const id = entry?.match_id === null || entry?.match_id === undefined
+            ? ""
+            : String(entry.match_id);
+          if (!id) {
+            unkeyed.push(entry);
+            continue;
+          }
+          const previous = byMatchId.get(id);
+          if (!previous) {
+            byMatchId.set(id, entry);
+            continue;
+          }
+          const snapshots = new Map();
+          for (const snapshot of [
+            ...(Array.isArray(previous.snapshots) ? previous.snapshots : []),
+            ...(Array.isArray(entry.snapshots) ? entry.snapshots : [])
+          ]) {
+            const stamp = String(snapshot?.collected_at || "");
+            if (!stamp) continue;
+            const old = snapshots.get(stamp);
+            if (!old || (
+              (!Array.isArray(old.stats) || old.stats.length === 0) &&
+              Array.isArray(snapshot.stats) && snapshot.stats.length > 0
+            )) snapshots.set(stamp, snapshot);
+          }
+          byMatchId.set(id, {
+            ...previous,
+            ...entry,
+            final_match: entry.final_match || previous.final_match,
+            snapshots: [...snapshots.values()].sort((a, b) =>
+              Date.parse(a.collected_at || 0) - Date.parse(b.collected_at || 0)
+            )
+          });
+        }
+        return [...byMatchId.values(), ...unkeyed];
+      };
 
       matchHistoryPromise = (async () => {
         try {

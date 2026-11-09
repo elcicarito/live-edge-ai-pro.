@@ -1281,25 +1281,26 @@ jobs:
             // =========================================
             const PERMANENT_MATCH_HISTORY_PATH = "data/live-match-history.jsonl.gz";
             const LEGACY_PERMANENT_MATCH_HISTORY_PATH = "data/live-match-history.jsonl";
-            const permanentIds = new Set();
+            const permanentById = new Map();
             const existingPermanentText = readText(
               PERMANENT_MATCH_HISTORY_PATH,
               LEGACY_PERMANENT_MATCH_HISTORY_PATH
             ) || "";
 
             if (existingPermanentText) {
-              const existingLines = existingPermanentText.split("\n").filter(Boolean);
-
-              for (const line of existingLines) {
+              for (const line of existingPermanentText.split("\n").filter(Boolean)) {
                 try {
                   const item = JSON.parse(line);
-                  if (item?.match_id) permanentIds.add(String(item.match_id));
+                  if (item?.match_id) permanentById.set(String(item.match_id), item);
                 } catch {
                   // Poškodený riadok neblokuje archiváciu ostatných zápasov.
                 }
               }
             }
 
+            // Trvalý archív je append-only: nové verzie záznamu sa pripájajú
+            // ako ďalší gzip člen. Existujúce snímky nikdy nemažeme; dopĺňame
+            // nové podľa collected_at a deduplikujeme ich podľa tohto času.
             const permanentRecords = [];
             for (const item of archive.archived_matches || []) {
               if (
@@ -1309,25 +1310,45 @@ jobs:
               ) continue;
 
               const id = String(item.id);
-              if (permanentIds.has(id)) continue;
-
+              const previous = permanentById.get(id);
               const timelineItem = timelineById.get(id);
-              permanentRecords.push({
+              const snapshotsByTime = new Map();
+
+              for (const snapshot of [
+                ...(Array.isArray(previous?.snapshots) ? previous.snapshots : []),
+                ...(Array.isArray(timelineItem?.snapshots) ? timelineItem.snapshots : [])
+              ]) {
+                const stamp = String(snapshot?.collected_at || "");
+                if (!stamp) continue;
+                const existing = snapshotsByTime.get(stamp);
+                // Prefer a version with actual statistics when timestamps collide.
+                if (!existing || (
+                  (!Array.isArray(existing.stats) || existing.stats.length === 0) &&
+                  (Array.isArray(snapshot.stats) && snapshot.stats.length > 0)
+                )) snapshotsByTime.set(stamp, snapshot);
+              }
+
+              const merged = {
+                ...(previous || {}),
                 schema_version: 1,
                 match_id: id,
-                archived_at: item.archived_at || now,
-                home: timelineItem?.home || item.final_match.home || "",
-                away: timelineItem?.away || item.final_match.away || "",
-                competition: timelineItem?.competition || item.final_match.competition || "",
-                final_score: item.final_score || null,
-                final_status: item.final_status || getStatus(item.final_match),
-                final_match: item.final_match,
-                // Trvalý archív preberá kompletné surové API snímky z LIVE časovej osi.
-                snapshots: Array.isArray(timelineItem?.snapshots)
-                  ? timelineItem.snapshots
-                  : []
-              });
-              permanentIds.add(id);
+                archived_at: previous?.archived_at || item.archived_at || now,
+                home: timelineItem?.home || previous?.home || item.final_match.home || "",
+                away: timelineItem?.away || previous?.away || item.final_match.away || "",
+                competition: timelineItem?.competition || previous?.competition || item.final_match.competition || "",
+                final_score: item.final_score || previous?.final_score || null,
+                final_status: item.final_status || previous?.final_status || getStatus(item.final_match),
+                final_match: item.final_match || previous?.final_match,
+                snapshots: [...snapshotsByTime.values()].sort((a, b) =>
+                  Date.parse(a.collected_at || 0) - Date.parse(b.collected_at || 0)
+                )
+              };
+
+              // Append only when the record is new or has gained/updated data.
+              if (!previous || JSON.stringify(merged) !== JSON.stringify(previous)) {
+                permanentRecords.push(merged);
+                permanentById.set(id, merged);
+              }
             }
 
             const permanentAppendText = permanentRecords.map(item => JSON.stringify(item)).join("\n") + (permanentRecords.length ? "\n" : "");
@@ -1340,8 +1361,8 @@ jobs:
             if (fs.existsSync(LEGACY_PERMANENT_MATCH_HISTORY_PATH)) fs.unlinkSync(LEGACY_PERMANENT_MATCH_HISTORY_PATH);
 
             console.log("PERMANENT MATCH HISTORY:", JSON.stringify({
-              newly_archived: permanentRecords.length,
-              total_archived: permanentIds.size,
+              inserted_or_enriched: permanentRecords.length,
+              total_archived: permanentById.size,
               retention: "permanent"
             }));
 
