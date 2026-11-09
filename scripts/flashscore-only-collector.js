@@ -146,12 +146,15 @@ async function main() {
     try {
       const detail = await getJSON("/matches/details", { match: String(raw.id) });
       const fields = detail?.diagnostic_core_fields || {};
+      const coreSample = Object.fromEntries(Object.entries(fields).map(([key, value]) => [
+        key, String(value ?? "").slice(0, 160)
+      ]));
       const candidates = Object.fromEntries(Object.entries(fields).filter(([key, value]) =>
         /clock|timer|minute|elapsed|period|phase|time|status|stage/i.test(key) ||
-        (typeof value === "string" && /\d{1,3}\s*[:']\s*\d{1,2}/.test(value))
+        (typeof value === "string" && /\\d{1,3}\\s*[:']\\s*\\d{1,2}/.test(value))
       ));
       return { id: String(raw.id), stage: raw.stage || raw.status || null,
-        core_keys: Object.keys(fields), clock_candidates: candidates };
+        core_keys: Object.keys(fields), core_sample: coreSample, clock_candidates: candidates };
     } catch (error) {
       return { id: String(raw.id), error: error.message };
     }
