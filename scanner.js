@@ -239,6 +239,23 @@
     throw new Error("Nepodarilo sa načítať LIVE dáta z hlavného, záložného ani GitHub API zdroja. " + failures.join(" | "));
   }
 
+  // Pomocné archívy sa nemenia tak často ako LIVE snapshot.
+  // Držíme ich v pamäti a nesťahujeme veľké súbory pri každom 2-minútovom cykle.
+  const refreshCache = new Map();
+  async function getCachedJSON(url, ttlMs) {
+    const cached = refreshCache.get(url);
+    if (cached && Date.now() - cached.loadedAt < ttlMs) return cached.value;
+    const value = await getJSON(url);
+    refreshCache.set(url, { loadedAt: Date.now(), value });
+    return value;
+  }
+
+  let lastRenderedSignalArchive = null;
+  let lastRenderedBttsArchive = null;
+  let lastRenderedMatchArchive = null;
+  let lastRenderedPerformanceGreen = null;
+  let lastRenderedPerformanceBtts = null;
+
   async function loadPermanentMatchHistory() {
     if (!matchHistoryPromise) {
       const parseLines = content => {
@@ -4310,19 +4327,19 @@
     try {
       const [current, historyData, signalArchive, bttsArchive, matchArchive, permanentMatchHistory] = await Promise.all([
         getJSON(CURRENT_URL),
-        getJSON(HISTORY_URL).catch(error => {
+        getCachedJSON(HISTORY_URL, 5 * 60 * 1000).catch(error => {
           console.warn("História zberu nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
           return [];
         }),
-        getJSON(SIGNAL_ARCHIVE_URL).catch(error => {
+        getCachedJSON(SIGNAL_ARCHIVE_URL, 4 * 60 * 1000).catch(error => {
           console.warn("Trvalý archív signálov nie je dostupný:", error);
           return null;
         }),
-        getJSON(BTTS_ARCHIVE_URL).catch(error => {
+        getCachedJSON(BTTS_ARCHIVE_URL, 4 * 60 * 1000).catch(error => {
           console.warn("BTTS archív zatiaľ nie je dostupný:", error);
           return null;
         }),
-        getJSON(MATCH_ARCHIVE_URL).catch(error => {
+        getCachedJSON(MATCH_ARCHIVE_URL, 10 * 60 * 1000).catch(error => {
           console.warn("Archív zápasov nie je dostupný:", error);
           return null;
         }),
@@ -4381,14 +4398,33 @@
         }
 
         renderSummary();
-        if (signalArchive) renderServerSignalArchive(signalArchive, greenSignalArchiveEl);
-        else if (greenSignalArchiveEl) { greenSignalArchiveEl.innerHTML = ""; addText(greenSignalArchiveEl, "Archív zelených signálov sa nepodarilo načítať."); }
-        if (bttsArchive) renderBttsSignalArchive(bttsArchive, bttsSignalArchiveEl);
-        else if (bttsSignalArchiveEl) { bttsSignalArchiveEl.innerHTML = ""; addText(bttsSignalArchiveEl, "Archív BTTS sa nepodarilo načítať."); }
-        renderMatchArchive(matchArchive);
+        if (signalArchive !== lastRenderedSignalArchive) {
+          if (signalArchive !== lastRenderedSignalArchive) {
+            if (signalArchive) renderServerSignalArchive(signalArchive, greenSignalArchiveEl);
+            else if (greenSignalArchiveEl) { greenSignalArchiveEl.innerHTML = ""; addText(greenSignalArchiveEl, "Archív zelených signálov sa nepodarilo načítať."); }
+            lastRenderedSignalArchive = signalArchive;
+          }
+          if (bttsArchive !== lastRenderedBttsArchive) {
+            if (bttsArchive) renderBttsSignalArchive(bttsArchive, bttsSignalArchiveEl);
+            else if (bttsSignalArchiveEl) { bttsSignalArchiveEl.innerHTML = ""; addText(bttsSignalArchiveEl, "BTTS archív sa nepodarilo načítať."); }
+            lastRenderedBttsArchive = bttsArchive;
+          }
+          if (matchArchive !== lastRenderedMatchArchive) {
+            renderMatchArchive(matchArchive);
+            lastRenderedMatchArchive = matchArchive;
+          }
+          lastRenderedMatchArchive = matchArchive;
+        }
         renderSystemStats(current, signalArchive, matchArchive);
         renderApiDataQuality(current, matchArchive, matchHistoryData);
+        if (
+        signalArchive !== lastRenderedPerformanceGreen ||
+        bttsArchive !== lastRenderedPerformanceBtts
+      ) {
         renderFootballPerformanceCenter(signalArchive, bttsArchive);
+        lastRenderedPerformanceGreen = signalArchive;
+        lastRenderedPerformanceBtts = bttsArchive;
+      }
 
         signalEl.textContent =
           `ZASTARANÉ DÁTA – NIE LIVE | Posledný zber: ${current.collected_at || "neznámy čas"} | Signály zablokované`;
@@ -4525,7 +4561,14 @@
       renderMatchArchive(matchArchive);
       renderSystemStats(current, signalArchive, matchArchive);
       renderApiDataQuality(current, matchArchive, matchHistoryData);
-      renderFootballPerformanceCenter(signalArchive, bttsArchive);
+      if (
+        signalArchive !== lastRenderedPerformanceGreen ||
+        bttsArchive !== lastRenderedPerformanceBtts
+      ) {
+        renderFootballPerformanceCenter(signalArchive, bttsArchive);
+        lastRenderedPerformanceGreen = signalArchive;
+        lastRenderedPerformanceBtts = bttsArchive;
+      }
 
       signalEl.textContent =
         `Aktualizované: ${new Date().toLocaleTimeString("sk-SK")} | LIVE: ${matches.length}`;
