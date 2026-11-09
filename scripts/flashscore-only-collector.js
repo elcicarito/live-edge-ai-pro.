@@ -66,7 +66,12 @@ function allStats(payload) {
   }
   return out;
 }
-function makeMatch(raw, competition, stats, statsError) {
+function commentaryMinute(payload) {
+  const comments = Array.isArray(payload?.comments) ? payload.comments : [];
+  const latest = comments.find(item => typeof item?.minute === "string" && item.minute.trim());
+  return latest ? latest.minute.trim() : null;
+}
+function makeMatch(raw, competition, stats, statsError, liveMinute, commentaryError) {
   const home = nameOf(raw.home), away = nameOf(raw.away);
   const stage = String(raw.stage || raw.status || "LIVE");
   return {
@@ -79,9 +84,10 @@ function makeMatch(raw, competition, stats, statsError) {
     country: competition?.country?.name || null,
     status: raw.status || "live",
     stage,
-    // Exact elapsed time passed through from Flashscore's raw live-feed BA field.
-    live_minute: raw.live_minute ?? null,
-    minute_source: raw.live_minute ? "flashscore_live_feed_BA" : null,
+    // Minute comes from the newest Flashscore commentary item, never the BA period-score field.
+    live_minute: liveMinute,
+    minute_source: liveMinute ? "Flashscore commentary MB" : null,
+    commentary_error: commentaryError || null,
     start_time: raw.start_time || null,
     collected_at: now,
     home_score: numberOf(raw.home_score),
@@ -127,17 +133,32 @@ async function main() {
       const index = cursor++;
       if (index >= rawMatches.length) return;
       const { raw, competition } = rawMatches[index];
-      let stats = [], statsError = null;
+      let stats = [], statsError = null, liveMinute = null, commentaryError = null;
+      const tasks = [];
       if (raw.has_statistics === true) {
-        try {
-          const payload = await getJSON("/matches/statistics", { match: String(raw.id) });
-          stats = allStats(payload);
-        } catch (error) {
-          statsError = error.message;
-          errors.push(String(raw.id) + ": " + statsError);
-        }
+        tasks.push((async () => {
+          try {
+            const payload = await getJSON("/matches/statistics", { match: String(raw.id) });
+            stats = allStats(payload);
+          } catch (error) {
+            statsError = error.message;
+            errors.push(String(raw.id) + " statistics: " + statsError);
+          }
+        })());
       }
-      records.push(makeMatch(raw, competition, stats, statsError));
+      if (Array.isArray(raw.available_tabs) && raw.available_tabs.includes("commentary")) {
+        tasks.push((async () => {
+          try {
+            const payload = await getJSON("/matches/commentary", { match: String(raw.id) });
+            liveMinute = commentaryMinute(payload);
+          } catch (error) {
+            commentaryError = error.message;
+            errors.push(String(raw.id) + " commentary: " + commentaryError);
+          }
+        })());
+      }
+      await Promise.all(tasks);
+      records.push(makeMatch(raw, competition, stats, statsError, liveMinute, commentaryError));
     }
   });
   await Promise.all(workers);
