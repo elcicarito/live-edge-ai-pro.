@@ -205,6 +205,67 @@ jobs:
           else:
               report["sample_statistics"] = usable_statistics
 
+          # Compare Flashscore LIVE fixtures with the latest committed ESPN snapshot.
+          try:
+              with open("data/live-current.json", "r", encoding="utf-8") as handle:
+                  espn_snapshot = json.load(handle)
+              import re
+              import unicodedata
+              from datetime import datetime, timezone
+
+              def norm_team(value):
+                  if isinstance(value, dict):
+                      value = value.get("name") or value.get("displayName") or ""
+                  value = unicodedata.normalize("NFKD", str(value or ""))
+                  value = "".join(ch for ch in value if not unicodedata.combining(ch))
+                  return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+              def key_for(home, away):
+                  h, a = norm_team(home), norm_team(away)
+                  return (h, a) if h and a else None
+
+              espn_fixtures = []
+              for record in (espn_snapshot.get("records", []) or []):
+                  match = record.get("match", record) if isinstance(record, dict) else {}
+                  if not isinstance(match, dict) or str(match.get("status") or "").lower() not in ("live", "inplay", "in_play"):
+                      continue
+                  key = key_for(match.get("home"), match.get("away"))
+                  if key:
+                      espn_fixtures.append({"key": key, "home": match.get("home"), "away": match.get("away")})
+
+              flash_fixtures = []
+              for match in live_matches:
+                  home = match.get("home", {})
+                  away = match.get("away", {})
+                  home = home.get("name") if isinstance(home, dict) else home
+                  away = away.get("name") if isinstance(away, dict) else away
+                  key = key_for(home, away)
+                  if key:
+                      flash_fixtures.append({"key": key, "home": home, "away": away})
+
+              espn_keys = {fixture["key"] for fixture in espn_fixtures}
+              flash_keys = {fixture["key"] for fixture in flash_fixtures}
+              snapshot_time = espn_snapshot.get("collected_at")
+              snapshot_age_seconds = None
+              if snapshot_time:
+                  parsed_time = datetime.fromisoformat(snapshot_time.replace("Z", "+00:00"))
+                  snapshot_age_seconds = round((datetime.now(timezone.utc) - parsed_time).total_seconds())
+
+              report["provider_comparison"] = {
+                  "comparison_basis": "committed ESPN snapshot vs current Flashscore LIVE feed",
+                  "espn_snapshot_collected_at": snapshot_time,
+                  "espn_snapshot_age_seconds": snapshot_age_seconds,
+                  "espn_live_count": len(espn_fixtures),
+                  "flashscore_live_count": len(flash_fixtures),
+                  "matched_count": len(espn_keys & flash_keys),
+                  "flashscore_only_count": len(flash_keys - espn_keys),
+                  "espn_only_count": len(espn_keys - flash_keys),
+                  "flashscore_only": [{"home": f["home"], "away": f["away"]} for f in flash_fixtures if f["key"] not in espn_keys],
+                  "espn_only": [{"home": f["home"], "away": f["away"]} for f in espn_fixtures if f["key"] not in flash_keys]
+              }
+          except Exception as exc:
+              report["provider_comparison"] = {"error": type(exc).__name__ + ": " + str(exc)[:250]}
+
           print("FLASHSCORE_PROBE_REPORT=" + json.dumps(report, ensure_ascii=False))
           if health_status != 200 or live_status != 200 or today_status != 200:
               raise SystemExit("One or more core Flashscore endpoints did not return HTTP 200")
