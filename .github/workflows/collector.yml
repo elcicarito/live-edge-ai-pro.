@@ -1472,12 +1472,17 @@ jobs:
                 const rawTimelineStats = Array.isArray(match.stats) && match.stats.length
                   ? match.stats
                   : Array.isArray(match.flashscore_stats) ? match.flashscore_stats : [];
+                const toFiniteNumber = value => {
+                  if (value === null || value === undefined || value === "") return null;
+                  const parsed = Number(value);
+                  return Number.isFinite(parsed) ? parsed : null;
+                };
                 const stats = rawTimelineStats
                   .filter(stat => stat && typeof stat.label === "string")
                   .map(stat => ({
                     label: stat.label,
-                    home: Number.isFinite(Number(stat.home)) ? Number(stat.home) : null,
-                    away: Number.isFinite(Number(stat.away)) ? Number(stat.away) : null,
+                    home: toFiniteNumber(stat.home),
+                    away: toFiniteNumber(stat.away),
                     suffix: stat.suffix || "",
                     ...(stat.source ? { source: stat.source } : {}),
                     ...(stat.period ? { period: stat.period } : {})
@@ -1547,8 +1552,8 @@ jobs:
 
                 const previousHomeScore = previousSnapshot?.home_score;
                 const previousAwayScore = previousSnapshot?.away_score;
-                const homeScore = Number.isFinite(Number(match.home_score)) ? Number(match.home_score) : null;
-                const awayScore = Number.isFinite(Number(match.away_score)) ? Number(match.away_score) : null;
+                const homeScore = toFiniteNumber(match.home_score);
+                const awayScore = toFiniteNumber(match.away_score);
                 const scoreChanges = {
                   home: numericPair(previousHomeScore, homeScore),
                   away: numericPair(previousAwayScore, awayScore)
