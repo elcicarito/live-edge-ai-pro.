@@ -606,12 +606,20 @@ jobs:
                   seen.add(key);
 
                   let stats = [];
-                  try {
-                    const payload = await getFlashscoreJSON("/matches/statistics", { match: String(raw.id) });
-                    stats = normalizeFlashscoreStats(payload);
-                    if (stats.length) result.stats_available_count++;
-                  } catch (error) {
-                    result.errors.push("Štatistiky " + home + " – " + away + ": " + error.message);
+                  // Flashscore explicitly marks matches without a statistics tab.
+                  // Skip those requests instead of wasting one API call per poll.
+                  const availableTabs = Array.isArray(raw.available_tabs) ? raw.available_tabs : null;
+                  const statisticsAvailable =
+                    raw.has_statistics !== false &&
+                    (!availableTabs || availableTabs.includes("statistics"));
+                  if (statisticsAvailable) {
+                    try {
+                      const payload = await getFlashscoreJSON("/matches/statistics", { match: String(raw.id) });
+                      stats = normalizeFlashscoreStats(payload);
+                      if (stats.length) result.stats_available_count++;
+                    } catch (error) {
+                      result.errors.push("Štatistiky " + home + " – " + away + ": " + error.message);
+                    }
                   }
 
                   const espnMatch = espnByKey.get(key);
