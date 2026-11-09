@@ -4281,6 +4281,14 @@
 
       addText(engine, "SMART SIGNAL ENGINE v14", "18px");
       addText(engine, `Zdroj: ${(current.source_providers || [current.source || "neznámy"]).join(" + ")}`);
+      const providerStatus = current.source_status || {};
+      if (providerStatus.ESPN) {
+        addText(engine, `ESPN: ${providerStatus.ESPN.live_count ?? 0} LIVE | ${providerStatus.ESPN.complete ? "kompletný feed" : "neúplný feed"}`);
+      }
+      if (providerStatus.Flashscore) {
+        const fsStatus = providerStatus.Flashscore;
+        addText(engine, `Flashscore: ${fsStatus.live_count ?? 0} LIVE | navyše ${fsStatus.flashscore_only_count ?? 0} | štatistiky ${fsStatus.stats_available_count ?? 0} | ${fsStatus.complete ? "kompletný" : "čiastočný"}`);
+      }
       addText(engine, `Dáta: ${current.collected_at || "neznámy čas"}`);
       addText(engine, `Posledná kontrola: ${new Date().toLocaleTimeString("sk-SK")}`);
 
