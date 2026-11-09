@@ -77,8 +77,33 @@ jobs:
               '    return {' + chr(10) + '        "_diagnostic_raw_live_rows": diagnostic_raw_live_rows,' + chr(10) + '        "sport": refs.sport_ref(sport_id),',
               1
           )
-          p.write_text(source)
-          print("Temporary raw common_feed and LIVE list-feed diagnostics enabled.")
+          # Capture the raw incremental update feeds (r_1_1 / u_1_1) as well.
+          p = Path(".flashscore-scraper/flashscore/matches.py")
+          source = p.read_text()
+          start = source.find("def get_live_updates(sport):")
+          end = source.find("\ndef ", start + 1)
+          if start < 0:
+              raise SystemExit("get_live_updates function not found")
+          if end < 0:
+              end = len(source)
+          block = source[start:end]
+          raw_line = "    updates = {}\n"
+          if "_diagnostic_raw_update_rows" not in block:
+              if raw_line not in block:
+                  raise SystemExit("live updates insertion point not found")
+              block = block.replace(
+                  raw_line,
+                  raw_line + '    diagnostic_raw_update_rows = [r for t in (changes, extra) for r in P.parse_records(t) if r.get("AA")][:100]\n',
+                  1
+              )
+              old_return = '    return {"sport": refs.sport_ref(sport_id), "count": len(updates),\n            "updates": list(updates.values())}'
+              new_return = '    return {"sport": refs.sport_ref(sport_id), "count": len(updates),\n            "_diagnostic_raw_update_rows": diagnostic_raw_update_rows,\n            "updates": list(updates.values())}'
+              if old_return not in block:
+                  raise SystemExit("live updates return marker not found")
+              block = block.replace(old_return, new_return, 1)
+              source = source[:start] + block + source[end:]
+              p.write_text(source)
+          print("Temporary raw common_feed, LIVE list-feed and incremental-update diagnostics enabled.")
           PY
 
       - name: Build isolated Flashscore API
@@ -104,6 +129,26 @@ jobs:
           done
           echo "Flashscore API did not become healthy; ESPN collection will continue."
           exit 1
+
+      - name: Inspect Flashscore incremental live-update clock fields
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import json
+          import urllib.request
+          url = "http://127.0.0.1:8000/matches/live-updates?sport=football"
+          try:
+              with urllib.request.urlopen(url, timeout=30) as response:
+                  data = json.loads(response.read().decode("utf-8"))
+              rows = data.get("_diagnostic_raw_update_rows") or []
+              print("FLASHSCORE RAW INCREMENTAL UPDATE DIAGNOSTICS:", json.dumps({
+                  "update_count": data.get("count"),
+                  "raw_row_count": len(rows),
+                  "rows": rows[:30],
+              }, ensure_ascii=False))
+          except Exception as exc:
+              print("FLASHSCORE INCREMENTAL UPDATE DIAGNOSTIC ERROR:", repr(exc))
+          PY
 
       - name: Collect fresh LIVE football data
         run: |
