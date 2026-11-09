@@ -542,7 +542,8 @@ jobs:
               matched_count: 0,
               stats_enriched_count: 0,
               stats_available_count: 0,
-              errors: []
+              errors: [],
+              feed_complete: false
             };
             const base = "http://127.0.0.1:8000";
             const getFlashscoreJSON = async (path, params = {}) => {
@@ -571,6 +572,7 @@ jobs:
               if (!Array.isArray(feed?.competitions)) {
                 throw new Error("Flashscore LIVE feed nemá platné pole competitions.");
               }
+              result.feed_complete = true;
 
               const espnByKey = new Map();
               for (const match of espnFixtures) {
@@ -2300,17 +2302,25 @@ jobs:
               return { home, away };
             }
 
-            if (archiveSafe) {
+            // BTTS môže pracovať aj s kompletným Flashscore LIVE feedom,
+            // nezávisle od ESPN feed guarda. Pôvodné ESPN signály ostávajú
+            // chránené podmienkou archiveSafe v ich vlastnom modeli.
+            if (archiveSafe || flashscoreResult.feed_complete) {
               // Každý prah 1:0 je samostatný testovací variant.
               // Jeden zápas môže patriť do viacerých tierov, ale každý tier
               // sa uloží iba raz. Tak vieme porovnať 8 / 10 / 12 striel.
               for (const record of records) {
                 const match = record?.match;
                 if (!match || !isLive(match)) continue;
+                // Flashscore BTTS môže použiť iba potvrdený kompletný LIVE feed.
+                // ESPN si zachováva pôvodnú ochranu pred podozrivým feedom.
+                if (match.source !== "Flashscore" && !archiveSafe) continue;
                 const id = frontendMatchId(match);
                 if (!id) continue;
 
-                const minute = Number(match.live_minute);
+                const minuteText = String(match.live_minute ?? "").trim();
+                const minuteMatch = minuteText.match(/^~?(\d{1,3})(?:\+\d+)?$/);
+                const minute = minuteMatch ? Number(minuteMatch[1]) : NaN;
                 const homeScore = Number(match.home_score);
                 const awayScore = Number(match.away_score);
                 const age = Date.now() - Date.parse(record.collected_at || "");
@@ -2318,9 +2328,12 @@ jobs:
                     !Number.isFinite(homeScore) || !Number.isFinite(awayScore) ||
                     !Number.isFinite(age) || age < 0 || age > 7 * 60 * 1000) continue;
 
-                const sot = bttsStat(match.stats, "shots on target");
-                const off = bttsStat(match.stats, "shots off target");
-                const total = bttsStat(match.stats, "total shots");
+                const sourceStats = Array.isArray(match.stats) && match.stats.length
+                  ? match.stats
+                  : (Array.isArray(match.flashscore_stats) ? match.flashscore_stats : []);
+                const sot = bttsStat(sourceStats, "shots on target");
+                const off = bttsStat(sourceStats, "shots off target");
+                const total = bttsStat(sourceStats, "total shots");
                 if (!sot || (!off && !total)) continue;
                 const combinedSot = sot.home + sot.away;
                 // ESPN exposes totalShots directly; use it when shotsOffTarget is absent.
@@ -2372,6 +2385,7 @@ jobs:
                     combinedSot,
                     combinedShots,
                     competition: match.competition || match.league || null,
+                    source: match.source || "ESPN",
                     tier: candidate.tier,
                     tierKey: candidate.tierKey,
                     createdAt: record.collected_at,
@@ -2382,7 +2396,8 @@ jobs:
                       minute,
                       home_score: match.home_score ?? null,
                       away_score: match.away_score ?? null,
-                      raw_stats: Array.isArray(match.stats) ? match.stats : [],
+                      source: match.source || "ESPN",
+                      raw_stats: sourceStats,
                       raw_match: match
                     }
                   });
@@ -2396,8 +2411,52 @@ jobs:
                 .filter(item => item?.status_confirmation === "confirmed_finished" && item.final_match)
                 .map(item => [frontendMatchId(item.final_match) || String(item.id || ""), item.final_match])
             );
+            const liveFlashscoreIds = new Set(
+              records
+                .filter(record => record?.match?.source === "Flashscore")
+                .map(record => frontendMatchId(record.match))
+            );
             for (const signal of bttsArchive.signals) {
-              const finalMatch = bttsFinals.get(String(signal.matchId));
+              let finalMatch = bttsFinals.get(String(signal.matchId));
+
+              // Flashscore zápasy nie sú súčasťou ESPN archívu. Po zmiznutí
+              // z LIVE feedu over ich stav priamo cez Flashscore match detail.
+              // Nikdy nevyhodnocuj signál iba preto, že zápas zmizol z feedu.
+              if (!finalMatch && signal.source === "Flashscore" &&
+                  signal.status === "OPEN" && !liveFlashscoreIds.has(String(signal.matchId))) {
+                try {
+                  const flashscoreId = String(signal.matchId).replace(/^flashscore:/, "");
+                  const response = await fetch(
+                    "http://127.0.0.1:8000/matches/details?match=" + encodeURIComponent(flashscoreId),
+                    {
+                      headers: { "Accept": "application/json", "User-Agent": "LIVE-EDGE-AI-PRO/9.2" },
+                      signal: AbortSignal.timeout(20000),
+                      cache: "no-store"
+                    }
+                  );
+                  if (response.ok) {
+                    const detail = await response.json();
+                    if (isFinished({ status: detail.status }) &&
+                        detail.home_score !== null && detail.home_score !== undefined &&
+                        detail.away_score !== null && detail.away_score !== undefined &&
+                        Number.isFinite(Number(detail.home_score)) &&
+                        Number.isFinite(Number(detail.away_score))) {
+                      finalMatch = {
+                        status: detail.status,
+                        home_score: Number(detail.home_score),
+                        away_score: Number(detail.away_score),
+                        incidents: null
+                      };
+                      signal.flashscoreFinalVerifiedAt = signalNow;
+                      signal.flashscoreFinalStatus = detail.status;
+                    }
+                  } else if (response.status !== 404) {
+                    console.log("BTTS FLASHSCORE FINAL CHECK:", flashscoreId, "HTTP", response.status);
+                  }
+                } catch (error) {
+                  console.log("BTTS FLASHSCORE FINAL CHECK ERROR:", signal.matchId, error.message);
+                }
+              }
               if (!finalMatch) continue;
 
               // Nové signály vyhodnoť rovnako ako doteraz.
