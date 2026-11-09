@@ -2,12 +2,14 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const zlib = require("node:zlib");
 
 const BASE = "http://127.0.0.1:8000";
 const DATA = "data";
 const CURRENT_PATH = path.join(DATA, "flashscore-live-current.json");
 const ARCHIVE_PATH = path.join(DATA, "flashscore-match-archive.json");
-const TIMELINE_PATH = path.join(DATA, "flashscore-match-timeline.jsonl");
+const weekKey = (() => { const d = new Date(); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day + 3); const first = new Date(Date.UTC(d.getUTCFullYear(), 0, 4)); const week = 1 + Math.round(((d - first) / 86400000 - 3 + ((first.getUTCDay() + 6) % 7)) / 7); return d.getUTCFullYear() + "-W" + String(week).padStart(2, "0"); })();
+const TIMELINE_PATH = path.join(DATA, "flashscore-match-timeline-" + weekKey + ".jsonl.gz");
 const MAX_ARCHIVE_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 const now = new Date().toISOString();
 
@@ -200,7 +202,7 @@ async function main() {
   };
 
   if (timelineLines.length) {
-    fs.appendFileSync(TIMELINE_PATH, timelineLines.join("\n") + "\n");
+    fs.appendFileSync(TIMELINE_PATH, zlib.gzipSync(Buffer.from(timelineLines.join("\n") + "\n")));
   }
   atomicJson(ARCHIVE_PATH, archive);
   atomicJson(CURRENT_PATH, current);
@@ -209,6 +211,7 @@ async function main() {
     stats_match_count: current.stats_match_count,
     stats_error_count: errors.length,
     archive_matches: Object.keys(archive.matches).length,
+    timeline_file: path.basename(TIMELINE_PATH),
     timeline_snapshots_written: timelineLines.length,
     collected_at: now
   }, null, 2));
