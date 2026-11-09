@@ -22,7 +22,7 @@ jobs:
 
       - name: Restore latest live data snapshot
         run: |
-          git fetch origin live-data
+          git fetch --depth=1 origin live-data
           git checkout origin/live-data -- data/
 
       - name: Checkout pinned Flashscore scraper source
@@ -2595,8 +2595,8 @@ jobs:
             # Football collector runs are serialized to preserve the newest snapshot.
             # Retry fetch/rebase/push so fresh football data is not lost on a ref race.
             for attempt in 1 2 3 4 5; do
-              git fetch origin live-data
-              git rebase origin/live-data
+              git fetch --depth=1 origin live-data
+              git rebase --onto origin/live-data HEAD~1
               if git push origin HEAD:live-data; then
                 exit 0
               fi
