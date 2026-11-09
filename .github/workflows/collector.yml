@@ -26,6 +26,7 @@ jobs:
 
           node <<'NODE'
           const fs = require("fs");
+          const { classifyESPNFeedState } = require("./scripts/espn-feed-state.js");
           const zlib = require("zlib");
 
           const ESPN_SITE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
@@ -750,15 +751,12 @@ jobs:
 
             archive.feed_guard = feedGuard;
 
-            const feedState = !complete
-              ? "PARTIAL"
-              : uniqueFixtures.length === 0
-                ? "NO_LIVE"
-                : archiveSafe
-                  ? "LIVE"
-                  : baseline === null
-                    ? "BASELINE_PENDING"
-                    : "SUSPECTED_DROP";
+            const feedState = classifyESPNFeedState({
+              complete,
+              liveFixtureCount: uniqueFixtures.length,
+              archiveSafe,
+              baseline
+            });
 
             const output = {
               collected_at: new Date().toISOString(),
