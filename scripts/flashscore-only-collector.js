@@ -131,7 +131,8 @@ function makeMatch(raw, competition, stats, statsError, commentary, commentaryEr
     away_id: raw.away?.id || null,
     competition: competition?.name || "Neznáma súťaž",
     country: competition?.country?.name || null,
-    status: raw.status || "live",
+    status: detail?.status || raw.status || "live",
+    status_text: stage,
     stage,
     // The current clock is derived only from Flashscore's current-stage start timestamp.
     // Commentary MB remains a separate last-event field and is never used as the live clock.
