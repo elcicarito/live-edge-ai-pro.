@@ -3797,7 +3797,7 @@
     leagueLine.style.cssText = "font-size:12px;color:#a8b8cc;margin:2px 0 9px;";
     card.appendChild(leagueLine);
     if (match.source === "Flashscore") {
-      addText(card, "ZDROJ: FLASHSCORE · DOPLNKOVÝ LIVE FEED · SIGNÁLY ZATIAĽ VYPNUTÉ", "10px");
+      addText(card, "ZDROJ: FLASHSCORE · ZELENÝ MODEL LEN ESPN · BTTS MONITORING AKTÍVNY PRI SPLNENÍ PODMIENOK", "10px");
     } else if (match.stats_source === "Flashscore") {
       addText(card, "ŠTATISTIKY DOPLNENÉ Z FLASHSCORE · MODEL POUŽÍVA PÔVODNÉ ESPN DÁTA", "10px");
     }
