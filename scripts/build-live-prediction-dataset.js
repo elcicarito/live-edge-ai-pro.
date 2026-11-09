@@ -57,8 +57,8 @@ function buildDataset(observations, outcomes) {
     matchedObservations++;
     const label = classifyRemainderGoals(observation.score, outcome.final_score);
     if (!label) { invalidLabels++; continue; }
-    const source = String(observation.source || "unknown");
     sourceCounts[source] = (sourceCounts[source] || 0) + 1;
+    labelCounts[label.label] = (labelCounts[label.label] || 0) + 1;
     rows.push({
       schema_version: 1, dataset_version: "remainder-development-v1",
       sample_id: observationId, match_id: String(observation.match_id),
