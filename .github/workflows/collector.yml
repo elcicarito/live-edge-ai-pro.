@@ -33,6 +33,33 @@ jobs:
           ref: af784a918fc94339fd2c8ff0fadc1da69a6139d8
           path: .flashscore-scraper
 
+      - name: Expose temporary Flashscore raw clock diagnostics
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path(".flashscore-scraper/flashscore/matches.py")
+          if not p.exists():
+              print("Flashscore source unavailable; raw diagnostics skipped.")
+              raise SystemExit(0)
+          source = p.read_text()
+          marker = '    return summary\n'
+          start = source.find('def get_details(match):')
+          if start < 0:
+              raise SystemExit("get_details function not found")
+          end = source.find('\ndef ', start + 1)
+          if end < 0:
+              end = len(source)
+          block = source[start:end]
+          if 'diagnostic_core_fields' not in block:
+              if marker not in block:
+                  raise SystemExit("get_details return marker not found; refusing unsafe patch")
+              block = block.replace(marker, '    summary["diagnostic_core_fields"] = core\n' + marker, 1)
+              source = source[:start] + block + source[end:]
+              p.write_text(source)
+          print("Temporary raw common_feed diagnostics enabled for match details.")
+          PY
+
       - name: Build isolated Flashscore API
         continue-on-error: true
         run: |
