@@ -57,6 +57,11 @@ jobs:
           echo "Flashscore API did not become healthy; ESPN collection will continue."
           exit 1
 
+      - name: Collect isolated Flashscore-only archive (shadow validation)
+        continue-on-error: true
+        run: |
+          node scripts/flashscore-only-collector.js
+
       - name: Collect fresh LIVE football data
         run: |
           mkdir -p data
