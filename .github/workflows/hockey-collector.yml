@@ -22,18 +22,57 @@ jobs:
         run: |
           git fetch --depth=1 origin hockey-data-v2
           git checkout origin/hockey-data-v2 -- data/
+      - name: Checkout pinned Flashscore scraper source
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: omkarcloud/flashscore-scraper
+          ref: af784a918fc94339fd2c8ff0fadc1da69a6139d8
+          path: .flashscore-scraper
+      - name: Build isolated Flashscore API
+        continue-on-error: true
+        run: |
+          if [ -f .flashscore-scraper/Dockerfile ]; then
+            docker build -t live-edge-hockey-flashscore .flashscore-scraper
+          else
+            echo "Flashscore scraper unavailable; ESPN hockey collection will continue."
+            exit 1
+          fi
+      - name: Start Flashscore API
+        continue-on-error: true
+        run: |
+          docker run -d --rm --name live-edge-hockey-flashscore -p 127.0.0.1:8000:8000 live-edge-hockey-flashscore
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8000/health -o /tmp/hockey-flashscore-health.json; then
+              cat /tmp/hockey-flashscore-health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Flashscore API did not become healthy; ESPN hockey collection will continue."
+          exit 1
       - name: Collect ESPN hockey competitions
         run: node scripts/hockey-collector.mjs
+      - name: Collect Flashscore LIVE hockey and timestamped statistics
+        run: |
+          if curl --silent --fail http://127.0.0.1:8000/health >/dev/null; then
+            node scripts/hockey-flashscore-collector.mjs
+          else
+            echo "Flashscore hockey unavailable in this run; keeping the last successful Flashscore snapshot."
+          fi
+      - name: Stop Flashscore API
+        if: always()
+        run: docker logs live-edge-hockey-flashscore 2>&1 | tail -n 80 || true
       - name: Commit hockey data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch --depth=1 origin hockey-data-v2
           git reset --mixed origin/hockey-data-v2
-          git add data/hockey-current.json data/hockey-archive.json data/hockey-collector-status.json
+          git add data/hockey-current.json data/hockey-archive.json data/hockey-collector-status.json data/hockey-flashscore-current.json data/hockey-flashscore-archive.json data/hockey-flashscore-history.jsonl
           if git diff --cached --quiet; then
             echo "No hockey data changes."
             exit 0
           fi
-          git commit -m "Update ESPN hockey live data"
+          git commit -m "Update ESPN and Flashscore hockey live data"
           git push origin HEAD:hockey-data-v2
