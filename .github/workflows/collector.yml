@@ -2695,6 +2695,11 @@ jobs:
           });
           NODE
 
+      - name: Collect Flashscore match archive (shadow)
+        continue-on-error: true
+        run: |
+          node scripts/flashscore-only-collector.js
+
       - name: Build LIVE prediction training dataset
         run: |
           node scripts/build-live-prediction-dataset.js
