@@ -76,9 +76,9 @@ function makeMatch(raw, competition, stats, statsError) {
     country: competition?.country?.name || null,
     status: raw.status || "live",
     stage,
-    // Live list currently has no verified elapsed-minute field. Never fabricate one.
-    live_minute: null,
-    minute_source: "not_provided_by_flashscore_live_list",
+    // Exact elapsed time passed through from Flashscore's raw live-feed BA field.
+    live_minute: raw.live_minute ?? null,
+    minute_source: raw.live_minute ? "flashscore_live_feed_BA" : null,
     start_time: raw.start_time || null,
     collected_at: now,
     home_score: numberOf(raw.home_score),
