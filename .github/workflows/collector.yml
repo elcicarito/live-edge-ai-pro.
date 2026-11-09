@@ -57,7 +57,26 @@ jobs:
               block = block.replace(marker, '    summary["diagnostic_core_fields"] = core\n' + marker, 1)
               source = source[:start] + block + source[end:]
               p.write_text(source)
-          print("Temporary raw common_feed diagnostics enabled for match details.")
+          # Also expose the raw LIVE list-feed rows. The candidate key BA
+          # is ambiguous in public notes; inspect its actual values alongside
+          # the other row fields before treating it as a clock.
+          p = Path(".flashscore-scraper/flashscore/matches.py")
+          source = p.read_text()
+          marker = '    return {\n        "sport": refs.sport_ref(sport_id),'
+          replacement = '''    diagnostic_rows = [
+        row for row in P.parse_records(text)
+        if row.get("AA") and P.to_int(row.get("AB")) == 2
+    ][:5]
+    return {
+        "_diagnostic_raw_live_rows": [
+            {"id": row.get("AA"), "fields": row} for row in diagnostic_rows
+        ],
+        "sport": refs.sport_ref(sport_id),'''
+          if marker not in source:
+              raise SystemExit("get_matches return marker not found; refusing unsafe patch")
+          source = source.replace(marker, replacement, 1)
+          p.write_text(source)
+          print("Temporary raw common_feed and LIVE list-feed diagnostics enabled.")
           PY
 
       - name: Build isolated Flashscore API
