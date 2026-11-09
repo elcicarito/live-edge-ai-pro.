@@ -214,7 +214,10 @@ async function main() {
   if (!previousIndex || previousIndex.source !== "Flashscore" || !Array.isArray(previousIndex.weeks)) {
     throw new Error("Flashscore timeline index má neplatnú štruktúru; odmietam prepísať.");
   }
-  const allWeeks = [...new Set([...previousIndex.weeks, weekKey])].sort();
+  const existingWeeks = previousIndex.weeks
+    .map(item => typeof item === "string" ? item : item?.week)
+    .filter(week => typeof week === "string" && /^\\d{4}-W\\d{2}$/.test(week));
+  const allWeeks = [...new Set([...existingWeeks, weekKey])].sort();
   const retainedWeeks = allWeeks.slice(-MAX_TIMELINE_WEEKS);
   for (const oldWeek of allWeeks) {
     if (retainedWeeks.includes(oldWeek)) continue;
