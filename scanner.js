@@ -213,7 +213,7 @@
           candidate + (candidate.includes("?") ? "&" : "?") + "t=" + Date.now(),
           {
             cache: "no-store",
-            headers: { "Cache-Control": "no-cache", "Accept": "application/vnd.github+json" }
+            headers: { "Accept": "application/vnd.github+json" }
           }
         );
         if (!response.ok) throw new Error("HTTP " + response.status);
