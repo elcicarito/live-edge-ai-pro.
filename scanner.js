@@ -250,6 +250,154 @@
     return value;
   }
 
+  const flashscoreArchiveDateEl = document.getElementById("flashscore-archive-date");
+  const flashscoreArchiveSearchEl = document.getElementById("flashscore-archive-search");
+  const flashscoreArchiveLoadEl = document.getElementById("flashscore-archive-load");
+  const flashscoreArchiveStatusEl = document.getElementById("flashscore-archive-status");
+  const flashscoreArchiveResultsEl = document.getElementById("flashscore-archive-results");
+  const flashscoreArchiveCountEl = document.getElementById("flashscore-archive-count");
+  let flashscoreArchiveRows = [];
+  let flashscoreArchiveIndex = null;
+  let flashscoreArchiveLoadedWeek = "";
+
+  function localDateKey(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + d;
+  }
+
+  function isoWeekKey(dateString) {
+    const date = new Date(dateString + "T12:00:00Z");
+    if (!Number.isFinite(date.getTime())) return "";
+    const day = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - day + 3);
+    const first = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+    const week = 1 + Math.round(((date - first) / 86400000 - 3 + ((first.getUTCDay() + 6) % 7)) / 7);
+    return date.getUTCFullYear() + "-W" + String(week).padStart(2, "0");
+  }
+
+  async function fetchFlashscoreTimeline(file) {
+    const url = DATA_BASE_URL + file + "?t=" + Date.now();
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) throw new Error("HTTP " + response.status + " pri načítaní " + file);
+    if (typeof DecompressionStream === "undefined") {
+      throw new Error("Tento prehliadač nepodporuje čítanie komprimovaného archívu.");
+    }
+    const compressed = await response.arrayBuffer();
+    const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return new TextDecoder().decode(await new Response(stream).arrayBuffer());
+  }
+
+  function renderFlashscoreArchive() {
+    if (!flashscoreArchiveResultsEl) return;
+    const selectedDate = flashscoreArchiveDateEl?.value || localDateKey();
+    const query = String(flashscoreArchiveSearchEl?.value || "").trim().toLocaleLowerCase("sk");
+    const rows = flashscoreArchiveRows.filter(entry => {
+      const snapshot = entry.snapshot || {};
+      const snapshotDate = snapshot.collected_at ? localDateKey(new Date(snapshot.collected_at)) : "";
+      if (snapshotDate !== selectedDate) return false;
+      const haystack = [
+        entry.home, entry.away, entry.competition, snapshot.live_minute,
+        snapshot.stage, snapshot.home_score, snapshot.away_score
+      ].join(" ").toLocaleLowerCase("sk");
+      return !query || haystack.includes(query);
+    }).sort((a, b) => String(b.snapshot?.collected_at || "").localeCompare(String(a.snapshot?.collected_at || "")));
+
+    flashscoreArchiveResultsEl.innerHTML = "";
+    if (flashscoreArchiveCountEl) flashscoreArchiveCountEl.textContent = String(rows.length);
+    if (!rows.length) {
+      addText(flashscoreArchiveResultsEl, "Pre tento dátum a vyhľadávanie zatiaľ nie sú uložené žiadne snímky.");
+      return;
+    }
+
+    const shown = rows.slice(0, 60);
+    for (const entry of shown) {
+      const snapshot = entry.snapshot || {};
+      const card = document.createElement("div");
+      card.style.cssText = "margin:9px 0;padding:11px;border:1px solid #31445c;border-radius:10px;background:#101d2d;color:#fff;";
+      const heading = document.createElement("strong");
+      const minute = snapshot.live_minute === null || snapshot.live_minute === undefined || snapshot.live_minute === ""
+        ? (snapshot.stage || "LIVE")
+        : String(snapshot.live_minute).replace(/'$/, "") + "'";
+      heading.textContent = (entry.home || "Domáci") + " " + (snapshot.home_score ?? "–") +
+        " : " + (snapshot.away_score ?? "–") + " " + (entry.away || "Hostia") + " · " + minute;
+      card.appendChild(heading);
+      const meta = document.createElement("p");
+      meta.style.cssText = "margin:5px 0;color:#9baabe;font-size:12px;";
+      meta.textContent = (entry.competition || "Neznáma súťaž") + " · " +
+        new Date(snapshot.collected_at || "").toLocaleTimeString("sk-SK");
+      card.appendChild(meta);
+
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = "Štatistiky (" + (Array.isArray(snapshot.stats) ? snapshot.stats.length : 0) + ")";
+      details.appendChild(summary);
+      for (const stat of Array.isArray(snapshot.stats) ? snapshot.stats : []) {
+        const line = document.createElement("p");
+        line.style.cssText = "margin:4px 0;font-size:12px;color:#d6e1ee;";
+        line.textContent = (stat.name || "Štatistika") + ": " +
+          (stat.home ?? "–") + " : " + (stat.away ?? "–") +
+          (stat.period ? " · " + stat.period : "");
+        details.appendChild(line);
+      }
+      card.appendChild(details);
+      flashscoreArchiveResultsEl.appendChild(card);
+    }
+    if (rows.length > shown.length) {
+      addText(flashscoreArchiveResultsEl, "Zobrazených " + shown.length + " z " + rows.length + " snímok. Spresni vyhľadávanie.");
+    }
+  }
+
+  async function loadFlashscoreArchive() {
+    if (!flashscoreArchiveStatusEl || !flashscoreArchiveResultsEl) return;
+    const selectedDate = flashscoreArchiveDateEl?.value || localDateKey();
+    const week = isoWeekKey(selectedDate);
+    flashscoreArchiveStatusEl.textContent = "Načítavam Flashscore archív...";
+    try {
+      const [index, archive] = await Promise.all([
+        getCachedJSON(DATA_BASE_URL + "flashscore-timeline-index.json", 2 * 60 * 1000),
+        getCachedJSON(DATA_BASE_URL + "flashscore-match-archive.json", 2 * 60 * 1000).catch(() => null)
+      ]);
+      if (!index || index.source !== "Flashscore" || !Array.isArray(index.weeks)) {
+        throw new Error("Flashscore archív zatiaľ nemá platný index.");
+      }
+      flashscoreArchiveIndex = index;
+      const uniqueMatches = Object.keys(archive?.matches || {}).length;
+      const weekEntry = index.weeks.find(item => item.week === week);
+      if (!weekEntry) {
+        flashscoreArchiveRows = [];
+        flashscoreArchiveLoadedWeek = week;
+        renderFlashscoreArchive();
+        flashscoreArchiveStatusEl.textContent = "Archív obsahuje " + uniqueMatches +
+          " zápasov. Pre týždeň " + week + " zatiaľ nie sú uložené snímky.";
+        return;
+      }
+      if (flashscoreArchiveLoadedWeek !== week) {
+        const text = await fetchFlashscoreTimeline(weekEntry.file);
+        flashscoreArchiveRows = text.split("\n").filter(Boolean).map(line => {
+          try { return JSON.parse(line); } catch { return null; }
+        }).filter(Boolean);
+        flashscoreArchiveLoadedWeek = week;
+      }
+      renderFlashscoreArchive();
+      flashscoreArchiveStatusEl.textContent = "Zdroj: Flashscore · " + uniqueMatches +
+        " archivovaných zápasov · " + flashscoreArchiveRows.length +
+        " snímok v " + week + ". Zobrazenie je filtrované podľa dátumu.";
+    } catch (error) {
+      flashscoreArchiveStatusEl.textContent = "Nový archív ešte nie je dostupný: " + error.message;
+      flashscoreArchiveResultsEl.innerHTML = "";
+      if (flashscoreArchiveCountEl) flashscoreArchiveCountEl.textContent = "0";
+    }
+  }
+
+  if (flashscoreArchiveDateEl) flashscoreArchiveDateEl.value = localDateKey();
+  if (flashscoreArchiveLoadEl) flashscoreArchiveLoadEl.addEventListener("click", loadFlashscoreArchive);
+  if (flashscoreArchiveDateEl) flashscoreArchiveDateEl.addEventListener("change", loadFlashscoreArchive);
+  if (flashscoreArchiveSearchEl) flashscoreArchiveSearchEl.addEventListener("input", renderFlashscoreArchive);
+  loadFlashscoreArchive();
+
+
   let lastRenderedSignalArchive = null;
   let lastRenderedBttsArchive = null;
   let lastRenderedMatchArchive = null;
