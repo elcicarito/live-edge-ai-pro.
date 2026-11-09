@@ -4276,7 +4276,19 @@
         settleSignals(actualMatches);
       }
 
-      addText(engine, `Stav zberu: ${allowSignals ? "KOMPLETNÝ" : "NEÚPLNÝ"}`);
+      const feedStateLabel = current.feed_state === "NO_LIVE"
+        ? "KOMPLETNÝ – BEZ LIVE ZÁPASOV"
+        : current.feed_state === "PARTIAL"
+          ? "NEÚPLNÝ – CHYBA ZBERU"
+          : current.feed_state === "SUSPECTED_DROP"
+            ? "POZASTAVENÝ – PODOZRIVÝ POKLES"
+            : current.feed_state === "BASELINE_PENDING"
+              ? "ČAKÁ NA POTVRDENIE ZÁKLADNE"
+              : allowSignals ? "KOMPLETNÝ" : "NEÚPLNÝ";
+      addText(engine, `Stav zberu: ${feedStateLabel}`);
+      if (current.feed_state === "NO_LIVE") {
+        addText(engine, "ESPN potvrdil platný feed bez práve prebiehajúcich zápasov. Zber je kompletný; nové LIVE signály sa teraz negenerujú.");
+      }
       addText(engine, `Bezpečná archivácia: ${current.archive_safe ? "ÁNO" : "POZASTAVENÁ"}`);
       if (current.feed_guard_warning === true) {
         addText(
