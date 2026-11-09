@@ -228,6 +228,8 @@ jobs:
                           if values:
                               found[selector] = values[:8]
                       body = page.locator("body").inner_text(timeout=10000)
+                      import time
+                      page_capture_epoch = time.time()
                       with urllib.request.urlopen("http://127.0.0.1:8000/matches/live-updates?sport=football", timeout=30) as response:
                           live_updates = json.loads(response.read().decode("utf-8"))
                       match_update = next((item for item in live_updates.get("updates", []) if item.get("id") == match["id"]), {})
@@ -238,9 +240,8 @@ jobs:
                       stage_values = detail.get("diagnostic_environment_values") or {}
                       stage_start = stage_values.get("eventStageStartTime")
                       stage_id = detail.get("stage_id")
-                      import time
                       from datetime import datetime, timezone
-                      capture_epoch = time.time()
+                      capture_epoch = page_capture_epoch
                       derived_clock = None
                       if stage_start:
                           elapsed = max(0, int(capture_epoch - float(stage_start)))
