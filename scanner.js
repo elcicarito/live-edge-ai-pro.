@@ -197,21 +197,30 @@
   }
 
   async function getJSON(url) {
-    const response = await fetch(
-      url + "?t=" + Date.now(),
-      {
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache"
-        }
-      }
+    const fallbackUrl = url.replace(
+      "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/",
+      "https://cdn.jsdelivr.net/gh/elcicarito/live-edge-ai-pro.@live-data-v2/"
     );
+    const candidates = [...new Set([url, fallbackUrl])];
+    const failures = [];
 
-    if (!response.ok) {
-      throw new Error("HTTP " + response.status + " – " + url);
+    for (const candidate of candidates) {
+      try {
+        const response = await fetch(
+          candidate + (candidate.includes("?") ? "&" : "?") + "t=" + Date.now(),
+          {
+            cache: "no-store",
+            headers: { "Cache-Control": "no-cache" }
+          }
+        );
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        return await response.json();
+      } catch (error) {
+        failures.push(candidate + ": " + (error?.message || String(error)));
+      }
     }
 
-    return response.json();
+    throw new Error("Nepodarilo sa načítať dátový súbor z hlavného ani záložného zdroja. " + failures.join(" | "));
   }
 
   async function loadPermanentMatchHistory() {
@@ -4510,7 +4519,7 @@
         "Dáta nie sú dostupné. Staré zápasy nezobrazujem."
       );
 
-      signalEl.textContent = "CHYBA NAČÍTANIA – signály zablokované.";
+      signalEl.textContent = "CHYBA NAČÍTANIA – signály zablokované. " + (error?.message || "Neznáma chyba");
 
     } finally {
       scanning = false;
