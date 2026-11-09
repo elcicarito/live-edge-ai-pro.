@@ -2122,6 +2122,8 @@ jobs:
                 const minute = Number(match.live_minute);
                 if (match.home_score === null || match.home_score === undefined ||
                     match.away_score === null || match.away_score === undefined) continue;
+                if (match.home_score === null || match.home_score === undefined ||
+                    match.away_score === null || match.away_score === undefined) continue;
                 const homeScore = Number(match.home_score);
                 const awayScore = Number(match.away_score);
 
@@ -2298,7 +2300,8 @@ jobs:
               const item = (stats || []).find(s =>
                 String(s.label || "").toLowerCase() === label
               );
-              if (!item) return null;
+              if (!item || item.home === null || item.home === undefined || item.home === "" ||
+                  item.away === null || item.away === undefined || item.away === "") return null;
               const home = Number(item.home);
               const away = Number(item.away);
               if (!Number.isFinite(home) || !Number.isFinite(away) || home < 0 || away < 0) return null;
