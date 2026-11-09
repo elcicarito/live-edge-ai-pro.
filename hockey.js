@@ -61,7 +61,7 @@
       return pairs.length ? pairs.map(([k,v]) => `<span class="hockey-stat"><b>${esc(k)}:</b> ${esc(v)}</span>`).join("") : '<span class="hockey-muted">Štatistiky zatiaľ nie sú dostupné.</span>';
     };
     return `<article class="hockey-match">
-      <div class="hockey-match-head"><b>🏒 \${esc(match.league_name || match.league_slug)} <small>\${esc(match.source || "ESPN")}</small></b><span>\${esc(state)}\${period} \${esc(match.clock || "")}</span></div>
+      <div class="hockey-match-head"><b>🏒 ${esc(match.league_name || match.league_slug)} <small>${esc(match.source || "ESPN")}</small></b><span>${esc(state)}${period} ${esc(match.clock || "")}</span></div>
       <div class="hockey-score-row"><div>${esc(match.home?.name)}<br>${esc(match.away?.name)}</div><strong>${esc(score(match.home?.score))}<br>${esc(score(match.away?.score))}</strong></div>
       <div class="hockey-periods"><span>Po tretinách – domáci: ${esc((match.periods?.home || []).join(" · ") || "–")}</span><span>Hostia: ${esc((match.periods?.away || []).join(" · ") || "–")}</span></div>
       <details><summary>Štatistiky zápasu</summary><div class="hockey-stats-grid"><div><b>Domáci</b><br>${stats("home")}</div><div><b>Hostia</b><br>${stats("away")}</div></div></details>
@@ -94,12 +94,12 @@
       archiveMatches = mergeSources(espnArchiveMatches, flashArchiveMatches);
       const leagues = [...new Map(archiveMatches.map(m => [m.league_slug, m.league_name || m.league_slug])).entries()];
       const currentValue = leagueFilter.value;
-      leagueFilter.innerHTML = '<option value="">Všetky ligy</option>' + leagues.map(([slug,name]) => \`<option value="\${esc(slug)}">\${esc(name)}</option>\`).join("");
+      leagueFilter.innerHTML = '<option value="">Všetky ligy</option>' + leagues.map(([slug,name]) => `<option value="${esc(slug)}">${esc(name)}</option>`).join("");
       leagueFilter.value = currentValue;
       const matches = mergeSources(current.matches || [], flashCurrent.matches || []);
       const latestCollected = [current.collected_at, flashCurrent.collected_at].filter(Boolean).sort().at(-1);
       const espnCount = (current.matches || []).length, flashCount = (flashCurrent.matches || []).length;
-      liveMeta.textContent = \`ESPN + Flashscore · \${matches.length} unikátnych LIVE zápasov (ESPN: \${espnCount}, Flashscore: \${flashCount}) · Zber: \${dateText(latestCollected)}\`;
+      liveMeta.textContent = `ESPN + Flashscore · ${matches.length} unikátnych LIVE zápasov (ESPN: ${espnCount}, Flashscore: ${flashCount}) · Zber: ${dateText(latestCollected)}`;
       liveList.innerHTML = matches.length ? matches.map(m => card(m,false)).join("") : '<p>ESPN ani Flashscore momentálne nevracajú prebiehajúci hokejový zápas.</p>';
       renderArchive();
     } catch (error) {
