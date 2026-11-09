@@ -64,7 +64,7 @@ jobs:
       - name: Build and start isolated Flashscore API
         run: |
           docker build -t flashscore-clock-diagnostic .flashscore-scraper
-          docker run -d --rm --name flashscore-clock-diagnostic -p 127.0.0.1:8000:8000 flashscore-clock-diagnostic
+          docker run -d --name flashscore-clock-diagnostic -p 127.0.0.1:8000:8000 flashscore-clock-diagnostic
           for attempt in $(seq 1 30); do
             if curl --silent --fail http://127.0.0.1:8000/health; then
               exit 0
@@ -77,7 +77,7 @@ jobs:
           echo "Container logs:"
           docker logs flashscore-clock-diagnostic 2>&1 || true
           echo "Container inspect:"
-          docker inspect flashscore-clock-diagnostic --format '{{json .State}}' 2>&1 || true
+          docker inspect flashscore-clock-diagnostic 2>&1 || true
           exit 1
 
       - name: Inspect current live fixtures and page clocks
