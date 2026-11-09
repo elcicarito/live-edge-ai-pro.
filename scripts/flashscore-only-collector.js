@@ -69,8 +69,11 @@ function allStats(payload) {
 function commentaryInfo(payload) {
   const comments = Array.isArray(payload?.comments) ? payload.comments : [];
   const latest = comments.find(item => typeof item?.minute === "string" && item.minute.trim());
+  const latestClock = comments.find(item => typeof item?.clock === "string" && item.clock.trim());
   return {
     lastEventMinute: latest ? latest.minute.trim() : null,
+    // MK is the clock timestamp attached to a commentary event, not a live timer.
+    lastEventClock: latestClock ? latestClock.clock.trim() : null,
     count: comments.length,
     availableTabs: Array.isArray(payload?.available_tabs) ? payload.available_tabs : []
   };
@@ -93,6 +96,8 @@ function makeMatch(raw, competition, stats, statsError, commentary, commentaryEr
     minute_source: null,
     last_event_minute: commentary.lastEventMinute,
     last_event_minute_source: commentary.lastEventMinute ? "Flashscore commentary MB" : null,
+    last_event_clock: commentary.lastEventClock,
+    last_event_clock_source: commentary.lastEventClock ? "Flashscore commentary MK (event clock)" : null,
     commentary_count: commentary.count,
     available_tabs: commentary.availableTabs,
     commentary_error: commentaryError || null,
@@ -112,6 +117,7 @@ function snapshotOf(match) {
     collected_at: match.collected_at,
     live_minute: match.live_minute,
     last_event_minute: match.last_event_minute,
+    last_event_clock: match.last_event_clock,
     stage: match.stage,
     home_score: match.home_score,
     away_score: match.away_score,
@@ -275,6 +281,7 @@ async function main() {
     commentary_samples: records.slice(0, 8).map(x => ({
       match: x.home + " - " + x.away,
       last_event_minute: x.last_event_minute,
+      last_event_clock: x.last_event_clock,
       commentary_count: x.commentary_count,
       available_tabs: x.available_tabs
     })),
