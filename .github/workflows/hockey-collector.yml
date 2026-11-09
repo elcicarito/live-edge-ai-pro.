@@ -34,4 +34,6 @@ jobs:
             exit 0
           fi
           git commit -m "Update ESPN hockey live data"
-          git push
+          git fetch origin live-data
+          git rebase origin/live-data
+          git push origin HEAD:live-data
