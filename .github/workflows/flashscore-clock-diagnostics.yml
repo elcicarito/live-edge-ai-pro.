@@ -72,6 +72,12 @@ jobs:
             sleep 2
           done
           echo "Flashscore API did not become healthy"
+          echo "Container status:"
+          docker ps -a --filter name=flashscore-clock-diagnostic
+          echo "Container logs:"
+          docker logs flashscore-clock-diagnostic 2>&1 || true
+          echo "Container inspect:"
+          docker inspect flashscore-clock-diagnostic --format '{{json .State}}' 2>&1 || true
           exit 1
 
       - name: Inspect current live fixtures and page clocks
