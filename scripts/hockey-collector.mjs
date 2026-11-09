@@ -85,6 +85,32 @@ const settled = await Promise.all(LEAGUES.map(async league => {
 }));
 const all = settled.flatMap(x => x.events);
 const live = all.filter(x => x.status === "live");
+// ESPN summary doplní tímové boxscore štatistiky, ak ich konkrétna súťaž poskytuje.
+await Promise.all(live.map(async match => {
+  try {
+    const summary = await get(`${BASE}/${match.league_slug}/summary?event=${encodeURIComponent(match.id)}`);
+    const teams = summary?.boxscore?.teams || [];
+    for (const row of teams) {
+      const id = String(row.team?.id || row.teamId || "");
+      const side = id && id === String(match.home.id) ? "home"
+        : id && id === String(match.away.id) ? "away" : null;
+      if (!side) continue;
+      const parsed = {};
+      for (const stat of row.statistics || []) {
+        const name = String(stat.name || stat.abbreviation || "");
+        if (!name) continue;
+        parsed[name] = numberOrNull(first(stat.displayValue, stat.value));
+      }
+      if (Object.keys(parsed).length) match.stats[side] = { ...match.stats[side], ...parsed };
+    }
+    const competition = summary?.header?.competitions?.[0];
+    if (competition?.status?.displayClock) match.clock = String(competition.status.displayClock);
+    if (competition?.status?.period) match.period = numberOrNull(competition.status.period);
+    match.summary_checked_at = new Date().toISOString();
+  } catch (error) {
+    console.log(`SUMMARY ERROR ${match.league_slug}/${match.id}: ${error.message}`);
+  }
+}));
 const finished = all.filter(x => x.status === "finished");
 await fs.mkdir("data", { recursive: true });
 const current = {
