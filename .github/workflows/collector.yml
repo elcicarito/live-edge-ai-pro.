@@ -1467,13 +1467,20 @@ jobs:
                 const stamp = Date.parse(collectedAt || "");
                 if (!Number.isFinite(stamp) || stamp < historyCutoff) continue;
 
-                const stats = (Array.isArray(match.stats) ? match.stats : [])
+                // Archivuj aj Flashscore-only štatistiky v časovej osi.
+                // Nezapisuj ich do match.stats: predikčné modely ostávajú na overenom ESPN feede.
+                const rawTimelineStats = Array.isArray(match.stats) && match.stats.length
+                  ? match.stats
+                  : Array.isArray(match.flashscore_stats) ? match.flashscore_stats : [];
+                const stats = rawTimelineStats
                   .filter(stat => stat && typeof stat.label === "string")
                   .map(stat => ({
                     label: stat.label,
                     home: Number.isFinite(Number(stat.home)) ? Number(stat.home) : null,
                     away: Number.isFinite(Number(stat.away)) ? Number(stat.away) : null,
-                    suffix: stat.suffix || ""
+                    suffix: stat.suffix || "",
+                    ...(stat.source ? { source: stat.source } : {}),
+                    ...(stat.period ? { period: stat.period } : {})
                   }));
 
                 const item = timelineById.get(id) || {
@@ -1505,11 +1512,14 @@ jobs:
                   collection_status: batch.data_status || "unknown",
                   stats_count: stats.length,
                   stats,
-                  // Úplné dostupné dáta zo zdroja ESPN bez straty polí.
-                  // raw_match obsahuje aj všetky pôvodné štatistiky a ich metadáta.
-                  raw_stats: Array.isArray(match.stats) ? match.stats : [],
+                  stats_source: Array.isArray(match.stats) && match.stats.length
+                    ? (match.stats_source || match.source || "ESPN")
+                    : (Array.isArray(match.flashscore_stats) && match.flashscore_stats.length
+                      ? "Flashscore"
+                      : (match.source || "unknown")),
+                  raw_stats: rawTimelineStats,
                   raw_match: match,
-                  stats_available: Array.isArray(match.stats) && match.stats.length > 0
+                  stats_available: rawTimelineStats.length > 0
                 };
 
                 const existingIndex = item.snapshots.findIndex(existing =>
