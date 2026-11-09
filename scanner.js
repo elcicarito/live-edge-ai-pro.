@@ -317,9 +317,10 @@
       const card = document.createElement("div");
       card.style.cssText = "margin:9px 0;padding:11px;border:1px solid #31445c;border-radius:10px;background:#101d2d;color:#fff;";
       const heading = document.createElement("strong");
-      const minute = snapshot.live_minute === null || snapshot.live_minute === undefined || snapshot.live_minute === ""
-        ? (snapshot.stage || "LIVE")
-        : String(snapshot.live_minute).replace(/'$/, "") + "'";
+      const minute = snapshot.live_clock ||
+        (snapshot.live_minute === null || snapshot.live_minute === undefined || snapshot.live_minute === ""
+          ? (snapshot.stage || "LIVE")
+          : String(snapshot.live_minute).replace(/'$/, "") + "'");
       heading.textContent = (entry.home || "Domáci") + " " + (snapshot.home_score ?? "–") +
         " : " + (snapshot.away_score ?? "–") + " " + (entry.away || "Hostia") + " · " + minute;
       card.appendChild(heading);
@@ -672,8 +673,13 @@
       return "HT";
     }
 
+    if (match.source === "Flashscore") {
+      const flashscoreClock = String(match.live_clock || "").trim();
+      return flashscoreClock || raw || "?";
+    }
+
     if (!raw) return "?";
-    // Flashscore's clock is estimated from kickoff + match stage, not a live timer.
+    // ESPN's minute is advanced from the collection timestamp; Flashscore supplies its own stage clock.
     if (raw.startsWith("~")) return raw;
 
     const base = parseInt(raw, 10);
