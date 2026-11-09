@@ -4276,12 +4276,29 @@
         settleSignals(actualMatches);
       }
 
-      addText(engine, `Stav zberu: ${allowSignals ? "KOMPLETNÝ" : "NEÚPLNÝ"}`);
+      const feedStateLabel = current.feed_state === "NO_LIVE"
+        ? "KOMPLETNÝ – BEZ LIVE ZÁPASOV"
+        : current.feed_state === "PARTIAL"
+          ? "NEÚPLNÝ – CHYBA ZBERU"
+          : current.feed_state === "SUSPECTED_DROP"
+            ? "POZASTAVENÝ – PODOZRIVÝ POKLES"
+            : current.feed_state === "BASELINE_PENDING"
+              ? "ČAKÁ NA POTVRDENIE ZÁKLADNE"
+              : allowSignals ? "KOMPLETNÝ" : "NEÚPLNÝ";
+      addText(engine, `Stav zberu: ${feedStateLabel}`);
+      if (current.feed_state === "NO_LIVE") {
+        addText(engine, "ESPN potvrdil platný feed bez práve prebiehajúcich zápasov. Zber je kompletný; nové LIVE signály sa teraz negenerujú.");
+      }
       addText(engine, `Bezpečná archivácia: ${current.archive_safe ? "ÁNO" : "POZASTAVENÁ"}`);
-      if (current.feed_guard_warning === true) {
+      if (current.feed_guard_warning === true && current.feed_state === "SUSPECTED_DROP") {
         addText(
           engine,
-          "UPOZORNENIE: Počet zápasov vo feede je nižší než historická základňa. Zobrazené sú iba zápasy s overenými detailmi; nové signály a archivácia sú do potvrdenia feedu zablokované."
+          "UPOZORNENIE: Počet LIVE zápasov je nižší než historická základňa. Zobrazené sú iba zápasy s overenými detailmi; nové signály a archivácia sú do potvrdenia feedu zablokované."
+        );
+      } else if (current.feed_guard_warning === true && current.feed_state === "BASELINE_PENDING") {
+        addText(
+          engine,
+          "UPOZORNENIE: Historická základňa ESPN sa ešte overuje; nové signály a archivácia sú zatiaľ zablokované."
         );
       }
       addText(engine, `Vek dát: ${Math.max(0, Math.round(age / 1000))} sekúnd`);
@@ -4315,17 +4332,22 @@
       addText(engine, `Obnovovanie: každých ${SCAN_INTERVAL_MS / 1000} sekúnd`);
       addText(engine, `Povolený rozdiel meraní: ${MIN_GAP_MINUTES}–${MAX_GAP_MINUTES} min`);
 
-      if (!allowSignals) {
+      if (!allowSignals && current.feed_state !== "BASELINE_PENDING" && current.feed_state !== "SUSPECTED_DROP") {
         addText(
           engine,
           "UPOZORNENIE: Zber nie je kompletný. Nové signály sú zablokované."
         );
       }
 
-      if (current.feed_guard_warning) {
+      if (current.feed_state === "SUSPECTED_DROP") {
         addText(
           engine,
-          "FEED GUARD: Podozrivý pokles počtu zápasov. Archivácia je pozastavená."
+          "FEED GUARD: Podozrivý pokles LIVE zápasov. Nové signály a archivácia sú pozastavené."
+        );
+      } else if (current.feed_state === "BASELINE_PENDING") {
+        addText(
+          engine,
+          "ESPN: Historická základňa sa ešte overuje. Nové signály a archivácia sú zatiaľ pozastavené."
         );
       }
 
