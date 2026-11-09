@@ -156,7 +156,6 @@ const current = {
 };
 const previousCurrent = await readJson("data/hockey-current.json", null);
 if (previousCurrent && sameData(previousCurrent, current)) {
-  current.collected_at = previousCurrent.collected_at || now;
   const previousMatches = new Map((previousCurrent.matches || []).map(match => [`${match.league_slug}:${match.id}`, match]));
   current.matches = current.matches.map(match => {
     const previous = previousMatches.get(`${match.league_slug}:${match.id}`);
@@ -197,6 +196,5 @@ const summary = {
   errors: settled.filter(x => !x.ok).map(x => ({ league: x.league.slug, error: x.error }))
 };
 const previousSummary = await readJson("data/hockey-collector-status.json", null);
-if (previousSummary && sameData(previousSummary, summary)) summary.collected_at = previousSummary.collected_at || now;
 await fs.writeFile("data/hockey-collector-status.json", JSON.stringify(summary, null, 2));
 console.log("HOCKEY COLLECTOR:", JSON.stringify(summary));
