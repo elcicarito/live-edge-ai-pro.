@@ -290,15 +290,17 @@
       leagueCounts.set(league, (leagueCounts.get(league) || 0) + 1);
     });
     const eligibleLeagues = [...leagueCounts.values()].filter(n => n >= 10).length;
-    const mae = settled.length ? settled.reduce((sum,p) => sum + Number(p.absolute_error),0) / settled.length : null;
-    const covered = settled.filter(p => Number.isFinite(Number(p.actual_total)) &&
+    const baselineSettled = settled.filter(p => p.model_version === 3);
+    const challengerSettled = settled.filter(p => p.model_version === 5);
+    const mae = baselineSettled.length ? baselineSettled.reduce((sum,p) => sum + Number(p.absolute_error),0) / baselineSettled.length : null;
+    const covered = baselineSettled.filter(p => Number.isFinite(Number(p.actual_total)) &&
       Number.isFinite(Number(p.range_low)) && Number.isFinite(Number(p.range_high)) &&
       Number(p.actual_total) >= Number(p.range_low) && Number(p.actual_total) <= Number(p.range_high)).length;
-    const coverage = settled.length ? covered / settled.length * 100 : null;
+    const coverage = baselineSettled.length ? covered / baselineSettled.length * 100 : null;
     const metrics = [
       ["Kompletné zápasy podľa formátu", completeMatches.length],
       ["Ligy s min. 10 zápasmi", eligibleLeagues],
-      ["Vyhodnotené predikcie", settled.length],
+      ["Vyhodnotené predikcie v3", baselineSettled.length],
       ["Priemerná absolútna chyba", mae === null ? "—" : mae.toFixed(1) + " b."]
     ];
     const grid = document.createElement("div");
@@ -314,9 +316,20 @@
     });
     performanceContent.appendChild(grid);
     const coverageNote=document.createElement("p");
-    coverageNote.textContent="Pokrytie rozpätia ±5 bodov: "+(coverage===null?"zatiaľ bez vzorky":coverage.toFixed(1)+" % ("+covered+"/"+settled.length+")")+".";
+    coverageNote.textContent="Pokrytie rozpätia ±5 bodov: "+(coverage===null?"zatiaľ bez vzorky":coverage.toFixed(1)+" % ("+covered+"/"+baselineSettled.length+")")+".";
     coverageNote.style.cssText="font-size:12px;color:#d7e3f1;margin:8px 0";
     performanceContent.appendChild(coverageNote);
+    const challengerMae = challengerSettled.length ? challengerSettled.reduce((sum,p)=>sum+Number(p.absolute_error),0)/challengerSettled.length : null;
+    const compareTitle=document.createElement("div");
+    compareTitle.textContent="POROVNANIE MODELOV · NOVÉ LIVE TESTY";
+    compareTitle.style.cssText="font-size:11px;font-weight:900;color:#39e6a5;margin:15px 0 7px";
+    performanceContent.appendChild(compareTitle);
+    const compareRow=document.createElement("div");
+    compareRow.style.cssText="display:flex;justify-content:space-between;gap:10px;padding:8px 2px;border-bottom:1px solid #263b55;font-size:11px";
+    const compareLabel=document.createElement("span");compareLabel.textContent="V5 challenger · 80/20";
+    const compareValue=document.createElement("strong");compareValue.textContent=challengerMae===null?"Zatiaľ čaká na vyhodnotenie":challengerMae.toFixed(1)+" b. · n="+challengerSettled.length;
+    compareValue.style.color=challengerSettled.length>=30?"#39e6a5":"#f2c66d";
+    compareRow.append(compareLabel,compareValue);performanceContent.appendChild(compareRow);
     const qTitle=document.createElement("div");
     qTitle.textContent="PRESNOSŤ PODĽA OBDOBIA";
     qTitle.style.cssText="font-size:11px;font-weight:900;color:#39e6a5;margin:15px 0 7px";
@@ -349,7 +362,7 @@
       row.append(name,n); performanceContent.appendChild(row);
     });
     const note=document.createElement("p");
-    note.textContent="Model v3 zostáva nezmenený. MAE a pokrytie rozpätia sa počítajú iba zo skutočne vyhodnotených LIVE predikcií. Historický archív slúži na kontrolu dostupnosti dát; zatiaľ z neho nevyvodzujeme víťaza medzi alternatívnymi modelmi. Pri malej vzorke sú výsledky iba orientačné.";
+    note.textContent="V3 zostáva referenčný model. V5 je iba experimentálny challenger a používa prísny časový filter: do tréningu berie len zápasy rovnakej ligy, ktoré sa začali pred aktuálnym zápasom a už boli archivované pred vytvorením predikcie. V5 zatiaľ neprehlasuje V3; rozhodnutie až po dostatočnej novej vzorke.";
     note.style.cssText="font-size:10px;color:#8296ad;line-height:1.5;margin-top:12px";
     performanceContent.appendChild(note);
   }
@@ -388,7 +401,7 @@
         const card = document.createElement("div");
         card.style.cssText = "background:#0d1929;border:1px solid #354d69;border-radius:9px;padding:11px;margin:8px 0";
         const name = document.createElement("div");
-        name.textContent = (p.league || "Liga neznáma") + " · " + p.home + " – " + p.away + " · " + (p.model_version===4?"H"+p.target_half:"Q"+p.target_quarter);
+        name.textContent = (p.league || "Liga neznáma") + " · " + p.home + " – " + p.away + " · " + (p.model_version===4?"H"+p.target_half:"Q"+p.target_quarter) + (p.model_version===5?" · V5 test":" · V3");
         name.style.cssText = "font-size:12px;color:#a9bdd4;line-height:1.4";
         const value = document.createElement("div");
         value.textContent = p.predicted_total + " bodov";
