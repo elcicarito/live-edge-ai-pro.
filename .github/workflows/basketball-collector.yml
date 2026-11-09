@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: live-edge-basketball-collector
+  group: live-data-collectors
   cancel-in-progress: false
 
 jobs:
@@ -17,6 +17,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Restore latest live data snapshot
+        run: |
+          git fetch origin live-data
+          git checkout origin/live-data -- data/
 
       - name: Collect LIVE basketball data
         run: |
@@ -618,10 +623,11 @@ jobs:
           git add data/basketball-current.json data/basketball-history.jsonl data/basketball-archive.json data/basketball-predictions.json data/basketball-collector-metrics.jsonl
           git commit -m "Update LIVE basketball data"
           # Football and basketball collectors can commit near-simultaneously.
-          # Rebase our basketball-only commit onto the latest main before pushing.
+          # Rebase our basketball-only data commit onto the latest live-data snapshot before pushing.
           for attempt in 1 2 3; do
-            git pull --rebase origin main
-            if git push origin HEAD:main; then
+            git fetch origin live-data
+            git rebase origin/live-data
+            if git push origin HEAD:live-data; then
               exit 0
             fi
             echo "Push conflict, retry ${attempt}/3"
