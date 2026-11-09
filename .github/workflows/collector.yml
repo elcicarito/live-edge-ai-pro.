@@ -33,6 +33,38 @@ jobs:
           ref: af784a918fc94339fd2c8ff0fadc1da69a6139d8
           path: .flashscore-scraper
 
+      - name: Expose Flashscore current-stage clock metadata (shadow collector)
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path(".flashscore-scraper/flashscore/matches.py")
+          if not path.exists():
+              raise SystemExit("Pinned Flashscore scraper source is unavailable")
+          source = path.read_text()
+          start = source.find("def get_details(match):")
+          if start < 0:
+              raise SystemExit("get_details function not found")
+          end = source.find("\ndef ", start + 1)
+          if end < 0:
+              end = len(source)
+          block = source[start:end]
+          marker = "    return summary"
+          if marker not in block:
+              raise SystemExit("get_details return marker not found")
+          if "live_clock_metadata" not in block:
+              injected = """    summary["live_clock_metadata"] = {
+                  "stage_start_epoch": P.to_int(environment.get("eventStageStartTime")),
+                  "stage_id": P.to_int(environment.get("eventStageId")),
+                  "stage_type_id": P.to_int(environment.get("eventStageTypeId")),
+                  "format": P.clean(core.get("DM")) or None,
+                  "core_minute": P.to_int(core.get("DI")),
+              }
+          """
+              block = block.replace(marker, injected + marker, 1)
+              path.write_text(source[:start] + block + source[end:])
+          print("Flashscore current-stage clock metadata exposed for isolated shadow collector.")
+
       - name: Build isolated Flashscore API
         continue-on-error: true
         run: |
