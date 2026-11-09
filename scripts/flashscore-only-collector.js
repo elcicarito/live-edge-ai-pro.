@@ -218,7 +218,8 @@ async function main() {
     fixture_count: records.length,
     live_count: records.length,
     stats_match_count: records.filter(x => x.stats_available).length,
-    stats_error_count: errors.length,
+    stats_error_count: records.filter(x => x.stats_error).length,
+    commentary_error_count: records.filter(x => x.commentary_error).length,
     errors: errors.slice(0, 30),
     records: records.map(match => ({ collected_at: now, match }))
   };
@@ -235,7 +236,7 @@ async function main() {
   }
   const existingWeeks = previousIndex.weeks
     .map(item => typeof item === "string" ? item : item?.week)
-    .filter(week => typeof week === "string" && /^\\d{4}-W\\d{2}$/.test(week));
+    .filter(week => typeof week === "string" && /^\d{4}-W\d{2}$/.test(week));
   const allWeeks = [...new Set([...existingWeeks, weekKey])].sort();
   const retainedWeeks = allWeeks.slice(-MAX_TIMELINE_WEEKS);
   for (const oldWeek of allWeeks) {
@@ -256,7 +257,8 @@ async function main() {
   console.log(JSON.stringify({
     source: "Flashscore", live_count: records.length,
     stats_match_count: current.stats_match_count,
-    stats_error_count: errors.length,
+    stats_error_count: records.filter(x => x.stats_error).length,
+    commentary_error_count: records.filter(x => x.commentary_error).length,
     live_minute_count: records.filter(x => x.live_minute !== null && x.live_minute !== undefined && x.live_minute !== "").length,
     live_minute_samples: records.filter(x => x.live_minute !== null && x.live_minute !== undefined && x.live_minute !== "").slice(0, 8).map(x => ({ match: x.home + " - " + x.away, minute: x.live_minute, minute_source: x.minute_source })),
     archive_matches: Object.keys(archive.matches).length,
