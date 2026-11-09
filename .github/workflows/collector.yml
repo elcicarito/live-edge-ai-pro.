@@ -34,6 +34,7 @@ jobs:
           path: .flashscore-scraper
 
       - name: Patch Flashscore parser to expose raw live minute
+        continue-on-error: true
         run: |
           python3 - <<'PY'
           from pathlib import Path
