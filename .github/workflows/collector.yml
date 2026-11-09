@@ -62,7 +62,7 @@ jobs:
           # the other row fields before treating it as a clock.
           p = Path(".flashscore-scraper/flashscore/matches.py")
           source = p.read_text()
-          marker = '    return {\n        "sport": refs.sport_ref(sport_id),'
+          marker = "    return {" + chr(10) + '        "sport": refs.sport_ref(sport_id),'
           replacement = '''    diagnostic_rows = [
         row for row in P.parse_records(text)
         if row.get("AA") and P.to_int(row.get("AB")) == 2
