@@ -33,6 +33,20 @@ jobs:
           ref: af784a918fc94339fd2c8ff0fadc1da69a6139d8
           path: .flashscore-scraper
 
+      - name: Patch Flashscore parser to expose raw live minute
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          parser = Path(".flashscore-scraper/flashscore/parsers.py")
+          source = parser.read_text()
+          old = '        "stage_id": stage_id,\n        "start_time": timestamp(row.get("AD")),'
+          new = '        "stage_id": stage_id,\n        "live_minute": clean(row.get("BA")) or None,\n        "minute_source": "flashscore_live_feed_BA" if clean(row.get("BA")) else None,\n        "start_time": timestamp(row.get("AD")),'
+          if old not in source:
+              raise SystemExit("Flashscore parser layout changed; refusing an unverified patch.")
+          parser.write_text(source.replace(old, new, 1))
+          print("Flashscore parser now exposes raw BA live-minute field.")
+          PY
+
       - name: Build isolated Flashscore API
         continue-on-error: true
         run: |
