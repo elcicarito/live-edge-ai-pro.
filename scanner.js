@@ -288,7 +288,7 @@
       matchHistoryPromise = (async () => {
         try {
           const response = await fetch(MATCH_HISTORY_URL + "?t=" + Date.now(), {
-            cache: "no-store", headers: { "Cache-Control": "no-cache" }
+            cache: "no-store"
           });
           if (!response.ok) throw new Error("HTTP " + response.status + " – gzip archív");
           if (typeof DecompressionStream !== "function") throw new Error("Prehliadač nepodporuje gzip dekompresiu.");
