@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: live-data-football-writer
+  group: live-data-collectors
   cancel-in-progress: false
 
 jobs:
@@ -2592,7 +2592,7 @@ jobs:
             echo "Žiadne nové zmeny na uloženie."
           else
             git commit -m "Update LIVE football data"
-            # All live-data writers share one concurrency lock.
+            # Football collector runs are serialized to preserve the newest snapshot.
             # Retry fetch/rebase/push so fresh football data is not lost on a ref race.
             for attempt in 1 2 3 4 5; do
               git fetch origin live-data
