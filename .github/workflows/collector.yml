@@ -2315,7 +2315,7 @@ jobs:
               // Každý prah 1:0 je samostatný testovací variant.
               // Jeden zápas môže patriť do viacerých tierov, ale každý tier
               // sa uloží iba raz. Tak vieme porovnať 8 / 10 / 12 striel.
-              for (const record of records) {
+              for (const record of combinedRecords) {
                 const match = record?.match;
                 if (!match || !isLive(match)) continue;
                 // Flashscore BTTS môže použiť iba potvrdený kompletný LIVE feed.
@@ -2418,7 +2418,7 @@ jobs:
                 .map(item => [frontendMatchId(item.final_match) || String(item.id || ""), item.final_match])
             );
             const liveFlashscoreIds = new Set(
-              records
+              combinedRecords
                 .filter(record => record?.match?.source === "Flashscore")
                 .map(record => frontendMatchId(record.match))
             );
