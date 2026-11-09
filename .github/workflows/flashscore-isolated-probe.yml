@@ -121,17 +121,21 @@ jobs:
                   try:
                       stats, stats_bytes, stats_status = get_json("/matches/statistics", {"match": match["id"]})
                       stat_periods = stats.get("periods", []) if isinstance(stats, dict) else []
-                      stat_count = sum(
-                          len(group.get("statistics", []))
+                      stat_rows = [
+                          {"period": period.get("period"), "category": group.get("category"),
+                           "name": row.get("name"), "home": row.get("home"), "away": row.get("away")}
                           for period in stat_periods if isinstance(period, dict)
                           for group in period.get("groups", []) if isinstance(group, dict)
-                      )
+                          for row in group.get("statistics", []) if isinstance(row, dict)
+                      ]
+                      stat_count = len(stat_rows)
                       item["match_statistics"] = {
                           "http": stats_status,
                           "bytes": stats_bytes,
                           "period_count": stats.get("period_count") if isinstance(stats, dict) else None,
                           "statistic_count": stat_count,
-                          "has_data": stat_count > 0
+                          "has_data": stat_count > 0,
+                          "sample_rows": stat_rows[:20]
                       }
                       if stats_status == 200 and stat_count > 0:
                           usable_statistics = {"match_id": match["id"], "kind": "match", **item["match_statistics"]}
