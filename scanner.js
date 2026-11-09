@@ -4553,14 +4553,23 @@
       renderMatchesGrouped(matches, historyData, allowSignals, false, signalArchive, bttsArchive);
 
       renderSummary();
-      if (signalArchive) renderServerSignalArchive(signalArchive, greenSignalArchiveEl);
-      else if (greenSignalArchiveEl) { greenSignalArchiveEl.innerHTML = ""; addText(greenSignalArchiveEl, "Archív zelených signálov sa nepodarilo načítať."); }
-      if (bttsArchive) renderBttsSignalArchive(bttsArchive, bttsSignalArchiveEl);
-      else if (bttsSignalArchiveEl) { bttsSignalArchiveEl.innerHTML = ""; addText(bttsSignalArchiveEl, "Archív BTTS sa nepodarilo načítať."); }
-
-      renderMatchArchive(matchArchive);
+      if (signalArchive !== lastRenderedSignalArchive) {
+        if (signalArchive) renderServerSignalArchive(signalArchive, greenSignalArchiveEl);
+        else if (greenSignalArchiveEl) { greenSignalArchiveEl.innerHTML = ""; addText(greenSignalArchiveEl, "Archív zelených signálov sa nepodarilo načítať."); }
+        lastRenderedSignalArchive = signalArchive;
+      }
+      if (bttsArchive !== lastRenderedBttsArchive) {
+        if (bttsArchive) renderBttsSignalArchive(bttsArchive, bttsSignalArchiveEl);
+        else if (bttsSignalArchiveEl) { bttsSignalArchiveEl.innerHTML = ""; addText(bttsSignalArchiveEl, "BTTS archív sa nepodarilo načítať."); }
+        lastRenderedBttsArchive = bttsArchive;
+      }
+      const matchArchiveChanged = matchArchive !== lastRenderedMatchArchive;
+      if (matchArchiveChanged) {
+        renderMatchArchive(matchArchive);
+        lastRenderedMatchArchive = matchArchive;
+        renderApiDataQuality(current, matchArchive, matchHistoryData);
+      }
       renderSystemStats(current, signalArchive, matchArchive);
-      renderApiDataQuality(current, matchArchive, matchHistoryData);
       if (
         signalArchive !== lastRenderedPerformanceGreen ||
         bttsArchive !== lastRenderedPerformanceBtts
