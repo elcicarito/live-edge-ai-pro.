@@ -2695,6 +2695,10 @@ jobs:
           });
           NODE
 
+      - name: Build LIVE prediction training dataset
+        run: |
+          node scripts/build-live-prediction-dataset.js
+
       - name: Save collected data
         run: |
           git config user.name "github-actions[bot]"
