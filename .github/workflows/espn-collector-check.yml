@@ -39,6 +39,7 @@ jobs:
       - name: Verify NO_LIVE guard and output contract
         run: |
           grep -F 'const noLiveFeed = complete && uniqueFixtures.length === 0;' .github/workflows/collector.yml
-          grep -F 'feedState = !complete' .github/workflows/collector.yml
+          grep -F 'classifyESPNFeedState' .github/workflows/collector.yml
+          node scripts/test-espn-feed-state.js
           grep -F '"NO_LIVE"' .github/workflows/collector.yml
           grep -F 'Array.isArray(data?.events)' .github/workflows/collector.yml
