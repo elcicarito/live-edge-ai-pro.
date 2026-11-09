@@ -59,6 +59,20 @@ const server = http.createServer((req, res) => {
     }));
     return;
   }
+  if (req.url.startsWith("/matches/details")) {
+    res.end(JSON.stringify({
+      id: "test-match-1",
+      status: "live",
+      stage: "2nd Half",
+      live_clock_metadata: {
+        stage_start_epoch: Math.floor(Date.now() / 1000) - (10 * 60 + 20),
+        stage_id: 13,
+        stage_type_id: 2,
+        format: null
+      }
+    }));
+    return;
+  }
   if (req.url.startsWith("/matches/commentary")) {
     res.end(JSON.stringify({
       comments: [{ minute: "57'", text: "Test commentary" }]
@@ -113,8 +127,9 @@ function runCollector() {
 
     assert.equal(current.source, "Flashscore");
     assert.equal(current.live_count, 1);
-    assert.equal(current.records[0].match.live_minute, null, "event minute must never be mislabeled as the live clock");
-    assert.equal(current.records[0].match.minute_source, null);
+    assert.equal(current.records[0].match.live_minute, 55, "second-half clock must include the 45-minute first half");
+    assert.match(current.records[0].match.live_clock, /^55:\d{2}$/, "clock must preserve seconds");
+    assert.equal(current.records[0].match.minute_source, "Flashscore eventStageStartTime");
     assert.equal(current.records[0].match.last_event_minute, "57'");
     assert.equal(current.records[0].match.last_event_minute_source, "Flashscore commentary MB");
     assert.equal(current.records[0].match.commentary_count, 1);
@@ -132,7 +147,8 @@ function runCollector() {
     const lines = zlib.gunzipSync(fs.readFileSync(timelinePath), { finishFlush: zlib.constants.Z_FINISH })
       .toString("utf8").trim().split("\n").map(line => JSON.parse(line));
     assert.equal(lines.length, 2);
-    assert.equal(lines[0].snapshot.live_minute, null);
+    assert.equal(lines[0].snapshot.live_minute, 55);
+    assert.match(lines[0].snapshot.live_clock, /^55:\d{2}$/);
     assert.equal(lines[0].snapshot.last_event_minute, "57'");
     assert.equal(lines[1].score_changed, true);
     assert.equal(lines[1].stat_changes.length, 1);
