@@ -20,6 +20,38 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Checkout pinned Flashscore scraper source
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: omkarcloud/flashscore-scraper
+          ref: af784a918fc94339fd2c8ff0fadc1da69a6139d8
+          path: .flashscore-scraper
+
+      - name: Build isolated Flashscore API
+        continue-on-error: true
+        run: |
+          if [ -f .flashscore-scraper/Dockerfile ]; then
+            docker build -t live-edge-flashscore .flashscore-scraper
+          else
+            echo "Flashscore scraper checkout unavailable; ESPN collection will continue."
+            exit 1
+          fi
+
+      - name: Start Flashscore API
+        continue-on-error: true
+        run: |
+          docker run -d --rm --name live-edge-flashscore -p 127.0.0.1:8000:8000 live-edge-flashscore
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8000/health -o /tmp/live-edge-flashscore-health.json; then
+              cat /tmp/live-edge-flashscore-health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Flashscore API did not become healthy; ESPN collection will continue."
+          exit 1
+
       - name: Collect fresh LIVE football data
         run: |
           mkdir -p data
@@ -433,6 +465,178 @@ jobs:
             return [...fixtures.values()];
           }
 
+          function teamKey(value) {
+            return String(value || "")
+              .normalize("NFKD")
+              .replace(/[\\u0300-\\u036f]/g, "")
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "");
+          }
+
+          function flashscoreTeamName(value) {
+            if (typeof value === "string") return value.trim();
+            return String(value?.name || value?.full_name || value?.short_name || "").trim();
+          }
+
+          function normalizeFlashscoreStats(payload) {
+            const labels = {
+              "ball possession": ["Possession", "%"],
+              "total shots": ["Total shots", ""],
+              "shots on target": ["Shots on target", ""],
+              "shots off target": ["Shots off target", ""],
+              "corner kicks": ["Corners", ""],
+              "yellow cards": ["Yellow cards", ""],
+              "red cards": ["Red cards", ""],
+              "fouls": ["Fouls", ""],
+              "offsides": ["Offsides", ""],
+              "saves": ["Saves", ""]
+            };
+            const periods = Array.isArray(payload?.periods) ? payload.periods : [];
+            const matchPeriod = periods.find(item => String(item?.period || "").toLowerCase() === "match");
+            const chosenPeriods = matchPeriod ? [matchPeriod] : periods.slice(0, 1);
+            const rows = new Map();
+            for (const period of chosenPeriods) {
+              for (const group of period?.groups || []) {
+                for (const row of group?.statistics || []) {
+                  const rawName = String(row?.name || "").trim();
+                  const mapped = labels[rawName.toLowerCase()];
+                  if (!mapped) continue;
+                  const home = numericStat(row.home_value ?? row.home);
+                  const away = numericStat(row.away_value ?? row.away);
+                  if (home === null && away === null) continue;
+                  rows.set(mapped[0], {
+                    label: mapped[0], home, away, suffix: mapped[1],
+                    source: "Flashscore", period: period.period || null
+                  });
+                }
+              }
+            }
+            return [...rows.values()];
+          }
+
+          async function loadFlashscoreLiveFixtures(espnFixtures) {
+            const result = {
+              records: [],
+              live_count: 0,
+              matched_count: 0,
+              stats_enriched_count: 0,
+              stats_available_count: 0,
+              errors: []
+            };
+            const base = "http://127.0.0.1:8000";
+            const getFlashscoreJSON = async (path, params = {}) => {
+              const query = new URLSearchParams(params).toString();
+              const response = await fetch(base + path + (query ? "?" + query : ""), {
+                headers: { "Accept": "application/json", "User-Agent": "LIVE-EDGE-AI-PRO/9.2" },
+                signal: AbortSignal.timeout(25000),
+                cache: "no-store"
+              });
+              if (!response.ok) throw new Error(path + " HTTP " + response.status);
+              return response.json();
+            };
+
+            try {
+              const feed = await getFlashscoreJSON("/matches/live", { sport: "football" });
+              const rawMatches = [];
+              for (const competition of feed?.competitions || []) {
+                for (const item of competition?.matches || []) {
+                  if (item && item.id) rawMatches.push({
+                    ...item,
+                    competition: item.competition || competition.competition
+                  });
+                }
+              }
+              result.live_count = rawMatches.length;
+              if (!Array.isArray(feed?.competitions)) {
+                throw new Error("Flashscore LIVE feed nemá platné pole competitions.");
+              }
+
+              const espnByKey = new Map();
+              for (const match of espnFixtures) {
+                const key = teamKey(match.home) + "::" + teamKey(match.away);
+                if (key !== "::") espnByKey.set(key, match);
+              }
+
+              const seen = new Set();
+              const now = new Date().toISOString();
+              let cursor = 0;
+              const workers = Array.from({ length: 4 }, async () => {
+                while (true) {
+                  const index = cursor++;
+                  if (index >= rawMatches.length) return;
+                  const raw = rawMatches[index];
+                  const home = flashscoreTeamName(raw.home);
+                  const away = flashscoreTeamName(raw.away);
+                  if (!home || !away) {
+                    result.errors.push("Flashscore zápas bez názvu domácich alebo hostí: " + String(raw.id));
+                    continue;
+                  }
+                  const key = teamKey(home) + "::" + teamKey(away);
+                  if (seen.has(key)) continue;
+                  seen.add(key);
+
+                  let stats = [];
+                  try {
+                    const payload = await getFlashscoreJSON("/matches/statistics", { match: String(raw.id) });
+                    stats = normalizeFlashscoreStats(payload);
+                    if (stats.length) result.stats_available_count++;
+                  } catch (error) {
+                    result.errors.push("Štatistiky " + home + " – " + away + ": " + error.message);
+                  }
+
+                  const espnMatch = espnByKey.get(key);
+                  if (espnMatch) {
+                    result.matched_count++;
+                    if ((!Array.isArray(espnMatch.stats) || !espnMatch.stats.length) && stats.length) {
+                      espnMatch.flashscore_stats = stats;
+                      espnMatch.stats_source = "Flashscore";
+                      result.stats_enriched_count++;
+                    }
+                    continue;
+                  }
+
+                  const competition = typeof raw.competition === "string"
+                    ? raw.competition
+                    : raw.competition?.name || raw.tournament?.name || "Flashscore LIVE";
+                  const stage = String(raw.stage || raw.status || "live");
+                  const match = {
+                    id: String(raw.id),
+                    tracker: { id: "flashscore:" + String(raw.id) },
+                    slug: "flashscore:" + String(raw.id),
+                    url: raw.link || "https://www.flashscore.com/match/" + String(raw.id) + "/",
+                    home, away,
+                    competition,
+                    league: competition,
+                    status: "live",
+                    status_text: stage,
+                    live_minute: null,
+                    home_score: numericStat(raw.home_score),
+                    away_score: numericStat(raw.away_score),
+                    stats: [],
+                    flashscore_stats: stats,
+                    stats_source: stats.length ? "Flashscore" : null,
+                    goal_events: [],
+                    source: "Flashscore"
+                  };
+                  result.records.push({ collected_at: now, match });
+                }
+              });
+              await Promise.all(workers);
+              console.log("FLASHSCORE LIVE RESULT:", JSON.stringify({
+                live_count: result.live_count,
+                flashscore_only: result.records.length,
+                matched_with_espn: result.matched_count,
+                espn_stats_enriched: result.stats_enriched_count,
+                matches_with_statistics: result.stats_available_count,
+                errors: result.errors.slice(0, 12)
+              }));
+            } catch (error) {
+              result.errors.push("Flashscore LIVE feed: " + error.message);
+              console.log("FLASHSCORE FEED UNAVAILABLE:", error.message);
+            }
+            return result;
+          }
+
           async function getESPNMatchDetail(previousMatch) {
             const leagueSlug = previousMatch?.espn_league_slug;
             const eventId = previousMatch?.espn_event_id;
@@ -540,6 +744,9 @@ jobs:
             }
 
             const complete = errors.length === 0;
+            const flashscoreResult = await loadFlashscoreLiveFixtures(uniqueFixtures);
+            const flashscoreRecords = flashscoreResult.records;
+            const combinedRecords = [...records, ...flashscoreRecords];
 
             // =========================================
             // OCHRANA PRED NEÚPLNÝM LIVE ZOZNAMOM
@@ -762,16 +969,33 @@ jobs:
               collected_at: new Date().toISOString(),
               collection_started_at: startedAt,
               source: "ESPN",
-              collector_version: "9.1",
+              source_providers: ["ESPN", "Flashscore"],
+              collector_version: "9.2",
               feed_state: feedState,
               data_status: archiveSafe ? "complete" : "partial",
               collection_complete: complete,
               archive_safe: archiveSafe,
+              // Keep fixture_count ESPN-only: it is the historical feed-guard baseline.
               fixture_count: uniqueFixtures.length,
-              live_count: records.length,
-              saved_count: records.length,
+              espn_live_count: records.length,
+              flashscore_live_count: flashscoreRecords.length,
+              combined_live_count: combinedRecords.length,
+              live_count: combinedRecords.length,
+              saved_count: combinedRecords.length,
+              source_status: {
+                ESPN: { complete, live_count: records.length, errors: errors.length },
+                Flashscore: {
+                  complete: flashscoreResult.errors.length === 0,
+                  live_count: flashscoreResult.live_count,
+                  flashscore_only_count: flashscoreRecords.length,
+                  matched_count: flashscoreResult.matched_count,
+                  stats_available_count: flashscoreResult.stats_available_count,
+                  stats_enriched_count: flashscoreResult.stats_enriched_count,
+                  errors: flashscoreResult.errors.slice(0, 20)
+                }
+              },
               errors,
-              records
+              records: combinedRecords
             };
 
             // =========================================
@@ -841,6 +1065,7 @@ jobs:
               Array.isArray(previousLatest.records)
             ) {
               for (const record of previousLatest.records) {
+                if (record?.match?.source === "Flashscore") continue;
                 const id = getMatchId(record);
                 if (!id || currentById.has(id) || pending.has(id) || archived.has(id)) continue;
 
@@ -996,6 +1221,7 @@ jobs:
                 Array.isArray(previousLatest.records)
               ) {
                 for (const record of previousLatest.records) {
+                  if (record?.match?.source === "Flashscore") continue;
                   const id = getMatchId(record);
 
                   if (!id) continue;
