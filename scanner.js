@@ -4391,8 +4391,11 @@
         settleSignals(actualMatches);
       }
 
+      const flashscoreLiveCount = Number(providerStatus.Flashscore?.live_count || 0);
       const feedStateLabel = current.feed_state === "NO_LIVE"
-        ? "KOMPLETNÝ – BEZ LIVE ZÁPASOV"
+        ? (flashscoreLiveCount > 0
+          ? "KOMPLETNÝ – LIVE ZÁPASY Z FLASHSCORE"
+          : "KOMPLETNÝ – BEZ LIVE ZÁPASOV")
         : current.feed_state === "PARTIAL"
           ? "NEÚPLNÝ – CHYBA ZBERU"
           : current.feed_state === "SUSPECTED_DROP"
@@ -4401,8 +4404,10 @@
               ? "ČAKÁ NA POTVRDENIE ZÁKLADNE"
               : allowSignals ? "KOMPLETNÝ" : "NEÚPLNÝ";
       addText(engine, `Stav zberu: ${feedStateLabel}`);
-      if (current.feed_state === "NO_LIVE") {
-        addText(engine, "ESPN potvrdil platný feed bez práve prebiehajúcich zápasov. Zber je kompletný; nové LIVE signály sa teraz negenerujú.");
+      if (current.feed_state === "NO_LIVE" && flashscoreLiveCount > 0) {
+        addText(engine, `ESPN momentálne nevracia LIVE zápasy, ale Flashscore poskytuje ${flashscoreLiveCount} LIVE zápasov. Sú zobrazené v zozname; dôveryhodnosť štatistík a pravidlá signálov zostávajú oddelené podľa zdroja.`);
+      } else if (current.feed_state === "NO_LIVE") {
+        addText(engine, "ESPN aj Flashscore momentálne nevracajú prebiehajúce zápasy. Zber je kompletný.");
       }
       addText(engine, `Bezpečná archivácia: ${current.archive_safe ? "ÁNO" : "POZASTAVENÁ"}`);
       if (current.feed_guard_warning === true && current.feed_state === "SUSPECTED_DROP") {
