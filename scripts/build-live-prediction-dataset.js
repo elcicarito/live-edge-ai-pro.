@@ -47,13 +47,20 @@ function buildDataset(observations, outcomes) {
   const seen = new Set(), rows = [];
   let unmatchedObservations = 0, invalidLabels = 0, matchedObservations = 0;
   const sourceCounts = {};
+  const unmatchedSourceCounts = {};
+  const labelCounts = {};
   for (const observation of observations) {
     if (observation?.record_type !== "observation" || !observation.match_id) continue;
     const observationId = String(observation.observation_id || "");
     if (!observationId || seen.has(observationId)) continue;
     seen.add(observationId);
+    const source = String(observation.source || "unknown");
     const outcome = outcomeByMatch.get(String(observation.match_id));
-    if (!outcome) { unmatchedObservations++; continue; }
+    if (!outcome) {
+      unmatchedObservations++;
+      unmatchedSourceCounts[source] = (unmatchedSourceCounts[source] || 0) + 1;
+      continue;
+    }
     matchedObservations++;
     const label = classifyRemainderGoals(observation.score, outcome.final_score);
     if (!label) { invalidLabels++; continue; }
@@ -83,6 +90,7 @@ function buildDataset(observations, outcomes) {
       confirmed_outcomes: outcomeByMatch.size, unique_observations: seen.size,
       matched_observations: matchedObservations, unmatched_observations: unmatchedObservations,
       invalid_labels: invalidLabels, training_samples: rows.length, source_counts: sourceCounts,
+      unmatched_source_counts: unmatchedSourceCounts, label_counts: labelCounts,
       target_horizon: "REMAINDER_OF_MATCH",
       target_classes: ["HOME_ONLY_SCORES_AGAIN","AWAY_ONLY_SCORES_AGAIN","BOTH_TEAMS_SCORE_AGAIN","NO_MORE_GOALS"],
       note: "Label opisuje góly od času LIVE snímky do potvrdeného konca zápasu; nejde o predikciu gólu v najbližších 10 minútach ani o kalibrovanú pravdepodobnosť."
