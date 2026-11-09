@@ -3161,7 +3161,9 @@
     const filtered = confirmed.filter(item => {
       const match = item?.final_match || item?.last_snapshot?.match || {};
       const league = String(match.competition || match.league || "").trim();
-      const stamp = item.finished_at || item.archived_at;
+      // Filter by the match's scheduled kickoff day, not by the later
+      // moment when the collector happened to archive/confirm the result.
+      const stamp = match.time || item.finished_at || item.archived_at;
       const matchDate = archiveDateKey(stamp);
       return (!archiveLeagueFilter || league === archiveLeagueFilter) &&
         (!archiveDateFilter || matchDate === archiveDateFilter);
