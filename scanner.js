@@ -250,6 +250,8 @@
     return value;
   }
 
+  const flashscoreLiveShadowStatusEl = document.getElementById("flashscore-live-shadow-status");
+  const flashscoreLiveShadowListEl = document.getElementById("flashscore-live-shadow-list");
   const flashscoreArchiveDateEl = document.getElementById("flashscore-archive-date");
   const flashscoreArchiveSearchEl = document.getElementById("flashscore-archive-search");
   const flashscoreArchiveLoadEl = document.getElementById("flashscore-archive-load");
@@ -259,6 +261,48 @@
   let flashscoreArchiveRows = [];
   let flashscoreArchiveIndex = null;
   let flashscoreArchiveLoadedWeek = "";
+
+  async function loadFlashscoreLiveShadow() {
+    if (!flashscoreLiveShadowStatusEl || !flashscoreLiveShadowListEl) return;
+    try {
+      const current = await getCachedJSON(DATA_BASE_URL + "flashscore-live-current.json", 45 * 1000);
+      if (!current || current.source !== "Flashscore" || !Array.isArray(current.records)) {
+        throw new Error("Flashscore LIVE snapshot nemá platnú štruktúru.");
+      }
+      const records = current.records
+        .map(record => record?.match)
+        .filter(match => match && String(match.status || "").toLowerCase() === "live");
+      const clockCount = records.filter(match => Boolean(match.live_clock)).length;
+      flashscoreLiveShadowStatusEl.textContent =
+        "SHADOW zdroj: Flashscore · LIVE zápasy: " + records.length +
+        " · čas dostupný: " + clockCount + "/" + records.length +
+        " · posledný zber: " + new Date(current.collected_at || "").toLocaleTimeString("sk-SK");
+      flashscoreLiveShadowListEl.innerHTML = "";
+      if (!records.length) {
+        addText(flashscoreLiveShadowListEl, "Flashscore momentálne nevracia LIVE zápasy.");
+        return;
+      }
+      for (const match of records) {
+        const card = document.createElement("div");
+        card.style.cssText = "margin:8px 0;padding:10px;border:1px solid #31445c;border-radius:9px;background:#101d2d;color:#fff;";
+        const heading = document.createElement("strong");
+        const score = (match.home_score ?? "–") + " : " + (match.away_score ?? "–");
+        heading.textContent = (match.home || "Domáci") + " " + score + " " +
+          (match.away || "Hostia") + " · " + (match.live_clock || "ČAS NEZISTENÝ");
+        card.appendChild(heading);
+        const meta = document.createElement("p");
+        meta.style.cssText = "margin:5px 0 0;color:#9baabe;font-size:12px;";
+        meta.textContent = (match.competition || "Neznáma súťaž") + " · " +
+          (match.stage || "LIVE") + " · " +
+          (match.minute_source || "Bez overeného času");
+        card.appendChild(meta);
+        flashscoreLiveShadowListEl.appendChild(card);
+      }
+    } catch (error) {
+      flashscoreLiveShadowStatusEl.textContent = "Flashscore shadow dáta zatiaľ nie sú dostupné: " + error.message;
+      flashscoreLiveShadowListEl.innerHTML = "";
+    }
+  }
 
   function localDateKey(date = new Date()) {
     const y = date.getFullYear();
@@ -4501,6 +4545,7 @@
       ]);
 
       matchHistoryData = Array.isArray(permanentMatchHistory) ? permanentMatchHistory : [];
+      await loadFlashscoreLiveShadow();
 
       const collectedTime = Date.parse(current.collected_at || "");
       const age = Date.now() - collectedTime;
