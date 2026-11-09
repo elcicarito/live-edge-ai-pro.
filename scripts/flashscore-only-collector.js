@@ -151,7 +151,7 @@ async function main() {
       ]));
       const candidates = Object.fromEntries(Object.entries(fields).filter(([key, value]) =>
         /clock|timer|minute|elapsed|period|phase|time|status|stage/i.test(key) ||
-        (typeof value === "string" && /\\d{1,3}\\s*[:']\\s*\\d{1,2}/.test(value))
+        (typeof value === "string" && /\d{1,3}\s*[:']\s*\d{1,2}/.test(value))
       ));
       return { id: String(raw.id), stage: raw.stage || raw.status || null,
         core_keys: Object.keys(fields), core_sample: coreSample, clock_candidates: candidates };
