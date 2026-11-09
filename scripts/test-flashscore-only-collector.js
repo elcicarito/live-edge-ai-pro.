@@ -180,7 +180,7 @@ function runCollector() {
     assert.equal(specialTimeline[0].snapshot.live_minute, 31);
     assert.match(specialTimeline[0].snapshot.live_clock, /^31:\d{2}$/);
 
-    process.stdout.write("Flashscore collector integration test passed: two snapshots, separate event/live minute fields, stats, score/stat changes, gzip timeline and index.\n");
+    process.stdout.write("Flashscore collector integration test passed: standard and 2x20 clocks, seconds, separate event/live minute fields, stats, score/stat changes, gzip timeline and index.\n");
   } finally {
     await new Promise(resolve => server.close(resolve));
     fs.rmSync(tempDir, { recursive: true, force: true });
