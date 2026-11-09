@@ -23,7 +23,7 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Test isolated Flashscore live-clock collector and syntax
+      - name: Test standard and custom-format Flashscore live-clock collector
         run: |
           node --check scripts/flashscore-only-collector.js
           node --check scripts/test-flashscore-only-collector.js
