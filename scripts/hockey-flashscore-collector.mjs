@@ -9,9 +9,9 @@ const get = async (path, params = {}) => {
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
   url.searchParams.set("_t", String(Date.now()));
   const response = await fetch(url, { headers, cache: "no-store", signal: AbortSignal.timeout(45000) });
-  if (!response.ok) throw new Error(\`Flashscore \${path}: HTTP \${response.status}\`);
+  if (!response.ok) throw new Error(`Flashscore ${path}: HTTP ${response.status}`);
   const data = await response.json();
-  if (!data || typeof data !== "object") throw new Error(\`Flashscore \${path}: invalid JSON\`);
+  if (!data || typeof data !== "object") throw new Error(`Flashscore ${path}: invalid JSON`);
   return data;
 };
 const readJson = async (path, fallback) => { try { return JSON.parse(await fs.readFile(path, "utf8")); } catch { return fallback; } };
@@ -57,10 +57,10 @@ const details = await Promise.all(liveRows.map(async row => {
   }
   const stage = String(row.stage || row.status || detail.stage || "LIVE");
   return {
-    id: \`flashscore-\${sourceId}\`, source: "Flashscore", source_match_id: sourceId,
+    id: `flashscore-${sourceId}`, source: "Flashscore", source_match_id: sourceId,
     league_slug: String((detail.competition?.name || row.competition?.name || "hockey").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")),
     league_name: detail.competition?.name || row.competition?.name || "Hokej",
-    name: \`\${homeName} – \${awayName}\`, date: row.start_time || detail.start_time || null,
+    name: `${homeName} – ${awayName}`, date: row.start_time || detail.start_time || null,
     status: "live", status_text: stage, period: periodNumber(stage), clock: String(row.time || row.clock || ""),
     home, away, periods: { home: [], away: [] }, stats, stats_by_period: statsByPeriod,
     available_tabs: detail.available_tabs || [], has_statistics: Boolean(detail.has_statistics || statsByPeriod.some(p => p.statistics.length)),
