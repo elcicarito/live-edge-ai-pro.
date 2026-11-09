@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: live-data-collectors
+  group: live-data-basketball-writer
   cancel-in-progress: false
 
 jobs:
@@ -20,8 +20,8 @@ jobs:
 
       - name: Restore latest live data snapshot
         run: |
-          git fetch origin live-data
-          git checkout origin/live-data -- data/
+          git fetch origin basketball-data
+          git checkout origin/basketball-data -- data/
 
       - name: Collect LIVE basketball data
         run: |
@@ -625,9 +625,9 @@ jobs:
           # Football and basketball collectors can commit near-simultaneously.
           # Rebase our basketball-only data commit onto the latest live-data snapshot before pushing.
           for attempt in 1 2 3; do
-            git fetch origin live-data
-            git rebase origin/live-data
-            if git push origin HEAD:live-data; then
+            git fetch origin basketball-data
+            git rebase origin/basketball-data
+            if git push origin HEAD:basketball-data; then
               exit 0
             fi
             echo "Push conflict, retry ${attempt}/3"
