@@ -35,7 +35,7 @@
       const older = latest === match ? old : match;
       const stats = { home: { ...(older.stats?.home || {}), ...(latest.stats?.home || {}) }, away: { ...(older.stats?.away || {}), ...(latest.stats?.away || {}) } };
       merged.set(key, { ...older, ...latest, stats,
-        source: [...new Set([...(String(old.source || "").split(" + ")), ...(String(match.source || "").split(" + "))].filter(Boolean))].join(" + "),
+        source: [...new Set([...(String(old.source || "ESPN").split(" + ")), ...(String(match.source || "ESPN").split(" + "))].filter(Boolean))].join(" + "),
         stats_by_period: latest.stats_by_period?.length ? latest.stats_by_period : (older.stats_by_period || [])
       });
     }
