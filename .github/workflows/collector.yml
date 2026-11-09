@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: live-data-v2-football-writer
+  group: flashscore-shadow-validation-writer
   cancel-in-progress: false
 
 jobs:
@@ -20,10 +20,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Restore latest live data snapshot
+      - name: Restore latest isolated validation snapshot
         run: |
-          git fetch --depth=1 origin live-data-v2
-          git checkout origin/live-data-v2 -- data/
+          mkdir -p data
+          if git ls-remote --exit-code --heads origin flashscore-validation-data >/dev/null 2>&1; then
+            git fetch --depth=1 origin flashscore-validation-data
+            git checkout origin/flashscore-validation-data -- data/
+          else
+            echo "Prvý izolovaný Flashscore validačný zber; začíname s prázdnym dátovým priečinkom."
+          fi
 
       - name: Checkout pinned Flashscore scraper source
         uses: actions/checkout@v4
@@ -2712,20 +2717,21 @@ jobs:
         run: |
           node scripts/build-live-prediction-dataset.js
 
-      - name: Save collected data
+      - name: Save isolated validation data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch --depth=1 origin live-data-v2
-          # Move the data commit onto the dedicated snapshot branch without merging
-          # historical JSON snapshots (which intentionally change on every poll).
-          git reset --mixed origin/live-data-v2
+          if git ls-remote --exit-code --heads origin flashscore-validation-data >/dev/null 2>&1; then
+            git fetch --depth=1 origin flashscore-validation-data
+            # Keep the validation branch's existing data history, without touching live-data-v2.
+            git reset --mixed origin/flashscore-validation-data
+          fi
           git add -A -- data/
           if git diff --cached --quiet; then
-            echo "Žiadne nové zmeny na uloženie."
+            echo "Žiadne nové zmeny v izolovanom validačnom archíve."
           else
-            git commit -m "Update LIVE football data"
-            git push origin HEAD:live-data-v2
+            git commit -m "Update isolated Flashscore validation data"
+            git push origin HEAD:flashscore-validation-data
           fi
 
       - name: Stop Flashscore API
