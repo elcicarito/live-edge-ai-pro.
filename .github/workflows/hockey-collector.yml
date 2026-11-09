@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: live-data-hockey-writer
+  group: live-data-v2-hockey-writer
   cancel-in-progress: false
 
 jobs:
@@ -20,8 +20,8 @@ jobs:
 
       - name: Restore latest live data snapshot
         run: |
-          git fetch --depth=1 origin hockey-data
-          git checkout origin/hockey-data -- data/
+          git fetch --depth=1 origin hockey-data-v2
+          git checkout origin/hockey-data-v2 -- data/
       - name: Collect ESPN hockey competitions
         run: node scripts/hockey-collector.mjs
       - name: Commit hockey data
@@ -34,6 +34,6 @@ jobs:
             exit 0
           fi
           git commit -m "Update ESPN hockey live data"
-          git fetch --depth=1 origin hockey-data
-          git rebase --onto origin/hockey-data HEAD~1
-          git push origin HEAD:hockey-data
+          git fetch --depth=1 origin hockey-data-v2
+          git rebase --onto origin/hockey-data-v2 HEAD~1
+          git push origin HEAD:hockey-data-v2
