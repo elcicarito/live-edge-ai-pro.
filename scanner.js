@@ -1,9 +1,9 @@
 
 (() => {
-  // Načítaj dáta priamo z aktuálnej vetvy main. GitHub Pages build sa
+  // Načítaj dáta priamo z samostatnej vetvy live-data. GitHub Pages build sa
   // pri častých zberoch môže zrušiť novším commitom; raw súbory sa aktualizujú
   // hneď po commite collectora a nie sú závislé od dokončenia Pages deploya.
-  const DATA_BASE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./main/data/";
+  const DATA_BASE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data/data/";
   const CURRENT_URL = DATA_BASE_URL + "live-current.json";
   const HISTORY_URL = DATA_BASE_URL + "live-history.json";
   const SIGNAL_ARCHIVE_URL = DATA_BASE_URL + "signal-archive.json";
