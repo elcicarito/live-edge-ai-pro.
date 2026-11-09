@@ -1,0 +1,34 @@
+name: ESPN HOCKEY LIVE COLLECTOR
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: espn-hockey-live-collector
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Collect ESPN hockey competitions
+        run: node scripts/hockey-collector.mjs
+      - name: Commit hockey data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/hockey-current.json data/hockey-archive.json data/hockey-collector-status.json
+          if git diff --cached --quiet; then
+            echo "No hockey data changes."
+            exit 0
+          fi
+          git commit -m "Update ESPN hockey live data"
+          git push
