@@ -69,8 +69,11 @@ function allStats(payload) {
 function commentaryInfo(payload) {
   const comments = Array.isArray(payload?.comments) ? payload.comments : [];
   const latest = comments.find(item => typeof item?.minute === "string" && item.minute.trim());
+  const latestClock = comments.find(item => typeof item?.clock === "string" && item.clock.trim());
   return {
     lastEventMinute: latest ? latest.minute.trim() : null,
+    // MK is the clock timestamp attached to a commentary event, not a live timer.
+    lastEventClock: latestClock ? latestClock.clock.trim() : null,
     count: comments.length,
     availableTabs: Array.isArray(payload?.available_tabs) ? payload.available_tabs : []
   };
@@ -93,6 +96,8 @@ function makeMatch(raw, competition, stats, statsError, commentary, commentaryEr
     minute_source: null,
     last_event_minute: commentary.lastEventMinute,
     last_event_minute_source: commentary.lastEventMinute ? "Flashscore commentary MB" : null,
+    last_event_clock: commentary.lastEventClock,
+    last_event_clock_source: commentary.lastEventClock ? "Flashscore commentary MK (event clock)" : null,
     commentary_count: commentary.count,
     available_tabs: commentary.availableTabs,
     commentary_error: commentaryError || null,
@@ -112,6 +117,7 @@ function snapshotOf(match) {
     collected_at: match.collected_at,
     live_minute: match.live_minute,
     last_event_minute: match.last_event_minute,
+    last_event_clock: match.last_event_clock,
     stage: match.stage,
     home_score: match.home_score,
     away_score: match.away_score,
@@ -125,6 +131,13 @@ async function main() {
     throw new Error("Flashscore LIVE feed nemá platné competitions; dáta sa neprepíšu.");
   }
 
+  // Temporary raw list-feed diagnostics: inspect the original Flashscore
+  // fields before the scraper normalizes or drops them. Never persist these.
+  const rawClockRows = Array.isArray(feed?._diagnostic_raw_live_rows)
+    ? feed._diagnostic_raw_live_rows
+    : [];
+  console.log("FLASHSCORE RAW LIVE ROW DIAGNOSTICS:", JSON.stringify(rawClockRows));
+
   const rawMatches = [];
   for (const competition of feed.competitions) {
     for (const raw of Array.isArray(competition.matches) ? competition.matches : []) {
@@ -133,6 +146,27 @@ async function main() {
       }
     }
   }
+
+  // Temporary diagnostic only: inspect the raw Flashscore common_feed
+  // fields for a few live matches. This is not persisted into app data.
+  const clockDiagnosticSamples = await Promise.all(rawMatches.slice(0, 3).map(async ({ raw }) => {
+    try {
+      const detail = await getJSON("/matches/details", { match: String(raw.id) });
+      const fields = detail?.diagnostic_core_fields || {};
+      const coreSample = Object.fromEntries(Object.entries(fields).map(([key, value]) => [
+        key, String(value ?? "").slice(0, 160)
+      ]));
+      const candidates = Object.fromEntries(Object.entries(fields).filter(([key, value]) =>
+        /clock|timer|minute|elapsed|period|phase|time|status|stage/i.test(key) ||
+        (typeof value === "string" && /\d{1,3}\s*[:']\s*\d{1,2}/.test(value))
+      ));
+      return { id: String(raw.id), stage: raw.stage || raw.status || null,
+        core_keys: Object.keys(fields), core_sample: coreSample, clock_candidates: candidates };
+    } catch (error) {
+      return { id: String(raw.id), error: error.message };
+    }
+  }));
+  console.log("FLASHSCORE RAW CLOCK DIAGNOSTICS:", JSON.stringify(clockDiagnosticSamples));
 
   const records = [];
   const errors = [];
@@ -275,6 +309,7 @@ async function main() {
     commentary_samples: records.slice(0, 8).map(x => ({
       match: x.home + " - " + x.away,
       last_event_minute: x.last_event_minute,
+      last_event_clock: x.last_event_clock,
       commentary_count: x.commentary_count,
       available_tabs: x.available_tabs
     })),
