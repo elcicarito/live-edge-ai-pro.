@@ -43,7 +43,7 @@ jobs:
           if end < 0:
               end = len(source)
           block = source[start:end]
-          marker = "    return summary\\n"
+          marker = "    return summary"
           if marker not in block:
               raise SystemExit("get_details return marker not found")
           if "diagnostic_clock_elements" not in block:
@@ -55,7 +55,7 @@ jobs:
               summary["diagnostic_clock_elements"] = [html[max(0, m.start()-400):m.end()+700] for m in list(re.finditer(r'class="[^"]*(?:event__stage|event__time|detailScore__status|matchTime|clock|timer|stage__time)[^"]*"|data-testid="[^"]*(?:time|clock|stage)[^"]*"', html, re.I))[:20]]
               summary["diagnostic_minute_text"] = [html[max(0, m.start()-120):m.end()+180] for m in list(re.finditer(r'>\\s*(?:\\d{1,3}(?:\\+\\d{1,2})?|HT|Half Time|Break Time|FT)\\s*(?:&#39;|′)?\\s*<', html, re.I))[:25]]
           """
-              block = block.replace(marker, injected + marker)
+              block = block.replace(marker, injected + "\\n    return summary", 1)
               source = source[:start] + block + source[end:]
               p.write_text(source)
           print("Read-only HTML clock diagnostics patched into temporary scraper checkout.")
