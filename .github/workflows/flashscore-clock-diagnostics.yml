@@ -235,11 +235,31 @@ jobs:
                           detail = json.loads(response.read().decode("utf-8"))
                       lines = [line.strip() for line in body.splitlines() if line.strip()]
                       time_like = [line for line in lines if __import__("re").search(r"^\\d{1,3}(?:\\+\\d{1,2})?['′]?$|^(?:HT|Half Time|Break Time|FT)$", line, __import__("re").I)]
+                      stage_values = detail.get("diagnostic_environment_values") or {}
+                      stage_start = stage_values.get("eventStageStartTime")
+                      stage_id = detail.get("stage_id")
+                      import time
+                      from datetime import datetime, timezone
+                      capture_epoch = time.time()
+                      derived_clock = None
+                      if stage_start:
+                          elapsed = max(0, int(capture_epoch - float(stage_start)))
+                          if str(detail.get("stage") or "").lower() in ("2nd half", "second half"):
+                              elapsed += 45 * 60
+                          elif str(detail.get("stage") or "").lower() in ("extra time", "extra time 1st half"):
+                              elapsed += 90 * 60
+                          elif str(detail.get("stage") or "").lower() in ("extra time 2nd half",):
+                              elapsed += 105 * 60
+                          derived_clock = str(elapsed // 60) + ":" + str(elapsed % 60).zfill(2)
                       print("RENDERED_FLASHscore_CLOCK:", json.dumps({
                           "id": match["id"], "url": url, "title": page.title(),
                           "selectors": found, "time_like_text": time_like[:20],
                           "same_window_live_feed_BX": match_update.get("diagnostic_bx"),
-                          "same_window_detail_DI": detail.get("diagnostic_core_DI")
+                          "same_window_detail_DI": detail.get("diagnostic_core_DI"),
+                          "stage": detail.get("stage"), "stage_id": stage_id,
+                          "eventStageStartTime": stage_start,
+                          "capture_utc": datetime.fromtimestamp(capture_epoch, timezone.utc).isoformat(),
+                          "derived_clock_from_stage_start": derived_clock
                       }, ensure_ascii=False), flush=True)
                   except Exception as exc:
                       print("RENDERED_CLOCK_ERROR:", match["id"], repr(exc), flush=True)
