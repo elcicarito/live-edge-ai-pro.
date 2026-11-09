@@ -1513,6 +1513,8 @@ jobs:
                   .sort((a, b) => Date.parse(b.collected_at || "") - Date.parse(a.collected_at || ""))[0] || null;
 
                 const numericPair = (before, after) => {
+                  if (before === null || before === undefined || before === "" ||
+                      after === null || after === undefined || after === "") return null;
                   const from = Number(before);
                   const to = Number(after);
                   if (!Number.isFinite(from) || !Number.isFinite(to) || from === to) return null;
