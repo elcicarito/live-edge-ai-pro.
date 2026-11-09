@@ -22,6 +22,7 @@
   const matchArchiveCountEl = document.getElementById("match-archive-count");
   const matchArchiveLeagueEl = document.getElementById("match-archive-league");
   const matchArchiveDateEl = document.getElementById("match-archive-date");
+  const matchArchiveApplyEl = document.getElementById("match-archive-apply");
   const matchArchiveResetEl = document.getElementById("match-archive-reset");
   const greenSignalArchiveEl = document.getElementById("green-signal-archive");
   const greenSignalArchiveCountEl = document.getElementById("green-signal-archive-count");
@@ -32,6 +33,7 @@
   let matchHistoryPromise = null;
   let archiveLeagueFilter = "";
   let archiveDateFilter = "";
+  let archiveDateDraft = "";
 
   if (matchArchiveLeagueEl) {
     matchArchiveLeagueEl.addEventListener("change", () => {
@@ -40,8 +42,17 @@
     });
   }
   if (matchArchiveDateEl) {
-    matchArchiveDateEl.addEventListener("change", () => {
-      archiveDateFilter = matchArchiveDateEl.value;
+    const updateArchiveDateDraft = () => {
+      archiveDateDraft = matchArchiveDateEl.value;
+      if (matchArchiveApplyEl) matchArchiveApplyEl.disabled = !archiveDateDraft;
+    };
+    matchArchiveDateEl.addEventListener("input", updateArchiveDateDraft);
+    matchArchiveDateEl.addEventListener("change", updateArchiveDateDraft);
+  }
+  if (matchArchiveApplyEl) {
+    matchArchiveApplyEl.addEventListener("click", () => {
+      archiveDateFilter = archiveDateDraft || matchArchiveDateEl?.value || "";
+      archiveDateDraft = archiveDateFilter;
       renderMatchArchive(matchArchiveData);
     });
   }
@@ -49,8 +60,10 @@
     matchArchiveResetEl.addEventListener("click", () => {
       archiveLeagueFilter = "";
       archiveDateFilter = "";
+      archiveDateDraft = "";
       if (matchArchiveLeagueEl) matchArchiveLeagueEl.value = "";
       if (matchArchiveDateEl) matchArchiveDateEl.value = "";
+      if (matchArchiveApplyEl) matchArchiveApplyEl.disabled = true;
       renderMatchArchive(matchArchiveData);
     });
   }
@@ -3121,20 +3134,39 @@
       }
     }
 
-    if (matchArchiveDateEl && matchArchiveDateEl.value !== archiveDateFilter) {
-      matchArchiveDateEl.value = archiveDateFilter;
+    if (matchArchiveDateEl && matchArchiveDateEl.value !== archiveDateDraft) {
+      matchArchiveDateEl.value = archiveDateDraft;
     }
+    if (matchArchiveApplyEl) matchArchiveApplyEl.disabled = !archiveDateDraft;
+
+    const archiveDateKey = stamp => {
+      const date = stamp ? new Date(stamp) : null;
+      if (!date || Number.isNaN(date.getTime())) return "";
+      try {
+        const parts = new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Europe/Bratislava",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit"
+        }).formatToParts(date);
+        const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+        return values.year && values.month && values.day
+          ? values.year + "-" + values.month + "-" + values.day
+          : "";
+      } catch {
+        return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+      }
+    };
 
     const filtered = confirmed.filter(item => {
       const match = item?.final_match || item?.last_snapshot?.match || {};
       const league = String(match.competition || match.league || "").trim();
-      const stamp = item.finished_at || item.archived_at;
-      const date = stamp ? new Date(stamp) : null;
-      const localDate = date && !Number.isNaN(date.getTime())
-        ? [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-")
-        : "";
+      // Filter by the match's scheduled kickoff day, not by the later
+      // moment when the collector happened to archive/confirm the result.
+      const stamp = match.time || item.finished_at || item.archived_at;
+      const matchDate = archiveDateKey(stamp);
       return (!archiveLeagueFilter || league === archiveLeagueFilter) &&
-        (!archiveDateFilter || localDate === archiveDateFilter);
+        (!archiveDateFilter || matchDate === archiveDateFilter);
     });
 
     addText(matchArchiveEl, `Zobrazené výsledky: ${filtered.length} z ${confirmed.length}`);
