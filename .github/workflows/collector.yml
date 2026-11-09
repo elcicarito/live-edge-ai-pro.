@@ -468,7 +468,7 @@ jobs:
           function teamKey(value) {
             return String(value || "")
               .normalize("NFKD")
-              .replace(/[\\u0300-\\u036f]/g, "")
+              .replace(/[\u0300-\u036f]/g, "")
               .toLowerCase()
               .replace(/[^a-z0-9]+/g, "");
           }
@@ -2442,3 +2442,7 @@ jobs:
             echo "Unable to push football data after five retries."
             exit 1
           fi
+
+      - name: Stop Flashscore API
+        if: always()
+        run: docker stop live-edge-flashscore 2>/dev/null || true
