@@ -200,8 +200,36 @@ jobs:
           import urllib.parse
           import urllib.request
           base = "http://127.0.0.1:8000"
-          ids = ["bg0mAPYO", "WdH8ONtT", "fuxuWAcU", "Yo7rQRPP", "URZMok5F", "SpjGMmuf"]
-          for match_id in ids:
+          ids = []
+          try:
+              with urllib.request.urlopen(base + "/matches/live?sport=football", timeout=30) as response:
+                  live = json.loads(response.read().decode("utf-8"))
+              for competition in live.get("competitions") or []:
+                  for match in competition.get("matches") or []:
+                      match_id = match.get("id")
+                      if match_id and str(match_id) not in ids:
+                          ids.append(str(match_id))
+              print("FLASHSCORE CURRENT LIVE FIXTURES:", json.dumps({
+                  "match_count": len(ids),
+                  "competition_count": live.get("competition_count"),
+                  "sample_ids": ids[:20],
+              }, ensure_ascii=False))
+          except Exception as exc:
+              print("FLASHSCORE LIVE FIXTURE LIST ERROR:", repr(exc))
+          if not ids:
+              try:
+                  with urllib.request.urlopen(base + "/matches/live-updates?sport=football", timeout=30) as response:
+                      updates = json.loads(response.read().decode("utf-8"))
+                  ids = list(dict.fromkeys(
+                      str(row.get("AA")) for row in (updates.get("_diagnostic_raw_update_rows") or [])
+                      if row.get("AA")
+                  ))
+                  print("FALLBACK LIVE UPDATE IDS:", json.dumps(ids[:20]))
+              except Exception as exc:
+                  print("FLASHSCORE LIVE UPDATE FALLBACK ERROR:", repr(exc))
+          if not ids:
+              print("NO CURRENT LIVE MATCH IDS AVAILABLE FOR PAGE CLOCK DIAGNOSTICS")
+          for match_id in ids[:12]:
               try:
                   query = urllib.parse.urlencode({"match": match_id})
                   with urllib.request.urlopen(base + "/matches/details?" + query, timeout=25) as response:
