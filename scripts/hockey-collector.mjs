@@ -3,6 +3,19 @@ import fs from "node:fs/promises";
 const CORE = "https://sports.core.api.espn.com/v2/sports/hockey/leagues";
 const BASE = "https://site.api.espn.com/apis/site/v2/sports/hockey";
 const now = new Date().toISOString();
+const readJson = async (path, fallback = null) => {
+  try { return JSON.parse(await fs.readFile(path, "utf8")); } catch { return fallback; }
+};
+const comparable = value => {
+  if (Array.isArray(value)) return value.map(comparable);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).filter(key =>
+      !["collected_at", "updated_at", "summary_checked_at"].includes(key)
+    ).sort().map(key => [key, comparable(value[key])]));
+  }
+  return value;
+};
+const sameData = (a, b) => JSON.stringify(comparable(a)) === JSON.stringify(comparable(b));
 const headers = { accept: "application/json", "user-agent": "LIVE-EDGE-AI-PRO-HOCKEY/1.0", "cache-control": "no-cache" };
 const get = async url => {
   const response = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
@@ -141,22 +154,38 @@ const current = {
   live_count: live.length,
   matches: live
 };
+const previousCurrent = await readJson("data/hockey-current.json", null);
+if (previousCurrent && sameData(previousCurrent, current)) {
+  current.collected_at = previousCurrent.collected_at || now;
+  const previousMatches = new Map((previousCurrent.matches || []).map(match => [`${match.league_slug}:${match.id}`, match]));
+  current.matches = current.matches.map(match => {
+    const previous = previousMatches.get(`${match.league_slug}:${match.id}`);
+    return previous && sameData(previous, match)
+      ? { ...match, collected_at: previous.collected_at, summary_checked_at: previous.summary_checked_at }
+      : match;
+  });
+}
 await fs.writeFile("data/hockey-current.json", JSON.stringify(current, null, 2));
 
-let archive = [];
-try {
-  const stored = JSON.parse(await fs.readFile("data/hockey-archive.json", "utf8"));
-  archive = Array.isArray(stored) ? stored : Array.isArray(stored.matches) ? stored.matches : [];
-} catch {}
+const stored = await readJson("data/hockey-archive.json", {});
+let archive = Array.isArray(stored) ? stored : Array.isArray(stored.matches) ? stored.matches : [];
 const byId = new Map(archive.map(x => [`${x.league_slug}:${x.id}`, x]));
 for (const match of finished) {
   const key = `${match.league_slug}:${match.id}`;
   const old = byId.get(key);
   const hasStats = Object.keys(match.stats.home || {}).length || Object.keys(match.stats.away || {}).length;
-  byId.set(key, old ? { ...old, ...match, stats: hasStats ? match.stats : old.stats } : match);
+  const merged = old ? { ...old, ...match, stats: hasStats ? match.stats : old.stats } : match;
+  if (old && sameData(old, merged)) {
+    merged.collected_at = old.collected_at;
+    merged.summary_checked_at = old.summary_checked_at;
+  }
+  byId.set(key, merged);
 }
 archive = [...byId.values()].sort((a, b) => Date.parse(b.date || b.collected_at) - Date.parse(a.date || a.collected_at)).slice(0, 1500);
-await fs.writeFile("data/hockey-archive.json", JSON.stringify({ source: "ESPN public site API", updated_at: now, count: archive.length, matches: archive }, null, 2));
+const previousArchive = stored && !Array.isArray(stored) ? stored : null;
+const archivePayload = { source: "ESPN public site API", updated_at: now, count: archive.length, matches: archive };
+if (previousArchive && sameData(previousArchive, archivePayload)) archivePayload.updated_at = previousArchive.updated_at || now;
+await fs.writeFile("data/hockey-archive.json", JSON.stringify(archivePayload, null, 2));
 const summary = {
   collected_at: now,
   directory_leagues: leagues.length,
@@ -167,5 +196,7 @@ const summary = {
   archive_count: archive.length,
   errors: settled.filter(x => !x.ok).map(x => ({ league: x.league.slug, error: x.error }))
 };
+const previousSummary = await readJson("data/hockey-collector-status.json", null);
+if (previousSummary && sameData(previousSummary, summary)) summary.collected_at = previousSummary.collected_at || now;
 await fs.writeFile("data/hockey-collector-status.json", JSON.stringify(summary, null, 2));
 console.log("HOCKEY COLLECTOR:", JSON.stringify(summary));
