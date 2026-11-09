@@ -371,38 +371,26 @@ small{
 
 <details class="card archive-card">
 <summary>
-  <span>🟢 ARCHÍV ZELENÝCH SIGNÁLOV – GÓL DO 15 MIN.</span>
-  <span class="archive-count" id="green-signal-archive-count">LIVE</span>
-</summary>
-<div id="green-signal-archive"><p>Načítavam archív zelených signálov...</p></div>
-</details>
-
-<details class="card archive-card">
-<summary>
   <span>🔵 ARCHÍV MODRÝCH SIGNÁLOV – BTTS</span>
   <span class="archive-count" id="btts-signal-archive-count">LIVE</span>
 </summary>
 <div id="btts-signal-archive"><p>Načítavam archív BTTS...</p></div>
 </details>
 
-<details class="card archive-card">
-<summary>
-  <span>🏁 UKONČENÉ ZÁPASY</span>
-  <span class="archive-count" id="match-archive-count">0</span>
-</summary>
-<div class="archive-filters">
-  <label for="match-archive-league">Liga</label>
-  <select id="match-archive-league">
-    <option value="">Všetky ligy</option>
-  </select>
-  <label for="match-archive-date">Dátum ukončenia</label>
-  <input id="match-archive-date" type="date">
-  <button id="match-archive-apply" type="button" disabled>POTVRDIŤ DÁTUM</button>
-  <button id="match-archive-reset" type="button">VYMAZAŤ FILTER</button>
-</div>
-<div id="match-archive">
-  <p>Načítavam konečné výsledky...</p>
-</div>
+<details class="card archive-card" id="flashscore-match-archive-card">
+  <summary>
+    <span>⚽ NOVÝ ARCHÍV ZÁPASOV · FLASHSCORE</span>
+    <span class="archive-count" id="flashscore-archive-count">0</span>
+  </summary>
+  <div class="archive-filters">
+    <label for="flashscore-archive-date">Dátum snímok</label>
+    <input id="flashscore-archive-date" type="date">
+    <label for="flashscore-archive-search">Vyhľadať tím, súťaž alebo minútu</label>
+    <input id="flashscore-archive-search" type="search" placeholder="Napr. Slovan, Premier League, 67">
+    <button id="flashscore-archive-load" type="button">NAČÍTAŤ ZÁZNAMY</button>
+  </div>
+  <p id="flashscore-archive-status">Čakám na nový Flashscore archív...</p>
+  <div id="flashscore-archive-results"></div>
 </details>
 
 <button onclick="location.reload()">
@@ -489,7 +477,7 @@ OBNOVIŤ SKENER
 })();
 </script>
 <script src="./momentum-engine.js?v=1"></script>
-<script src="./scanner.js?v=92"></script>
+<script src="./scanner.js?v=95"></script>
 <script src="./basketball.js?v=12"></script>
 <script src="./hockey.js?v=1"></script>
 
