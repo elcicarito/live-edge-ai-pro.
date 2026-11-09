@@ -122,7 +122,10 @@ function runCollector() {
     assert.ok(index.weeks.some(item => item.week === previousWeek), "previous indexed week must be retained");
     assert.ok(index.weeks.some(item => item.week !== previousWeek), "current indexed week must be added");
 
-    const timelinePath = path.join(dataDir, index.weeks[0].file);
+    const currentWeek = isoWeekKey(new Date());
+    const currentWeekEntry = index.weeks.find(item => item.week === currentWeek);
+    assert.ok(currentWeekEntry, "current week timeline must be indexed");
+    const timelinePath = path.join(dataDir, currentWeekEntry.file);
     const lines = zlib.gunzipSync(fs.readFileSync(timelinePath), { finishFlush: zlib.constants.Z_FINISH })
       .toString("utf8").trim().split("\n").map(line => JSON.parse(line));
     assert.equal(lines.length, 2);
