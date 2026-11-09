@@ -150,6 +150,48 @@ jobs:
               print("FLASHSCORE INCREMENTAL UPDATE DIAGNOSTIC ERROR:", repr(exc))
           PY
 
+      - name: Correlate incremental BX values with match details
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import json
+          import urllib.parse
+          import urllib.request
+          base = "http://127.0.0.1:8000"
+          try:
+              with urllib.request.urlopen(base + "/matches/live-updates?sport=football", timeout=30) as response:
+                  updates = json.loads(response.read().decode("utf-8"))
+              rows = updates.get("_diagnostic_raw_update_rows") or []
+              seen = set()
+              correlated = []
+              for row in rows:
+                  match_id = row.get("AA")
+                  if not match_id or match_id in seen:
+                      continue
+                  seen.add(match_id)
+                  query = urllib.parse.urlencode({"match": match_id})
+                  try:
+                      with urllib.request.urlopen(base + "/matches/details?" + query, timeout=25) as response:
+                          detail = json.loads(response.read().decode("utf-8"))
+                      core = detail.get("diagnostic_core_fields") or {}
+                      correlated.append({
+                          "id": match_id,
+                          "incremental_BX": row.get("BX"),
+                          "incremental_keys": sorted(row.keys()),
+                          "detail_stage": detail.get("stage"),
+                          "detail_DI": core.get("DI"),
+                          "detail_DK": core.get("DK"),
+                          "detail_DD": core.get("DD"),
+                          "detail_DC": core.get("DC"),
+                          "detail_DM": core.get("DM"),
+                      })
+                  except Exception as exc:
+                      correlated.append({"id": match_id, "incremental_BX": row.get("BX"), "detail_error": repr(exc)})
+              print("FLASHSCORE BX TO MATCH DETAIL CORRELATION:", json.dumps(correlated[:30], ensure_ascii=False))
+          except Exception as exc:
+              print("FLASHSCORE BX CORRELATION ERROR:", repr(exc))
+          PY
+
       - name: Collect fresh LIVE football data
         run: |
           mkdir -p data
