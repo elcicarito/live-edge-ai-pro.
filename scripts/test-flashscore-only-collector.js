@@ -130,6 +130,7 @@ function runCollector() {
     assert.equal(current.records[0].match.live_minute, 55, "second-half clock must include the 45-minute first half");
     assert.match(current.records[0].match.live_clock, /^55:\d{2}$/, "clock must preserve seconds");
     assert.equal(current.records[0].match.minute_source, "Flashscore eventStageStartTime");
+    assert.equal(current.records[0].match.status_text, "2nd Half");
     assert.equal(current.records[0].match.last_event_minute, "57'");
     assert.equal(current.records[0].match.last_event_minute_source, "Flashscore commentary MB");
     assert.equal(current.records[0].match.commentary_count, 1);
