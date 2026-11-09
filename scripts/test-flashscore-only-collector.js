@@ -113,8 +113,11 @@ function runCollector() {
 
     assert.equal(current.source, "Flashscore");
     assert.equal(current.live_count, 1);
-    assert.equal(current.records[0].match.live_minute, "57'");
-    assert.equal(current.records[0].match.minute_source, "Flashscore commentary MB");
+    assert.equal(current.records[0].match.live_minute, null, "event minute must never be mislabeled as the live clock");
+    assert.equal(current.records[0].match.minute_source, null);
+    assert.equal(current.records[0].match.last_event_minute, "57'");
+    assert.equal(current.records[0].match.last_event_minute_source, "Flashscore commentary MB");
+    assert.equal(current.records[0].match.commentary_count, 1);
     assert.equal(current.records[0].match.stats[0].name, "Shots on target");
     assert.equal(archive.matches["test-match-1"].snapshots_count, 2);
     assert.equal(archive.matches["test-match-1"].score_change_count, 1);
@@ -129,11 +132,12 @@ function runCollector() {
     const lines = zlib.gunzipSync(fs.readFileSync(timelinePath), { finishFlush: zlib.constants.Z_FINISH })
       .toString("utf8").trim().split("\n").map(line => JSON.parse(line));
     assert.equal(lines.length, 2);
-    assert.equal(lines[0].snapshot.live_minute, "57'");
+    assert.equal(lines[0].snapshot.live_minute, null);
+    assert.equal(lines[0].snapshot.last_event_minute, "57'");
     assert.equal(lines[1].score_changed, true);
     assert.equal(lines[1].stat_changes.length, 1);
 
-    process.stdout.write("Flashscore collector integration test passed: two snapshots, live minute, stats, score/stat changes, gzip timeline and index.\n");
+    process.stdout.write("Flashscore collector integration test passed: two snapshots, separate event/live minute fields, stats, score/stat changes, gzip timeline and index.\n");
   } finally {
     await new Promise(resolve => server.close(resolve));
     fs.rmSync(tempDir, { recursive: true, force: true });
