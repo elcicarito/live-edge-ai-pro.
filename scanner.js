@@ -2379,7 +2379,7 @@
       title.textContent = `${item.home || "?"} ${item.startScore ? "(" + item.startScore + ")" : ""} – ${item.away || "?"}`;
       title.style.cssText = "font-weight:800;margin-bottom:5px;";
       const detail = document.createElement("div");
-      detail.textContent = `${item.tier || item.tierKey || "BTTS"} | ${style[3]} | ${item.startMinute ?? "?"}. min | SOT ${item.combinedSot ?? "?"} | strely ${item.combinedShots ?? "?"}${item.settledScore ? " | konečný stav " + item.settledScore : ""}`;
+      detail.textContent = `${item.source || "ESPN"} | ${item.tier || item.tierKey || "BTTS"} | ${style[3]} | ${item.startMinute ?? "?"}. min | SOT ${item.combinedSot ?? "?"} | strely ${item.combinedShots ?? "?"}${item.settledScore ? " | konečný stav " + item.settledScore : ""}`;
       detail.style.cssText = `font-size:12px;line-height:1.5;color:${style[2]};font-weight:700;`;
       row.append(title, detail);
       target.appendChild(row);
