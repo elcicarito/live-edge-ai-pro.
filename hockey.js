@@ -1,6 +1,6 @@
 (() => {
-  const CURRENT_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./hockey-data/data/hockey-current.json";
-  const ARCHIVE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./hockey-data/data/hockey-archive.json";
+  const CURRENT_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./hockey-data-v2/data/hockey-current.json";
+  const ARCHIVE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./hockey-data-v2/data/hockey-archive.json";
   const root = document.getElementById("hockey-view");
   if (!root) return;
   const liveList = document.getElementById("hockey-matches");
