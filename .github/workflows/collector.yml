@@ -1061,11 +1061,31 @@ jobs:
 
             const metricsPath = "data/football-collector-metrics.jsonl";
             const metricsHistory = fs.existsSync(metricsPath)
-              ? fs.readFileSync(metricsPath, "utf8").split("\n").filter(Boolean)
+              ? fs.readFileSync(metricsPath, "utf8").split("\n").filter(Boolean).map(line => {
+                  try {
+                    const record = JSON.parse(line);
+                    if (Array.isArray(record.api_response_diagnostics)) {
+                      record.api_response_diagnostics_count =
+                        record.api_response_diagnostics.length;
+                      delete record.api_response_diagnostics;
+                    }
+                    return JSON.stringify(record);
+                  } catch {
+                    return line;
+                  }
+                })
               : [];
+            // Plné diagnostiky ostávajú v Actions logu a v aktuálnom výstupe.
+            // Dlhodobý JSONL uchováva iba súhrn, aby sa história zbytočne nenafukovala.
+            const persistedMetrics = { ...collectorMetrics };
+            persistedMetrics.api_response_diagnostics_count =
+              Array.isArray(collectorMetrics.api_response_diagnostics)
+                ? collectorMetrics.api_response_diagnostics.length
+                : 0;
+            delete persistedMetrics.api_response_diagnostics;
             metricsHistory.push(JSON.stringify({
               sport: "football",
-              ...collectorMetrics
+              ...persistedMetrics
             }));
             fs.writeFileSync(metricsPath, metricsHistory.slice(-1000).join("\n") + "\n");
 
