@@ -23,6 +23,9 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
 
+      - name: Test isolated Flashscore live-clock collector
+        run: node scripts/test-flashscore-only-collector.js
+
       - name: Checkout pinned Flashscore scraper
         uses: actions/checkout@v4
         with:
