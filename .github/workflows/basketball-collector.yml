@@ -620,18 +620,12 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --depth=1 origin basketball-data-v2
+          git reset --mixed origin/basketball-data-v2
           git add data/basketball-current.json data/basketball-history.jsonl data/basketball-archive.json data/basketball-predictions.json data/basketball-collector-metrics.jsonl
+          if git diff --cached --quiet; then
+            echo "Basketball data unchanged after branch sync."
+            exit 0
+          fi
           git commit -m "Update LIVE basketball data"
-          # Football and basketball collectors can commit near-simultaneously.
-          # Rebase our basketball-only data commit onto the latest live-data snapshot before pushing.
-          for attempt in 1 2 3; do
-            git fetch --depth=1 origin basketball-data-v2
-            git rebase --onto origin/basketball-data-v2 HEAD~1
-            if git push origin HEAD:basketball-data-v2; then
-              exit 0
-            fi
-            echo "Push conflict, retry ${attempt}/3"
-            sleep 2
-          done
-          echo "Unable to push basketball data after three retries."
-          exit 1
+          git push origin HEAD:basketball-data-v2
