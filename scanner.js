@@ -201,7 +201,10 @@
       "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/",
       "https://cdn.jsdelivr.net/gh/elcicarito/live-edge-ai-pro.@live-data-v2/"
     );
-    const candidates = [...new Set([url, fallbackUrl])];
+    const apiUrl = url === CURRENT_URL
+      ? "https://api.github.com/repos/elcicarito/live-edge-ai-pro./contents/data/live-current.json?ref=live-data-v2"
+      : "";
+    const candidates = [...new Set([url, fallbackUrl, apiUrl].filter(Boolean))];
     const failures = [];
 
     for (const candidate of candidates) {
@@ -210,17 +213,31 @@
           candidate + (candidate.includes("?") ? "&" : "?") + "t=" + Date.now(),
           {
             cache: "no-store",
-            headers: { "Cache-Control": "no-cache" }
+            headers: { "Cache-Control": "no-cache", "Accept": "application/vnd.github+json" }
           }
         );
         if (!response.ok) throw new Error("HTTP " + response.status);
-        return await response.json();
+        const payload = await response.json();
+
+        // GitHub Contents API vracia obálku s base64 obsahom súboru.
+        // Ostatné zdroje vracajú priamo JSON dátového súboru.
+        if (
+          candidate === apiUrl &&
+          payload &&
+          typeof payload.content === "string" &&
+          payload.encoding === "base64"
+        ) {
+          const binary = atob(payload.content.replace(/\\s/g, ""));
+          const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+          return JSON.parse(new TextDecoder().decode(bytes));
+        }
+        return payload;
       } catch (error) {
         failures.push(candidate + ": " + (error?.message || String(error)));
       }
     }
 
-    throw new Error("Nepodarilo sa načítať dátový súbor z hlavného ani záložného zdroja. " + failures.join(" | "));
+    throw new Error("Nepodarilo sa načítať LIVE dáta z hlavného, záložného ani GitHub API zdroja. " + failures.join(" | "));
   }
 
   async function loadPermanentMatchHistory() {
