@@ -98,6 +98,8 @@ jobs:
 
           sample = next((m for m in live_matches if m.get("id")), None)
           if sample:
+              details, details_bytes, details_status = get_json("/matches/details", {"match": sample["id"]})
+              available_tabs = details.get("available_tabs", []) if isinstance(details, dict) else []
               report["sample_live_match"] = {
                   "id": sample.get("id"),
                   "home": (sample.get("home") or {}).get("name") if isinstance(sample.get("home"), dict) else sample.get("home"),
@@ -105,9 +107,11 @@ jobs:
                   "home_score": sample.get("home_score"),
                   "away_score": sample.get("away_score"),
                   "status": sample.get("status"),
-                  "available_tabs": sample.get("available_tabs", [])
+                  "details_http": details_status,
+                  "details_bytes": details_bytes,
+                  "available_tabs": available_tabs
               }
-              if "statistics" in (sample.get("available_tabs") or []):
+              if "statistics" in available_tabs:
                   try:
                       stats, stats_bytes, stats_status = get_json("/matches/statistics", {"match": sample["id"]})
                       report["sample_statistics"] = {
