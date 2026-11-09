@@ -66,12 +66,16 @@ function allStats(payload) {
   }
   return out;
 }
-function commentaryMinute(payload) {
+function commentaryInfo(payload) {
   const comments = Array.isArray(payload?.comments) ? payload.comments : [];
   const latest = comments.find(item => typeof item?.minute === "string" && item.minute.trim());
-  return latest ? latest.minute.trim() : null;
+  return {
+    lastEventMinute: latest ? latest.minute.trim() : null,
+    count: comments.length,
+    availableTabs: Array.isArray(payload?.available_tabs) ? payload.available_tabs : []
+  };
 }
-function makeMatch(raw, competition, stats, statsError, liveMinute, commentaryError) {
+function makeMatch(raw, competition, stats, statsError, commentary, commentaryError) {
   const home = nameOf(raw.home), away = nameOf(raw.away);
   const stage = String(raw.stage || raw.status || "LIVE");
   return {
@@ -84,9 +88,13 @@ function makeMatch(raw, competition, stats, statsError, liveMinute, commentaryEr
     country: competition?.country?.name || null,
     status: raw.status || "live",
     stage,
-    // Minute comes from the newest Flashscore commentary item, never the BA period-score field.
-    live_minute: liveMinute,
-    minute_source: liveMinute ? "Flashscore commentary MB" : null,
+    // Commentary MB is the minute of the latest event, NOT the live match clock.
+    live_minute: null,
+    minute_source: null,
+    last_event_minute: commentary.lastEventMinute,
+    last_event_minute_source: commentary.lastEventMinute ? "Flashscore commentary MB" : null,
+    commentary_count: commentary.count,
+    available_tabs: commentary.availableTabs,
     commentary_error: commentaryError || null,
     start_time: raw.start_time || null,
     collected_at: now,
@@ -103,6 +111,7 @@ function snapshotOf(match) {
   return {
     collected_at: match.collected_at,
     live_minute: match.live_minute,
+    last_event_minute: match.last_event_minute,
     stage: match.stage,
     home_score: match.home_score,
     away_score: match.away_score,
@@ -133,7 +142,9 @@ async function main() {
       const index = cursor++;
       if (index >= rawMatches.length) return;
       const { raw, competition } = rawMatches[index];
-      let stats = [], statsError = null, liveMinute = null, commentaryError = null;
+      let stats = [], statsError = null;
+      let commentary = { lastEventMinute: null, count: 0, availableTabs: [] };
+      let commentaryError = null;
       const tasks = [];
       if (raw.has_statistics === true) {
         tasks.push((async () => {
@@ -149,14 +160,14 @@ async function main() {
       tasks.push((async () => {
         try {
           const payload = await getJSON("/matches/commentary", { match: String(raw.id) });
-          liveMinute = commentaryMinute(payload);
+          commentary = commentaryInfo(payload);
         } catch (error) {
           commentaryError = error.message;
           errors.push(String(raw.id) + " commentary: " + commentaryError);
         }
       })());
       await Promise.all(tasks);
-      records.push(makeMatch(raw, competition, stats, statsError, liveMinute, commentaryError));
+      records.push(makeMatch(raw, competition, stats, statsError, commentary, commentaryError));
     }
   });
   await Promise.all(workers);
@@ -260,7 +271,13 @@ async function main() {
     stats_error_count: records.filter(x => x.stats_error).length,
     commentary_error_count: records.filter(x => x.commentary_error).length,
     live_minute_count: records.filter(x => x.live_minute !== null && x.live_minute !== undefined && x.live_minute !== "").length,
-    live_minute_samples: records.filter(x => x.live_minute !== null && x.live_minute !== undefined && x.live_minute !== "").slice(0, 8).map(x => ({ match: x.home + " - " + x.away, minute: x.live_minute, minute_source: x.minute_source })),
+    last_event_minute_count: records.filter(x => Boolean(x.last_event_minute)).length,
+    commentary_samples: records.slice(0, 8).map(x => ({
+      match: x.home + " - " + x.away,
+      last_event_minute: x.last_event_minute,
+      commentary_count: x.commentary_count,
+      available_tabs: x.available_tabs
+    })),
     archive_matches: Object.keys(archive.matches).length,
     timeline_file: path.basename(TIMELINE_PATH),
     timeline_index_file: path.basename(TIMELINE_INDEX_PATH),
