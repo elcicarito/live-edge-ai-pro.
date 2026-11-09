@@ -1,0 +1,121 @@
+name: Flashscore clock diagnostics (isolated)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/flashscore-clock-diagnostics.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flashscore-clock-diagnostics-isolated
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned Flashscore scraper
+        uses: actions/checkout@v4
+        with:
+          repository: omkarcloud/flashscore-scraper
+          ref: af784a918fc94339fd2c8ff0fadc1da69a6139d8
+          path: .flashscore-scraper
+
+      - name: Add read-only page clock diagnostics
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path(".flashscore-scraper/flashscore/matches.py")
+          source = p.read_text()
+          start = source.find("def get_details(match):")
+          if start < 0:
+              raise SystemExit("get_details function not found")
+          end = source.find("\ndef ", start + 1)
+          if end < 0:
+              end = len(source)
+          block = source[start:end]
+          marker = "    return summary\\n"
+          if marker not in block:
+              raise SystemExit("get_details return marker not found")
+          if "diagnostic_clock_elements" not in block:
+              injected = """    summary["diagnostic_environment_keys"] = sorted(environment.keys())
+              summary["diagnostic_environment_values"] = {k: environment.get(k) for k in ("eventStageStartTime", "event_stage_time", "eventStageTypeId", "eventStageId", "lastEventInfo", "final_stage")}
+              summary["diagnostic_event_info"] = info
+              import re
+              summary["diagnostic_html_clock_markers"] = [html[max(0, m.start()-160):m.end()+240] for m in list(re.finditer(r"displayClock|clock|minute|timer|timeElapsed|matchTime|elapsed|eventStageStartTime|event_stage_time", html, re.I))[:20]]
+              summary["diagnostic_clock_elements"] = [html[max(0, m.start()-400):m.end()+700] for m in list(re.finditer(r'class="[^"]*(?:event__stage|event__time|detailScore__status|matchTime|clock|timer|stage__time)[^"]*"|data-testid="[^"]*(?:time|clock|stage)[^"]*"', html, re.I))[:20]]
+              summary["diagnostic_minute_text"] = [html[max(0, m.start()-120):m.end()+180] for m in list(re.finditer(r'>\\s*(?:\\d{1,3}(?:\\+\\d{1,2})?|HT|Half Time|Break Time|FT)\\s*(?:&#39;|′)?\\s*<', html, re.I))[:25]]
+          """
+              block = block.replace(marker, injected + marker)
+              source = source[:start] + block + source[end:]
+              p.write_text(source)
+          print("Read-only HTML clock diagnostics patched into temporary scraper checkout.")
+          PY
+
+      - name: Build and start isolated Flashscore API
+        run: |
+          docker build -t flashscore-clock-diagnostic .flashscore-scraper
+          docker run -d --rm --name flashscore-clock-diagnostic -p 127.0.0.1:8000:8000 flashscore-clock-diagnostic
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8000/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Flashscore API did not become healthy"
+          exit 1
+
+      - name: Inspect current live fixtures and page clocks
+        run: |
+          python - <<'PY'
+          import json
+          import urllib.parse
+          import urllib.request
+          base = "http://127.0.0.1:8000"
+          with urllib.request.urlopen(base + "/matches/live?sport=football", timeout=30) as response:
+              live = json.loads(response.read().decode("utf-8"))
+          ids = []
+          for competition in live.get("competitions") or []:
+              for match in competition.get("matches") or []:
+                  match_id = match.get("id")
+                  if match_id and str(match_id) not in ids:
+                      ids.append(str(match_id))
+          print("CURRENT LIVE FIXTURES:", json.dumps({
+              "match_count": len(ids),
+              "competition_count": live.get("competition_count"),
+              "sample_ids": ids[:12]
+          }, ensure_ascii=False))
+          if not ids:
+              print("NO CURRENT LIVE FIXTURES AVAILABLE")
+          for match_id in ids[:12]:
+              try:
+                  query = urllib.parse.urlencode({"match": match_id})
+                  with urllib.request.urlopen(base + "/matches/details?" + query, timeout=25) as response:
+                      detail = json.loads(response.read().decode("utf-8"))
+                  print("MATCH CLOCK DIAGNOSTIC:", json.dumps({
+                      "id": match_id,
+                      "stage": detail.get("stage"),
+                      "status": detail.get("status"),
+                      "environment_keys": detail.get("diagnostic_environment_keys"),
+                      "environment_values": detail.get("diagnostic_environment_values"),
+                      "event_info": detail.get("diagnostic_event_info"),
+                      "clock_elements": detail.get("diagnostic_clock_elements"),
+                      "minute_text": detail.get("diagnostic_minute_text"),
+                      "html_markers": detail.get("diagnostic_html_clock_markers")
+                  }, ensure_ascii=False))
+              except Exception as exc:
+                  print("MATCH DETAIL ERROR:", match_id, repr(exc))
+          PY
+
+      - name: Stop isolated Flashscore API
+        if: always()
+        run: docker stop flashscore-clock-diagnostic 2>/dev/null || true
