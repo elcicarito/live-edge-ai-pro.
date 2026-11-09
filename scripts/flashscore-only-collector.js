@@ -9,8 +9,11 @@ const DATA = "data";
 const CURRENT_PATH = path.join(DATA, "flashscore-live-current.json");
 const ARCHIVE_PATH = path.join(DATA, "flashscore-match-archive.json");
 const weekKey = (() => { const d = new Date(); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day + 3); const first = new Date(Date.UTC(d.getUTCFullYear(), 0, 4)); const week = 1 + Math.round(((d - first) / 86400000 - 3 + ((first.getUTCDay() + 6) % 7)) / 7); return d.getUTCFullYear() + "-W" + String(week).padStart(2, "0"); })();
-const TIMELINE_PATH = path.join(DATA, "flashscore-match-timeline-" + weekKey + ".jsonl.gz");
+const TIMELINE_FILE = "flashscore-match-timeline-" + weekKey + ".jsonl.gz";
+const TIMELINE_PATH = path.join(DATA, TIMELINE_FILE);
+const TIMELINE_INDEX_PATH = path.join(DATA, "flashscore-timeline-index.json");
 const MAX_ARCHIVE_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+const MAX_TIMELINE_WEEKS = 13;
 const now = new Date().toISOString();
 
 function readJson(file, fallback) {
@@ -204,6 +207,28 @@ async function main() {
   if (timelineLines.length) {
     fs.appendFileSync(TIMELINE_PATH, zlib.gzipSync(Buffer.from(timelineLines.join("\n") + "\n")));
   }
+
+  const previousIndex = readJson(TIMELINE_INDEX_PATH, {
+    schema_version: 1, source: "Flashscore", weeks: []
+  });
+  if (!previousIndex || previousIndex.source !== "Flashscore" || !Array.isArray(previousIndex.weeks)) {
+    throw new Error("Flashscore timeline index má neplatnú štruktúru; odmietam prepísať.");
+  }
+  const allWeeks = [...new Set([...previousIndex.weeks, weekKey])].sort();
+  const retainedWeeks = allWeeks.slice(-MAX_TIMELINE_WEEKS);
+  for (const oldWeek of allWeeks) {
+    if (retainedWeeks.includes(oldWeek)) continue;
+    const oldFile = path.join(DATA, "flashscore-match-timeline-" + oldWeek + ".jsonl.gz");
+    if (fs.existsSync(oldFile)) fs.unlinkSync(oldFile);
+  }
+  atomicJson(TIMELINE_INDEX_PATH, {
+    schema_version: 1, source: "Flashscore", updated_at: now,
+    retention_weeks: MAX_TIMELINE_WEEKS,
+    weeks: retainedWeeks.map(week => ({
+      week, file: "flashscore-match-timeline-" + week + ".jsonl.gz"
+    }))
+  });
+
   atomicJson(ARCHIVE_PATH, archive);
   atomicJson(CURRENT_PATH, current);
   console.log(JSON.stringify({
@@ -214,6 +239,8 @@ async function main() {
     live_minute_samples: records.filter(x => x.live_minute !== null && x.live_minute !== undefined && x.live_minute !== "").slice(0, 8).map(x => ({ match: x.home + " - " + x.away, minute: x.live_minute, minute_source: x.minute_source })),
     archive_matches: Object.keys(archive.matches).length,
     timeline_file: path.basename(TIMELINE_PATH),
+    timeline_index_file: path.basename(TIMELINE_INDEX_PATH),
+    timeline_weeks_retained: retainedWeeks.length,
     timeline_snapshots_written: timelineLines.length,
     collected_at: now
   }, null, 2));
