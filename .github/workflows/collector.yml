@@ -1503,11 +1503,64 @@ jobs:
                   ? collectedAt
                   : item.last_seen_at;
 
+                const minuteLabel = String(
+                  match.live_minute ?? match.status_text ?? ""
+                ).trim() || null;
+                const minuteMatch = minuteLabel?.match(/\\d+/);
+                const numericMinute = minuteMatch ? Number(minuteMatch[0]) : null;
+                const previousSnapshot = [...item.snapshots]
+                  .filter(existing => Date.parse(existing.collected_at || "") < stamp)
+                  .sort((a, b) => Date.parse(b.collected_at || "") - Date.parse(a.collected_at || ""))[0] || null;
+
+                const numericPair = (before, after) => {
+                  const from = Number(before);
+                  const to = Number(after);
+                  if (!Number.isFinite(from) || !Number.isFinite(to) || from === to) return null;
+                  return { from, to, delta: Number((to - from).toFixed(2)) };
+                };
+                const previousStats = new Map(
+                  (Array.isArray(previousSnapshot?.stats) ? previousSnapshot.stats : []).map(stat => [
+                    [stat.label, stat.period || "", stat.suffix || ""].join("|"),
+                    stat
+                  ])
+                );
+                const statChanges = [];
+                for (const stat of stats) {
+                  const key = [stat.label, stat.period || "", stat.suffix || ""].join("|");
+                  const before = previousStats.get(key);
+                  if (!before) continue;
+                  const homeChange = numericPair(before.home, stat.home);
+                  const awayChange = numericPair(before.away, stat.away);
+                  if (homeChange || awayChange) {
+                    statChanges.push({
+                      label: stat.label,
+                      period: stat.period || null,
+                      suffix: stat.suffix || "",
+                      ...(homeChange ? { home: homeChange } : {}),
+                      ...(awayChange ? { away: awayChange } : {})
+                    });
+                  }
+                }
+
+                const previousHomeScore = previousSnapshot?.home_score;
+                const previousAwayScore = previousSnapshot?.away_score;
+                const homeScore = Number.isFinite(Number(match.home_score)) ? Number(match.home_score) : null;
+                const awayScore = Number.isFinite(Number(match.away_score)) ? Number(match.away_score) : null;
+                const scoreChanges = {
+                  home: numericPair(previousHomeScore, homeScore),
+                  away: numericPair(previousAwayScore, awayScore)
+                };
+
                 const snapshot = {
                   collected_at: collectedAt,
-                  minute: Number.isFinite(Number(match.live_minute)) ? Number(match.live_minute) : null,
-                  home_score: Number.isFinite(Number(match.home_score)) ? Number(match.home_score) : null,
-                  away_score: Number.isFinite(Number(match.away_score)) ? Number(match.away_score) : null,
+                  minute: numericMinute,
+                  minute_label: minuteLabel,
+                  home_score: homeScore,
+                  away_score: awayScore,
+                  score_changes: scoreChanges,
+                  changes_from_previous_at: previousSnapshot?.collected_at || null,
+                  changed_stats_count: statChanges.length,
+                  stats_changes: statChanges,
                   status: getStatus(match),
                   collection_status: batch.data_status || "unknown",
                   stats_count: stats.length,
