@@ -4334,10 +4334,15 @@
         );
       }
 
-      if (current.feed_guard_warning) {
+      if (current.feed_state === "SUSPECTED_DROP") {
         addText(
           engine,
-          "FEED GUARD: Podozrivý pokles počtu zápasov. Archivácia je pozastavená."
+          "FEED GUARD: Podozrivý pokles LIVE zápasov. Nové signály a archivácia sú pozastavené."
+        );
+      } else if (current.feed_state === "BASELINE_PENDING") {
+        addText(
+          engine,
+          "ESPN: Historická základňa sa ešte overuje. Nové signály a archivácia sú zatiaľ pozastavené."
         );
       }
 
