@@ -146,17 +146,15 @@ async function main() {
           }
         })());
       }
-      if (Array.isArray(raw.available_tabs) && raw.available_tabs.includes("commentary")) {
-        tasks.push((async () => {
-          try {
-            const payload = await getJSON("/matches/commentary", { match: String(raw.id) });
-            liveMinute = commentaryMinute(payload);
-          } catch (error) {
-            commentaryError = error.message;
-            errors.push(String(raw.id) + " commentary: " + commentaryError);
-          }
-        })());
-      }
+      tasks.push((async () => {
+        try {
+          const payload = await getJSON("/matches/commentary", { match: String(raw.id) });
+          liveMinute = commentaryMinute(payload);
+        } catch (error) {
+          commentaryError = error.message;
+          errors.push(String(raw.id) + " commentary: " + commentaryError);
+        }
+      })());
       await Promise.all(tasks);
       records.push(makeMatch(raw, competition, stats, statsError, liveMinute, commentaryError));
     }
