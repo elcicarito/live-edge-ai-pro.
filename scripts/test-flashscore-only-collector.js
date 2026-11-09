@@ -27,7 +27,7 @@ const server = http.createServer((req, res) => {
           away_score: 0,
           status: "live",
           stage: "2nd Half",
-          live_minute: "57",
+          available_tabs: ["statistics", "commentary"],
           has_statistics: true
         }]
       }]
@@ -47,6 +47,12 @@ const server = http.createServer((req, res) => {
           }]
         }]
       }]
+    }));
+    return;
+  }
+  if (req.url.startsWith("/matches/commentary")) {
+    res.end(JSON.stringify({
+      comments: [{ minute: "57'", text: "Test commentary" }]
     }));
     return;
   }
@@ -91,7 +97,8 @@ function runCollector() {
 
     assert.equal(current.source, "Flashscore");
     assert.equal(current.live_count, 1);
-    assert.equal(current.records[0].match.live_minute, "57");
+    assert.equal(current.records[0].match.live_minute, "57'");
+    assert.equal(current.records[0].match.minute_source, "Flashscore commentary MB");
     assert.equal(current.records[0].match.stats[0].name, "Shots on target");
     assert.equal(archive.matches["test-match-1"].snapshots_count, 2);
     assert.equal(archive.matches["test-match-1"].score_change_count, 1);
@@ -102,7 +109,7 @@ function runCollector() {
     const lines = zlib.gunzipSync(fs.readFileSync(timelinePath), { finishFlush: zlib.constants.Z_FINISH })
       .toString("utf8").trim().split("\n").map(line => JSON.parse(line));
     assert.equal(lines.length, 2);
-    assert.equal(lines[0].snapshot.live_minute, "57");
+    assert.equal(lines[0].snapshot.live_minute, "57'");
     assert.equal(lines[1].score_changed, true);
     assert.equal(lines[1].stat_changes.length, 1);
 
