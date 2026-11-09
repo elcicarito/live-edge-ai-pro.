@@ -131,6 +131,13 @@ async function main() {
     throw new Error("Flashscore LIVE feed nemá platné competitions; dáta sa neprepíšu.");
   }
 
+  // Temporary raw list-feed diagnostics: inspect the original Flashscore
+  // fields before the scraper normalizes or drops them. Never persist these.
+  const rawClockRows = Array.isArray(feed?._diagnostic_raw_live_rows)
+    ? feed._diagnostic_raw_live_rows
+    : [];
+  console.log("FLASHSCORE RAW LIVE ROW DIAGNOSTICS:", JSON.stringify(rawClockRows));
+
   const rawMatches = [];
   for (const competition of feed.competitions) {
     for (const raw of Array.isArray(competition.matches) ? competition.matches : []) {
