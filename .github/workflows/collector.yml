@@ -113,6 +113,11 @@ jobs:
         continue-on-error: true
         run: node scripts/flashscore-archive-quality.js
 
+      - name: Test browser-friendly Flashscore timeline export
+        run: node scripts/test-flashscore-timeline-browser-export.js
+      - name: Export recent Flashscore timeline for the app
+        run: node scripts/flashscore-timeline-browser-export.js
+
       - name: Export Flashscore-only training observations
         run: node scripts/flashscore-live-observations.js
       - name: Label observations with confirmed Flashscore outcomes
