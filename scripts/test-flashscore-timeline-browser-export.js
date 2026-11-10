@@ -30,6 +30,10 @@ try {
     { match_id: "", snapshot: { collected_at: "2026-11-10T20:59:00Z", stats: [] } }
   ];
   fs.writeFileSync(path.join(dir, "flashscore-timeline-index.json"), JSON.stringify(index));
+  fs.writeFileSync(path.join(dir, "flashscore-primary-current.json"), JSON.stringify({
+    source: "Flashscore",
+    records: [{ match: { id: "match-a", status: "live" } }]
+  }));
   fs.writeFileSync(path.join(dir, index.weeks[0].file),
     zlib.gzipSync(Buffer.from(rows.map(JSON.stringify).join("\n") + "\n")));
 
