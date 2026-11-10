@@ -159,6 +159,7 @@ function settleOne(match, archived, outcomes, confirmedAt) {
     status_confirmation: "confirmed_finished",
     final_status: "FINISHED",
     final_score: finalScore,
+    snapshots_count: Number(archived.snapshots_count || 0),
     home_score: homeScore,
     away_score: awayScore,
     final_match: finalMatch,
