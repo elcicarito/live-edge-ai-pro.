@@ -116,6 +116,62 @@ small{
 .stats-card[open]{border-color:#38546b}
 .stats-card #api-data-quality-content,.stats-card #system-stats{margin-top:12px}
 @media(max-width:420px){.stats-card{padding:12px}}
+
+/* LIVE match cards: clearer hierarchy without changing signal logic */
+#matches .priority-match-card,
+#matches .compact-match-card,
+#matches .no-signal-match-card{
+  position:relative;
+  overflow:hidden;
+  transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease;
+}
+#matches .priority-match-card{
+  border-left:3px solid #39bfa2!important;
+  box-shadow:0 7px 20px #0003, inset 0 1px 0 #ffffff08;
+}
+#matches .compact-match-card{
+  border-left:3px solid #52718f!important;
+  background:linear-gradient(110deg,#122136,#0d1929)!important;
+}
+#matches .no-signal-match-card{
+  border-left:3px solid #46566a!important;
+  background:linear-gradient(110deg,#111d2c,#0d1929)!important;
+}
+#matches .priority-match-card:hover,
+#matches .compact-match-card:hover,
+#matches .no-signal-match-card:hover{
+  border-color:#527d91!important;
+  box-shadow:0 9px 24px #0004;
+}
+#matches .match-team-name{letter-spacing:.05px}
+#matches .match-score{
+  min-width:76px;
+  text-align:center;
+  box-shadow:inset 0 1px 0 #ffffff0c,0 3px 10px #0002;
+}
+#matches .match-quick-stat{
+  padding:5px 8px!important;
+  background:#172a40!important;
+  border-color:#304963!important;
+  color:#dceaf5!important;
+}
+#matches .match-data-stamp{
+  margin:2px 0 8px;
+  font-size:9px;
+  color:#7893aa;
+  letter-spacing:.45px;
+}
+#matches .priority-match-card:focus-visible,
+#matches .compact-match-card:focus-visible,
+#matches .no-signal-match-card:focus-visible{
+  outline:2px solid #39e6a5;
+  outline-offset:2px;
+}
+@media(max-width:420px){
+  #matches .match-team-name{font-size:12px!important}
+  #matches .match-score{font-size:20px!important;min-width:68px;padding:4px 7px!important}
+  #matches .match-quick-stat{font-size:9px!important;padding:4px 6px!important}
+}
 .archive-filters{
   display:grid;
   grid-template-columns:1fr;
