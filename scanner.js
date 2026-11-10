@@ -3383,7 +3383,7 @@
         const status = item.status === "WIN" ? "WIN" : item.status === "LOSS" ? "LOSS" : "ČAKÁ NA VÝSLEDOK";
         const statusColor = item.status === "WIN" ? "#4ade80" : item.status === "LOSS" ? "#f87171" : "#fbbf24";
         const title = document.createElement("div");
-        title.textContent = (item.home || "?") + " – " + (item.away || "?") + " · " + item.minute + ". min · skóre " + item.home + ":" + item.away;
+        title.textContent = (item.homeTeam || "?") + " – " + (item.awayTeam || "?") + " · " + item.minute + ". min · skóre " + item.home + ":" + item.away;
         title.style.cssText = "font-weight:800;color:#dbeafe;font-size:12px;line-height:1.45;";
         const league = document.createElement("div");
         league.textContent = item.competition || "Súťaž neuvedená";
