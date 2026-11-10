@@ -3568,7 +3568,7 @@
     target.appendChild(capturedTitle);
     const capturedSummary = document.createElement("div");
     capturedSummary.style.cssText = "padding:12px;border:1px solid #0e7490;border-radius:10px;background:#0b2230;margin-bottom:10px;";
-    const currentRetrospective = capturedLate?.schema_version === 2;
+    const currentRetrospective = capturedLate?.schema_version === 2 && capturedLate?.ready === true;
     if (currentRetrospective) {
       const overallRate = capturedLate.win_rate == null ? "—" : Math.round(capturedLate.win_rate * 100) + "%";
       const qualifiedRate = capturedLate.qualified_win_rate == null ? "—" : Math.round(capturedLate.qualified_win_rate * 100) + "%";
