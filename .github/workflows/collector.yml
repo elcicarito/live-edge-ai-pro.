@@ -82,6 +82,9 @@ jobs:
       - name: Collect Flashscore LIVE matches and permanent timeline
         run: node scripts/flashscore-only-collector.js
 
+      - name: Settle confirmed Flashscore final results
+        run: node scripts/flashscore-outcome-settlement.js
+
       - name: Capture and settle Flashscore BTTS signals
         if: always()
         run: |
