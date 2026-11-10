@@ -670,6 +670,77 @@ details>summary{outline-offset:4px}
   #matches .live-stat-values span{font-size:8px!important}
 }
 
+
+/* SYSTEM ANALYTICS entry + expanded panel — presentation only */
+#system-stats-card{
+  margin:16px 0;
+  padding:0;
+  overflow:hidden;
+  border:1px solid rgba(56,189,248,.34);
+  border-left:4px solid #38bdf8;
+  border-radius:16px;
+  background:linear-gradient(145deg,#14263d 0%,#0e1b2d 100%);
+  box-shadow:0 10px 26px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.035);
+}
+#system-stats-card summary{
+  min-height:76px;
+  padding:15px 16px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  cursor:pointer;
+  list-style:none;
+  color:#edf7ff;
+}
+#system-stats-card summary::-webkit-details-marker{display:none}
+#system-stats-card summary:after{
+  content:"OTVORIŤ  ＋";
+  flex:0 0 auto;
+  margin-left:auto;
+  padding:8px 10px;
+  border:1px solid rgba(56,189,248,.35);
+  border-radius:9px;
+  background:#123149;
+  color:#7dd3fc;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.45px;
+}
+#system-stats-card[open] summary:after{content:"ZAVRIEŤ  −"}
+#system-stats-card .system-stats-icon{
+  display:flex;align-items:center;justify-content:center;
+  flex:0 0 42px;height:42px;border-radius:12px;
+  border:1px solid #286187;background:#102f48;font-size:20px;
+}
+#system-stats-card .system-stats-heading{
+  display:flex;flex-direction:column;gap:4px;min-width:0;
+}
+#system-stats-card .system-stats-title{
+  font-size:13px;font-weight:950;letter-spacing:.55px;
+}
+#system-stats-card .system-stats-subtitle{
+  color:#9eb4ca;font-size:10px;font-weight:500;line-height:1.35;
+}
+#system-stats-card[open]{border-color:#34769b}
+#system-stats-card #system-stats{
+  margin:0!important;padding:0 14px 15px;
+}
+#system-stats-card #system-stats > :first-child{margin-top:5px!important}
+#system-stats-card .system-stats-intro{
+  margin:0 14px 12px;padding:10px 11px;
+  border:1px solid #29445f;border-radius:10px;
+  background:#0d1a2b;color:#a9bfd4;
+  font-size:10px;line-height:1.5;
+}
+@media(max-width:420px){
+  #system-stats-card summary{min-height:70px;padding:12px 10px;gap:9px}
+  #system-stats-card .system-stats-icon{flex-basis:36px;height:36px;font-size:17px}
+  #system-stats-card .system-stats-title{font-size:11px}
+  #system-stats-card .system-stats-subtitle{font-size:9px}
+  #system-stats-card summary:after{padding:7px 6px;font-size:8px}
+  #system-stats-card #system-stats{padding:0 10px 12px}
+}
+
 </style>
 </head>
 
@@ -736,8 +807,15 @@ details>summary{outline-offset:4px}
   <summary>🧪 KVALITA API DÁT · POKRYTIE ŠTATISTÍK</summary>
   <div id="api-data-quality-content"><p>Vyhodnocujem dostupnosť API štatistík...</p></div>
 </details>
-<details class="card stats-card" id="system-stats-card">
-<summary>📊 ŠTATISTIKY SYSTÉMU</summary>
+<details class="card stats-card" id="system-stats-card" aria-label="Štatistiky systému a analytické centrum">
+<summary>
+  <span class="system-stats-icon" aria-hidden="true">📊</span>
+  <span class="system-stats-heading">
+    <span class="system-stats-title">ŠTATISTIKY SYSTÉMU</span>
+    <span class="system-stats-subtitle">Výsledky signálov · kvalita zberu · analytika modelu</span>
+  </span>
+</summary>
+<div class="system-stats-intro">CENTRUM ANALYTIKY · Údaje sa zobrazujú z uložených záznamov. OPEN a UNRESOLVED sa nezamieňajú za prehry; úspešnosť nie je automaticky ROI.</div>
 <div id="system-stats"><p>Načítavam štatistiky...</p></div>
 </details>
 
