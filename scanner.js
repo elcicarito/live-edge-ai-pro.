@@ -4663,9 +4663,9 @@
     deepViewButton.style.cssText = "display:block;width:100%;margin:2px 0 9px;padding:9px 11px;border:1px solid #3b7180;border-left:3px solid #38bdf8;border-radius:9px;background:linear-gradient(100deg,#123044,#14263a);color:#c8f3ff;text-align:left;font-size:10px;font-weight:900;letter-spacing:.35px;cursor:pointer;";
     deepViewButton.addEventListener("click", event => {
       event.stopPropagation();
-      if (noSignal) card.classList.add("no-signal-expanded");
       if (matchDetailPanel) {
         matchDetailPanel.open = !matchDetailPanel.open;
+        if (noSignal) card.classList.toggle("no-signal-expanded", matchDetailPanel.open);
         deepViewButton.setAttribute("aria-expanded", String(matchDetailPanel.open));
         deepViewButton.textContent = matchDetailPanel.open
           ? "− SKRYŤ DETAILNÚ ANALÝZU"
