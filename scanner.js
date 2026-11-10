@@ -889,7 +889,7 @@
     }
 
     if (!raw) return "?";
-    // ESPN's minute is advanced from the collection timestamp; Flashscore supplies its own stage clock.
+    // Flashscore supplies its own stage clock; its minute is never advanced a second time.
     if (raw.startsWith("~")) return raw;
 
     const base = parseInt(raw, 10);
@@ -2728,7 +2728,7 @@
       title.textContent = `${item.home || "?"} ${item.startScore ? "(" + item.startScore + ")" : ""} – ${item.away || "?"}`;
       title.style.cssText = "font-weight:800;margin-bottom:5px;";
       const detail = document.createElement("div");
-      detail.textContent = `${item.source || "ESPN"} | ${item.tier || item.tierKey || "BTTS"} | ${style[3]} | ${item.startMinute ?? "?"}. min | SOT ${item.combinedSot ?? "?"} | strely ${item.combinedShots ?? "?"}${item.settledScore ? " | konečný stav " + item.settledScore : ""}`;
+      detail.textContent = `${item.source || "Flashscore"} | ${item.tier || item.tierKey || "BTTS"} | ${style[3]} | ${item.startMinute ?? "?"}. min | SOT ${item.combinedSot ?? "?"} | strely ${item.combinedShots ?? "?"}${item.settledScore ? " | konečný stav " + item.settledScore : ""}`;
       detail.style.cssText = `font-size:12px;line-height:1.5;color:${style[2]};font-weight:700;`;
       row.append(title, detail);
       target.appendChild(row);
@@ -2744,8 +2744,8 @@
     const btts = Array.isArray(bttsArchive?.signals) ? bttsArchive.signals : [];
     const stats = rows => { const w=rows.filter(x=>x.status==="WIN").length; const l=rows.filter(x=>x.status==="LOSS").length; const open=rows.filter(x=>x.status==="OPEN").length; const u=rows.filter(x=>x.status==="UNRESOLVED").length; const n=w+l; return {w,l,open,u,n,p:n?Math.round(w/n*100)+"%":"—"}; };
     const g=stats(green), b=stats(btts);
-    const sourceOf = item => item.source || item.sourceSnapshot?.source || "ESPN";
-    const bttsEspn = stats(btts.filter(item => sourceOf(item) === "ESPN"));
+    const sourceOf = item => item.source || item.sourceSnapshot?.source || "Flashscore";
+    const bttsFlashscore = stats(btts.filter(item => sourceOf(item) === "Flashscore"));
     const bttsFlashscore = stats(btts.filter(item => sourceOf(item) === "Flashscore"));
     const times=green.filter(x=>x.status==="WIN"&&Number.isFinite(Number(x.settledMinute))&&Number.isFinite(Number(x.startMinute))).map(x=>Number(x.settledMinute)-Number(x.startMinute)).filter(x=>x>=0&&x<=30);
     const avg=times.length?(times.reduce((a,v)=>a+v,0)/times.length).toFixed(1)+" min":"—";
@@ -2755,7 +2755,7 @@
     add("ZELENÝ · ÚSPEŠNOSŤ",g.p,g.w+" WIN / "+g.l+" LOSS · N="+g.n);
     add("ZELENÝ · PRIEM. ČAS DO GÓLU",avg,"Podľa prvého zachytenia gólu");
     add("BTTS · SPOLU",b.p,b.w+" WIN / "+b.l+" LOSS · N="+b.n);
-    add("BTTS · ESPN",bttsEspn.p,bttsEspn.w+" WIN / "+bttsEspn.l+" LOSS · N="+bttsEspn.n);
+    add("BTTS · FLASHSCORE",bttsFlashscore.p,bttsFlashscore.w+" WIN / "+bttsFlashscore.l+" LOSS · N="+bttsFlashscore.n);
     add("BTTS · FLASHSCORE",bttsFlashscore.p,bttsFlashscore.w+" WIN / "+bttsFlashscore.l+" LOSS · N="+bttsFlashscore.n);
     add("CELKOM ULOŽENÉ SIGNÁLY",String(green.length+btts.length),"Zelené "+green.length+" · BTTS "+btts.length);
     const note=document.createElement("p");note.textContent="Otvorené: zelené "+g.open+", BTTS "+b.open+" · Neoverené: zelené "+g.u+", BTTS "+b.u+". WIN rate počíta iba potvrdené WIN a LOSS. Čas do gólu je orientačný podľa prvého zachytenia v LIVE dátach.";note.style.cssText="font-size:10px;line-height:1.5;color:#aebed0;margin:9px 0;";el.appendChild(note);
@@ -4780,7 +4780,7 @@
       } else if (current.feed_state === "BASELINE_PENDING") {
         addText(
           engine,
-          "ESPN: Historická základňa sa ešte overuje. Nové signály a archivácia sú zatiaľ pozastavené."
+          "Flashscore: Historická základňa sa ešte overuje. Nové signály a archivácia sú zatiaľ pozastavené."
         );
       }
 
