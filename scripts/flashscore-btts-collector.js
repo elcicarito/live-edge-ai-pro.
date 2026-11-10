@@ -155,7 +155,10 @@ async function run({ current, archive, detailsFetcher = getDetails, now = new Da
     const age = Date.now() - Date.parse(collectedAt);
     if (!Number.isFinite(age) || age < -60000 || age > 7 * 60 * 1000) continue;
 
-    const standardCandidates = getBttsCandidates(match);\n    const lateCandidate = getBttsAfter70Candidate(match);\n    // The 70+ group records only the strongest qualifying tier once per match.\n    for (const candidate of [...standardCandidates, ...(lateCandidate ? [lateCandidate] : [])]) {
+    const standardCandidates = getBttsCandidates(match);
+    const lateCandidate = getBttsAfter70Candidate(match);
+    // The 70+ group records only the strongest qualifying tier once per match.
+    for (const candidate of [...standardCandidates, ...(lateCandidate ? [lateCandidate] : [])]) {
       const signalId = "flashscore_btts_" + id + "_" + candidate.tierKey;
       if (output.signals.some(item => item.signalId === signalId)) continue;
       output.signals.push({
