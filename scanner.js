@@ -4240,7 +4240,7 @@
     const bttsSignals = Array.isArray(bttsArchive?.signals) ? bttsArchive.signals : [];
     const greenOpen = greenSignals.filter(item => item?.status === "OPEN").length;
     const bttsOpen = bttsSignals.filter(item => item?.status === "OPEN").length;
-    const status = !fresh ? "NEAKTUÁLNE" : complete ? "KOMPLETNÉ" : "NEÚPLNÉ";
+    const status = !fresh ? "NEAKTUÁLNE" : current?.feed_state === "FLASHSCORE_VALIDATION_PENDING" ? "OVEROVANIE" : complete ? "KOMPLETNÉ" : "NEÚPLNÉ";
     const collectedAt = Date.parse(current?.collected_at || "");
     const updated = Number.isFinite(collectedAt)
       ? new Date(collectedAt).toLocaleString("sk-SK")
@@ -4249,7 +4249,7 @@
     set("dashboard-data-status", status);
     set("dashboard-updated", "Posledný zber dát: " + updated + " · " + status);
     const statusElement = document.getElementById("dashboard-data-status");
-    if (statusElement) statusElement.style.color = !fresh ? "#f87171" : complete ? "#39e6a5" : "#fbbf24";
+    if (statusElement) statusElement.style.color = !fresh ? "#f87171" : status === "KOMPLETNÉ" ? "#39e6a5" : "#fbbf24";
   }
 
   async function scan() {
@@ -4374,7 +4374,7 @@
         .filter(item => isLive(item.match));
 
       const actualMatches = matches.map(item => item.match);
-      updateDashboard(current, matches.length, signalArchive, bttsArchive, true, allowSignals);
+      updateDashboard(current, matches.length, signalArchive, bttsArchive, true, current.collection_complete === true);
 
       // Legacy green-signal settlement is disabled during the Flashscore-only transition.
 
@@ -4390,7 +4390,7 @@
             ? "POZASTAVENÝ – PODOZRIVÝ POKLES"
             : current.feed_state === "BASELINE_PENDING"
               ? "ČAKÁ NA POTVRDENIE ZÁKLADNE"
-              : allowSignals ? "KOMPLETNÝ" : "NEÚPLNÝ";
+              : current.feed_state === "FLASHSCORE_VALIDATION_PENDING" ? "PREBIEHA OVEROVANIE FLASHSCORE" : current.collection_complete === true ? "KOMPLETNÝ" : "NEÚPLNÝ";
       addText(engine, `Stav zberu: ${feedStateLabel}`);
       if (current.feed_state === "NO_LIVE" && flashscoreLiveCount > 0) {
         addText(engine, `Flashscore poskytuje ${flashscoreLiveCount} LIVE zápasov. Sú zobrazené v zozname; dôveryhodnosť štatistík a pravidlá signálov zostávajú počas validácie oddelené.`);
@@ -4443,7 +4443,7 @@
       if (!allowSignals && current.feed_state !== "BASELINE_PENDING" && current.feed_state !== "SUSPECTED_DROP") {
         addText(
           engine,
-          "UPOZORNENIE: Zber nie je kompletný. Nové signály sú zablokované."
+          "Flashscore je načítaný; prebieha validačné obdobie. Archivácia a nové signály zostávajú do ukončenia validácie zablokované."
         );
       }
 
