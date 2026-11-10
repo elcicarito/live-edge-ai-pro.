@@ -33,10 +33,38 @@ h1{color:#39e6a5;font-size:25px}
 #matches{margin-top:0}
 #signal{font-size:12px;color:#a9bad0}
 #pressure-engine{margin-top:0!important}
-.engine-details summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;font-weight:800;color:#fff}
+.engine-details{
+  padding:13px 14px;
+  border:1px solid #2c465b;
+  border-left:3px solid #39bfa2;
+  background:linear-gradient(135deg,#142337 0%,#101b2a 100%);
+  box-shadow:0 6px 18px #0002;
+}
+.engine-details summary{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  cursor:pointer;list-style:none;color:#e8f2f7;
+}
 .engine-details summary::-webkit-details-marker{display:none}
-.engine-details summary:after{content:"＋";color:#39e6a5;font-size:20px}
+.engine-heading{display:flex;align-items:center;gap:10px;min-width:0}
+.engine-heading-icon{
+  display:flex;align-items:center;justify-content:center;flex:0 0 36px;height:36px;
+  border:1px solid #315c60;border-radius:11px;background:#163b3b;font-size:18px;
+}
+.engine-heading-copy{display:flex;flex-direction:column;gap:3px;min-width:0}
+.engine-heading-title{font-size:13px;font-weight:900;letter-spacing:.35px}
+.engine-heading-subtitle{font-size:10px;font-weight:500;color:#8fa8b9}
+.engine-tag{
+  flex:0 0 auto;padding:5px 7px;border:1px solid #31545b;border-radius:20px;
+  background:#142f34;color:#75d9c2;font-size:9px;font-weight:900;letter-spacing:.5px;
+}
+.engine-details summary:after{content:"＋";color:#72cdbb;font-size:18px;margin-left:2px}
 .engine-details[open] summary:after{content:"−"}
+.engine-details #pressure-engine{margin-top:12px!important}
+@media(max-width:420px){
+  .engine-details{padding:11px}
+  .engine-heading-subtitle{font-size:9px}
+  .engine-tag{font-size:8px;padding:4px 6px}
+}
 button{background:#39e6a5;color:#07120f;border:0;padding:14px;border-radius:9px;font-weight:bold;width:100%;cursor:pointer}
 small{color:#9baabe}
 @media(max-width:560px){body{padding:10px}.app-header{padding:8px 2px 12px}.brand h1{font-size:19px}.dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.metric{padding:12px}.metric-value{font-size:22px}}
@@ -610,7 +638,16 @@ details>summary{outline-offset:4px}
 </div>
 
 <details class="card engine-details">
-  <summary>🧠 AI PRESSURE ENGINE · STAV A DIAGNOSTIKA</summary>
+  <summary>
+    <span class="engine-heading">
+      <span class="engine-heading-icon">🧠</span>
+      <span class="engine-heading-copy">
+        <span class="engine-heading-title">AI PRESSURE ENGINE</span>
+        <span class="engine-heading-subtitle">Technický prehľad a stav signalizácie</span>
+      </span>
+    </span>
+    <span class="engine-tag">DIAGNOSTIKA</span>
+  </summary>
   <div id="pressure-engine"><p>Načítavam diagnostiku...</p></div>
 </details>
 
