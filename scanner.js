@@ -2746,7 +2746,6 @@
     const g=stats(green), b=stats(btts);
     const sourceOf = item => item.source || item.sourceSnapshot?.source || "Flashscore";
     const bttsFlashscore = stats(btts.filter(item => sourceOf(item) === "Flashscore"));
-    const bttsFlashscore = stats(btts.filter(item => sourceOf(item) === "Flashscore"));
     const times=green.filter(x=>x.status==="WIN"&&Number.isFinite(Number(x.settledMinute))&&Number.isFinite(Number(x.startMinute))).map(x=>Number(x.settledMinute)-Number(x.startMinute)).filter(x=>x>=0&&x<=30);
     const avg=times.length?(times.reduce((a,v)=>a+v,0)/times.length).toFixed(1)+" min":"—";
     el.innerHTML="";
@@ -2755,7 +2754,6 @@
     add("ZELENÝ · ÚSPEŠNOSŤ",g.p,g.w+" WIN / "+g.l+" LOSS · N="+g.n);
     add("ZELENÝ · PRIEM. ČAS DO GÓLU",avg,"Podľa prvého zachytenia gólu");
     add("BTTS · SPOLU",b.p,b.w+" WIN / "+b.l+" LOSS · N="+b.n);
-    add("BTTS · FLASHSCORE",bttsFlashscore.p,bttsFlashscore.w+" WIN / "+bttsFlashscore.l+" LOSS · N="+bttsFlashscore.n);
     add("BTTS · FLASHSCORE",bttsFlashscore.p,bttsFlashscore.w+" WIN / "+bttsFlashscore.l+" LOSS · N="+bttsFlashscore.n);
     add("CELKOM ULOŽENÉ SIGNÁLY",String(green.length+btts.length),"Zelené "+green.length+" · BTTS "+btts.length);
     const note=document.createElement("p");note.textContent="Otvorené: zelené "+g.open+", BTTS "+b.open+" · Neoverené: zelené "+g.u+", BTTS "+b.u+". WIN rate počíta iba potvrdené WIN a LOSS. Čas do gólu je orientačný podľa prvého zachytenia v LIVE dátach.";note.style.cssText="font-size:10px;line-height:1.5;color:#aebed0;margin:9px 0;";el.appendChild(note);
