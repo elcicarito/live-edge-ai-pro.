@@ -4622,20 +4622,26 @@
 
     const scoreGroup = document.createElement("div");
     scoreGroup.classList.add("match-score-group");
-    scoreGroup.style.cssText = "display:flex;align-items:center;justify-content:center;gap:5px;";
+    scoreGroup.style.cssText = "display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;flex-wrap:nowrap;";
 
     const clock = document.createElement("span");
     clock.classList.add("match-clock");
     clock.textContent = minute === "HT" ? "HT" : minute !== "?" ? `${minute}′` : "";
-    clock.style.cssText = "white-space:nowrap;font-size:12px;font-weight:900;color:#7dd3fc;font-variant-numeric:tabular-nums;padding:5px 6px;background:#102b43;border:1px solid #245477;border-radius:7px;";
+    clock.style.cssText = "white-space:nowrap;font-size:10px;font-weight:900;color:#7dd3fc;font-variant-numeric:tabular-nums;padding:3px 4px;background:#102b43;border:1px solid #245477;border-radius:6px;";
 
     const score = document.createElement("div");
     score.classList.add("match-score");
     score.textContent = `${Number(match.home_score || 0)} : ${Number(match.away_score || 0)}`;
-    score.style.cssText = "white-space:nowrap;font-size:23px;font-weight:900;letter-spacing:.5px;color:#fff;font-variant-numeric:tabular-nums;padding:4px 10px;background:#17283d;border:1px solid #38516e;border-radius:10px;";
-    scoreGroup.append(score);
-    if (clock.textContent) scoreGroup.prepend(clock);
+    score.style.cssText = "white-space:nowrap;font-size:19px;font-weight:900;letter-spacing:.3px;color:#fff;font-variant-numeric:tabular-nums;padding:3px 7px;background:#17283d;border:1px solid #38516e;border-radius:8px;";
+    if (clock.textContent) scoreGroup.appendChild(clock);
+    scoreGroup.appendChild(score);
 
+    const statusBadge = staleMode
+      ? { label: "ZASTARANÉ", background: "#7f1d1d", border: "#ef4444" }
+      : getStatusBadge(match);
+    const statusPill = addBadge(scoreGroup, statusBadge.label, statusBadge.background, statusBadge.border);
+    statusPill.classList.add("match-status-pill");
+    statusPill.style.cssText = `display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;flex:0 0 auto;padding:3px 5px;margin:0;border-radius:6px;background:${statusBadge.background};border:1px solid ${statusBadge.border};color:#fff;font-size:9px;font-weight:900;letter-spacing:.1px;line-height:1.15;box-shadow:none;`;
     const awayName = document.createElement("div");
     awayName.classList.add("match-team-name");
     awayName.textContent = match.away || "Hostia";
@@ -4643,17 +4649,6 @@
 
     teams.append(homeName, scoreGroup, awayName);
     header.appendChild(teams);
-
-    const statusBadge = staleMode
-      ? { label: "ZASTARANÉ DÁTA – NIE LIVE", background: "#7f1d1d", border: "#ef4444" }
-      : getStatusBadge(match);
-
-    addBadge(
-      header,
-      statusBadge.label,
-      statusBadge.background,
-      statusBadge.border
-    );
 
     card.appendChild(header);
 
