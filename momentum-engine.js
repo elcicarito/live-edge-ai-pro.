@@ -18,10 +18,19 @@
   function pair(stats,aliases){
     const rows=Array.isArray(stats)?stats:[];
     const keys=aliases.map(normalise);
-    let item=rows.find(x=>keys.includes(normalise(x?.label||x?.name||x?.type)));
-    if(!item)item=rows.find(x=>{const label=normalise(x?.label||x?.name||x?.type);return keys.some(k=>label.includes(k));});
+    const matches=rows.filter(x=>{
+      const label=normalise(x?.label||x?.name||x?.type);
+      return keys.includes(label)||keys.some(k=>label.includes(k));
+    });
+    if(!matches.length)return null;
+    // Flashscore repeats many statistics for Match, 1st Half and 2nd Half.
+    // When period metadata exists, use Match only; never mistake a half total for a match total.
+    const hasPeriodMetadata=matches.some(x=>x?.period!==null&&x?.period!==undefined&&String(x.period).trim()!=="");
+    const item=hasPeriodMetadata
+      ? matches.find(x=>normalise(x?.period)==="match")
+      : matches[0]; // Backward compatibility for legacy rows without period metadata.
     if(!item)return null;
-    const home=number(item.home),away=number(item.away);
+    const home=number(item.home_numeric??item.home),away=number(item.away_numeric??item.away);
     return home===null||away===null?null:{home,away};
   }
   function snapshotStats(match){
