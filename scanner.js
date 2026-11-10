@@ -1653,17 +1653,53 @@
         if (before && after && before !== after) {
           const definitions = [
             { label: "Strely", pattern: /total shots|shots total|celkové strely|celkove strely/i },
-            { label: "Na bránu", pattern: /shots on target|strely na bránu|strely na branu/i }
+            { label: "Na bránu", pattern: /shots on target|strely na bránu|strely na branu/i },
+            { label: "Rohy", pattern: /corners|rohov[eé] kopy|rohy/i }
           ];
+          const comparison = document.createElement("div");
+          comparison.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:7px;";
+          const teamPanels = [
+            { key: "home", label: "DOMÁCI", color: "#39e6a5" },
+            { key: "away", label: "HOSTIA", color: "#7dd3fc" }
+          ];
+          const teamRows = teamPanels.map(team => {
+            const panel = document.createElement("div");
+            panel.style.cssText = "min-width:0;padding:7px;background:#0b1726;border:1px solid #293d55;border-radius:7px;";
+            const title = document.createElement("div");
+            title.textContent = team.label;
+            title.style.cssText = "font-size:9px;font-weight:900;color:" + team.color + ";margin-bottom:4px;";
+            panel.appendChild(title);
+            return { ...team, panel };
+          });
+          let availableMetrics = 0;
           definitions.forEach(definition => {
             const oldValue = readMetric(before.match, definition.pattern);
             const newValue = readMetric(after.match, definition.pattern);
             if (!oldValue || !newValue || newValue.home < oldValue.home || newValue.away < oldValue.away) return;
+            availableMetrics++;
+            const homeDelta = newValue.home - oldValue.home;
+            const awayDelta = newValue.away - oldValue.away;
             const row = document.createElement("div");
-            row.textContent = definition.label + " · pred: " + oldValue.home + ":" + oldValue.away + " → po: " + newValue.home + ":" + newValue.away + " (+" + (newValue.home - oldValue.home) + ":" + (newValue.away - oldValue.away) + ")";
-            row.style.cssText = "font-size:9px;color:#b7c8d9;padding:3px 0;";
+            row.textContent = definition.label + " · pred " + oldValue.home + ":" + oldValue.away + " → po " + newValue.home + ":" + newValue.away;
+            row.style.cssText = "font-size:9px;color:#b7c8d9;padding:3px 0;border-bottom:1px solid #293d55;";
             card.appendChild(row);
+            teamRows.forEach(team => {
+              const value = team.key === "home" ? homeDelta : awayDelta;
+              const detail = document.createElement("div");
+              detail.textContent = definition.label + "  +" + value;
+              detail.style.cssText = "font-size:9px;color:#cbd5e1;padding:2px 0;";
+              team.panel.appendChild(detail);
+            });
           });
+          if (availableMetrics) {
+            teamRows.forEach(team => comparison.appendChild(team.panel));
+            card.appendChild(comparison);
+          } else {
+            const unavailable = document.createElement("div");
+            unavailable.textContent = "Porovnateľné štatistiky sa v oboch snímkach nenašli alebo sa počítadlá resetovali.";
+            unavailable.style.cssText = "font-size:9px;color:#fbbf24;padding:4px 0;";
+            card.appendChild(unavailable);
+          }
           const range = document.createElement("div");
           range.textContent = "Porovnanie snímok " + (snapshotMinute(before.match) || "—") + "′ až " + (snapshotMinute(after.match) || "—") + "′";
           range.style.cssText = "font-size:9px;color:#7892ac;margin-top:3px;";
