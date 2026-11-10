@@ -2044,20 +2044,30 @@
     }
 
     const intervals = [];
+    let rejectedGap = 0, missingShots = 0, resetStats = 0;
     for (let i = 1; i < unique.length; i++) {
       const previous = unique[i - 1];
       const current = unique[i];
       const minutes = (current.time - previous.time) / 60000;
-      if (!Number.isFinite(minutes) || minutes < MIN_GAP_MINUTES || minutes > MAX_GAP_MINUTES) continue;
+      if (!Number.isFinite(minutes) || minutes < MIN_GAP_MINUTES || minutes > MAX_GAP_MINUTES) {
+        rejectedGap++;
+        continue;
+      }
 
       const oldShots = statValue(previous.match.stats || [], "shots on target");
       const shots = statValue(current.match.stats || [], "shots on target");
       const oldAttacks = statValue(previous.match.stats || [], "shots off target");
       const attacks = statValue(current.match.stats || [], "shots off target");
-      if (!oldShots || !shots || !oldAttacks || !attacks) continue;
+      if (!oldShots || !shots || !oldAttacks || !attacks) {
+        missingShots++;
+        continue;
+      }
 
       if (shots.home < oldShots.home || shots.away < oldShots.away ||
-          attacks.home < oldAttacks.home || attacks.away < oldAttacks.away) continue;
+          attacks.home < oldAttacks.home || attacks.away < oldAttacks.away) {
+        resetStats++;
+        continue;
+      }
 
       intervals.push({
         time: current.time,
@@ -2067,8 +2077,9 @@
       });
     }
 
+    const diagnostics = { snapshots: unique.length, intervals: intervals.length, rejectedGap, missingShots, resetStats };
     if (intervals.length < 2) {
-      return { ready: false, reason: "Nie sú dostupné dva po sebe idúce platné intervaly bez resetu štatistík." };
+      return { ready: false, ...diagnostics, reason: "Nedostatok platných intervalov." };
     }
 
     const previous = intervals[intervals.length - 2];
@@ -2080,6 +2091,7 @@
 
     return {
       ready: true,
+      ...diagnostics,
       homePreviousRate: Number(previous.homeRate.toFixed(1)),
       awayPreviousRate: Number(previous.awayRate.toFixed(1)),
       homeLatestRate: Number(latest.homeRate.toFixed(1)),
@@ -5136,9 +5148,12 @@
             awayTrend.style.color = awayColor;
             trendLine.append(homeTrend, separator, awayTrend);
           } else {
-            trendLine.textContent = "Trend: čakám na dve platné porovnania meraní";
+            const diag = trend.snapshots !== undefined
+              ? `Vzorky: ${trend.snapshots} · platné intervaly: ${trend.intervals} · chýbajúce štatistiky: ${trend.missingShots} · reset: ${trend.resetStats} · časové medzery: ${trend.rejectedGap}`
+              : (trend.reason || "Nedostatok historických meraní");
+            trendLine.textContent = "Trend čaká · " + diag;
             trendLine.style.color = "#8296ad";
-            trendLine.title = trend.reason || "Nedostatok historických meraní";
+            trendLine.title = trend.reason || "Diagnostika časových meraní";
           }
           info.append(teams, meta, trendLine);
           const badge = document.createElement("div");
