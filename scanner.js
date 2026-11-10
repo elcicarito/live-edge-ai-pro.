@@ -1528,6 +1528,20 @@
     ];
     const intervalTotals = new Map();
     let validIntervals = 0;
+    const activityDiagnostics = {
+      adjacentPairs: Math.max(0, records.length - 1),
+      momentumWindowPairs: 0,
+      activityWindowPairs: 0,
+      gapOver7: 0,
+      gapOver15: 0,
+      invalidGap: 0,
+      missingMinute: 0,
+      missingInterval: 0,
+      noUsableStats: 0,
+      partialStats: 0,
+      missingMetricValues: 0,
+      resetMetricValues: 0
+    };
     const minuteOf = snapshot => {
       const raw = snapshot?.live_minute ?? snapshot?.minute;
       const parsed = Number(String(raw ?? "").replace(/[^0-9]/g, ""));
@@ -1552,23 +1566,52 @@
       const previous = records[index - 1];
       const current = records[index];
       const gap = (current.time - previous.time) / 60000;
+      if (!Number.isFinite(gap) || gap <= 0) {
+        activityDiagnostics.invalidGap++;
+        continue;
+      }
+      if (gap >= 1.5 && gap <= 15) activityDiagnostics.momentumWindowPairs++;
+      if (gap > 7) activityDiagnostics.gapOver7++;
+      if (gap > 15) activityDiagnostics.gapOver15++;
+      if (gap > 0 && gap <= 7) activityDiagnostics.activityWindowPairs++;
       const minute = minuteOf(current.match);
-      if (!(gap > 0 && gap <= 7) || minute === null) continue;
+      if (gap > 7 || minute === null) {
+        if (minute === null && gap <= 7) activityDiagnostics.missingMinute++;
+        continue;
+      }
       const interval = intervalDefinitions.find(item => minute >= item.start && minute <= item.end);
-      if (!interval) continue;
+      if (!interval) {
+        activityDiagnostics.missingInterval++;
+        continue;
+      }
       const deltas = {};
       let hasDelta = false;
+      let missingMetricValues = 0;
+      let resetMetricValues = 0;
       statDefinitions.forEach(definition => {
         const oldValue = getCumulativeStat(previous.match, definition);
         const newValue = getCumulativeStat(current.match, definition);
-        if (!oldValue || !newValue || newValue.home < oldValue.home || newValue.away < oldValue.away) return;
+        if (!oldValue || !newValue) {
+          missingMetricValues++;
+          return;
+        }
+        if (newValue.home < oldValue.home || newValue.away < oldValue.away) {
+          resetMetricValues++;
+          return;
+        }
         deltas[definition.key] = {
           home: newValue.home - oldValue.home,
           away: newValue.away - oldValue.away
         };
         hasDelta = true;
       });
-      if (!hasDelta) continue;
+      activityDiagnostics.missingMetricValues += missingMetricValues;
+      activityDiagnostics.resetMetricValues += resetMetricValues;
+      if (hasDelta && (missingMetricValues || resetMetricValues)) activityDiagnostics.partialStats++;
+      if (!hasDelta) {
+        activityDiagnostics.noUsableStats++;
+        continue;
+      }
       if (!intervalTotals.has(interval.label)) {
         intervalTotals.set(interval.label, { ...interval, count: 0, values: {} });
       }
@@ -1581,11 +1624,39 @@
       });
       validIntervals++;
     }
+    activityDiagnostics.validIntervals = validIntervals;
     const intervalHeading = document.createElement("div");
     intervalHeading.textContent = "AKTIVITA V ČASOVÝCH ÚSEKOCH";
     intervalHeading.style.cssText = "font-size:11px;font-weight:900;color:#dbeafe;margin:14px 0 7px;";
     target.appendChild(intervalHeading);
     const intervalRows = [...intervalTotals.values()].sort((a, b) => a.start - b.start);
+    const diagnosticPanel = document.createElement("div");
+    diagnosticPanel.style.cssText = "padding:8px 9px;margin:7px 0 10px;background:#0d1a2a;border:1px solid #30445d;border-radius:8px;";
+    const diagnosticTitle = document.createElement("div");
+    diagnosticTitle.textContent = "KONTROLA PÁROVANIA MERANÍ";
+    diagnosticTitle.style.cssText = "font-size:10px;font-weight:900;color:#cbd5e1;margin-bottom:5px;";
+    diagnosticPanel.appendChild(diagnosticTitle);
+    addText(diagnosticPanel,
+      "Susedné dvojice: " + activityDiagnostics.adjacentPairs +
+      " | okno Momentum 1,5–15 min: " + activityDiagnostics.momentumWindowPairs +
+      " | okno aktivity do 7 min: " + activityDiagnostics.activityWindowPairs,
+      "10px");
+    addText(diagnosticPanel,
+      "Vynechané: medzera nad 7 min " + activityDiagnostics.gapOver7 +
+      " (z toho nad 15 min " + activityDiagnostics.gapOver15 + ")" +
+      " | bez minúty zápasu " + activityDiagnostics.missingMinute +
+      " | bez použiteľnej štatistiky " + activityDiagnostics.noUsableStats,
+      "10px");
+    addText(diagnosticPanel,
+      "Čiastočne neúplné dvojice " + activityDiagnostics.partialStats +
+      " | chýbajúce hodnoty metrík " + activityDiagnostics.missingMetricValues +
+      " | resetované hodnoty metrík " + activityDiagnostics.resetMetricValues +
+      " | zarátané intervaly aktivity " + activityDiagnostics.validIntervals + ".",
+      "10px");
+    addText(diagnosticPanel,
+      "Okno Momentum je iba časové porovnanie párov; jeho platnosť navyše vyžaduje úplné strelecké štatistiky. Aktivita používa prísnejšiu hranicu najviac 7 minút.",
+      "9px");
+    target.appendChild(diagnosticPanel);
     if (!intervalRows.length) {
       addText(target, "Pre časové úseky zatiaľ nie je dosť susedných snímok s platnými kumulatívnymi štatistikami.", "10px");
     } else {
