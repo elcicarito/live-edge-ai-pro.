@@ -8,6 +8,7 @@ const DATA = path.resolve(process.argv[2] || path.join(__dirname, "..", "data"))
 const ARCHIVE = path.join(DATA, "flashscore-match-archive.json");
 const INDEX = path.join(DATA, "flashscore-timeline-index.json");
 const OUTPUT = path.join(DATA, "flashscore-archive-quality.json");
+const CURRENT = path.join(DATA, "flashscore-live-current.json");
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
@@ -49,6 +50,8 @@ function buildQualityReport(dataDir = DATA) {
   const intervals = [];
   const files = [];
   let malformedRows = 0;
+  const statNameCounts = new Map();
+  const historicalStatsStatus = { available: 0, not_flagged_unavailable: 0, flagged_but_empty: 0, error: 0, unknown_legacy: 0 };
 
   for (const week of index.weeks) {
     if (!week || typeof week.file !== "string" || !/^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(week.file)) {
@@ -72,6 +75,19 @@ function buildQualityReport(dataDir = DATA) {
       const hasStage = Boolean(String(snapshot.stage || "").trim());
       const stats = Array.isArray(snapshot.stats) ? snapshot.stats : [];
       const hasStats = stats.length > 0;
+      if (hasStats) {
+        const namesInSnapshot = new Set();
+        for (const stat of stats) {
+          const name = String(stat?.name || "").trim();
+          if (name) namesInSnapshot.add(name);
+        }
+        for (const name of namesInSnapshot) statNameCounts.set(name, (statNameCounts.get(name) || 0) + 1);
+      }
+      if (hasStats || snapshot.stats_available === true) historicalStatsStatus.available++;
+      else if (snapshot.stats_error) historicalStatsStatus.error++;
+      else if (snapshot.has_statistics === true) historicalStatsStatus.flagged_but_empty++;
+      else if (snapshot.has_statistics === false) historicalStatsStatus.not_flagged_unavailable++;
+      else historicalStatsStatus.unknown_legacy++;
 
       if (id) byMatch.set(id, (byMatch.get(id) || 0) + 1);
       if (hasTimestamp) snapshotsWithTimestamp++;
@@ -106,6 +122,43 @@ function buildQualityReport(dataDir = DATA) {
   }
 
   const matchesWithStats = matches.filter(match => Array.isArray(match?.last_snapshot?.stats) && match.last_snapshot.stats.length > 0).length;
+  const statCoverage = [...statNameCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([name, count]) => ({ name, snapshots: count, coverage: ratio(count, snapshotCount) }));
+  let currentLive = null;
+  const currentPath = path.join(dataDir, "flashscore-live-current.json");
+  if (fs.existsSync(currentPath)) {
+    const current = readJson(currentPath);
+    const liveRecords = Array.isArray(current.records) ? current.records : [];
+    const liveMatches = liveRecords.map(record => record?.match || record).filter(Boolean);
+    const currentStats = {
+      available: liveMatches.filter(match => match.stats_available === true || (Array.isArray(match.stats) && match.stats.length > 0)).length,
+      not_flagged_unavailable: liveMatches.filter(match => match.has_statistics === false && !(match.stats?.length) && !match.stats_error).length,
+      flagged_but_empty: liveMatches.filter(match => match.has_statistics === true && !(match.stats?.length) && !match.stats_error).length,
+      error: liveMatches.filter(match => Boolean(match.stats_error)).length
+    };
+    currentLive = {
+      collected_at: current.collected_at || null,
+      live_matches: liveMatches.length,
+      statistics: {
+        ...currentStats,
+        not_flagged_count: Number(current.stats_not_flagged_count ?? currentStats.not_flagged_unavailable),
+        requested_count: Number(current.stats_requested_count ?? (currentStats.available + currentStats.flagged_but_empty + currentStats.error)),
+        error_count: Number(current.stats_error_count ?? currentStats.error),
+        note: "Zápasy bez has_statistics príznaku sa evidujú ako štatistiky nedostupné, nie ako chyba zberu."
+      },
+      clock: {
+        available: liveMatches.filter(match => match.live_clock !== null && match.live_clock !== undefined && String(match.live_clock).trim() !== "").length,
+        missing: liveMatches.filter(match => match.live_clock === null || match.live_clock === undefined || String(match.live_clock).trim() === "").length,
+        errors: liveMatches.filter(match => Boolean(match.clock_error)).length,
+        diagnostics: liveMatches.reduce((out, match) => {
+          const key = match.clock_diagnostic || "unknown";
+          out[key] = (out[key] || 0) + 1;
+          return out;
+        }, {})
+      }
+    };
+  }
   const matchesWithClock = matches.filter(match => {
     const value = match?.last_snapshot?.live_clock;
     return value !== null && value !== undefined && String(value).trim() !== "";
@@ -140,6 +193,12 @@ function buildQualityReport(dataDir = DATA) {
       snapshot_timestamp: ratio(snapshotsWithTimestamp, snapshotCount),
       snapshot_stage: ratio(snapshotsWithStage, snapshotCount)
     },
+    statistics_quality: {
+      historical_snapshot_status: historicalStatsStatus,
+      by_stat_name: statCoverage,
+      note: "Pokrytie štatistík je počet snímok, v ktorých sa daná štatistika nachádza. Staršie snímky bez uložených príznakov dostupnosti sa označujú ako unknown_legacy."
+    },
+    current_live_quality: currentLive,
     snapshot_quality: {
       with_stats: snapshotsWithStats,
       with_clock: snapshotsWithClock,
