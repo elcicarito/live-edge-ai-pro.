@@ -53,7 +53,73 @@ function classify(snapshot) {
   }
   return null;
 }
-function buildEvaluation({ index, outcomes, bttsArchive, now = new Date().toISOString() }) {
+function buildCapturedSignalAfter70Analysis({ signals, outcomes, timelineRecords, index, now }) {
+  const captured = (Array.isArray(signals) ? signals : []).filter(signal =>
+    signal?.source === "Flashscore" && signal?.model === "BTTS" &&
+    Number(signal.startMinute) >= 46 && Number(signal.startMinute) <= 50 &&
+    signal.matchId != null
+  );
+  const signalMatches = new Map();
+  for (const signal of captured) {
+    const id = String(signal.matchId);
+    if (!signalMatches.has(id)) signalMatches.set(id, []);
+    signalMatches.get(id).push(signal);
+  }
+  const records = [];
+  if (Array.isArray(timelineRecords)) records.push(...timelineRecords);
+  else {
+    for (const week of index.weeks || []) {
+      const file = path.join(DATA, path.basename(week.file || ""));
+      if (!fs.existsSync(file)) continue;
+      const content = zlib.gunzipSync(fs.readFileSync(file), { finishFlush: zlib.constants.Z_SYNC_FLUSH }).toString("utf8");
+      for (const line of content.split("\n")) {
+        if (!line.trim()) continue;
+        try { records.push(JSON.parse(line)); } catch {}
+      }
+    }
+  }
+  const firstByMatch = new Map();
+  for (const record of records) {
+    const id = String(record?.match_id || "");
+    if (!signalMatches.has(id)) continue;
+    const candidate = classify(record.snapshot);
+    if (!candidate || candidate.minute <= 70) continue;
+    const prior = firstByMatch.get(id);
+    if (!prior || candidate.minute < prior.minute) {
+      firstByMatch.set(id, {
+        matchId:id, home:record.home || "", away:record.away || "",
+        competition:record.competition || "", ...candidate,
+        collectedAt:record.snapshot?.collected_at || null
+      });
+    }
+  }
+  const entries = [...firstByMatch.values()].map(entry => {
+    const final = outcomes?.matches?.[entry.matchId];
+    const home = num(final?.home_score), away = num(final?.away_score);
+    let status = "PENDING";
+    if (final?.status === "CONFIRMED" && home !== null && away !== null) {
+      status = home > 0 && away > 0 ? "WIN" : "LOSS";
+    }
+    return { ...entry, status, finalScore:home === null || away === null ? null : home + ":" + away };
+  }).sort((a,b) => String(b.collectedAt || "").localeCompare(String(a.collectedAt || "")));
+  const wins = entries.filter(x => x.status === "WIN").length;
+  const losses = entries.filter(x => x.status === "LOSS").length;
+  const pending = entries.filter(x => x.status === "PENDING").length;
+  return {
+    method:"Iba skutočne zachytené Flashscore BTTS LIVE signály z 46.–50. minúty. Z ich zápasov sa vyberie prvá uložená snímka po 70. minúte, ktorá splní existujúce BTTS skóre a strelecké prahy. Jeden záznam na zápas; nejde o nový LIVE signál.",
+    source:"Flashscore BTTS signal archive + permanent Flashscore timeline + confirmed outcomes",
+    generated_at:now,
+    captured_signal_count:signalMatches.size,
+    qualifying_match_count:entries.length,
+    sample:entries.length, wins, losses, pending, settled:wins+losses,
+    win_rate:wins+losses ? wins/(wins+losses) : null,
+    odds_available:false, roi_available:false,
+    note:"Úspech znamená, že do konečného výsledku skórovali oba tímy. Zápasy bez splnenej podmienky po 70. minúte sa nezapočítavajú do tejto vzorky.",
+    entries
+  };
+}
+
+function buildEvaluation({ index, outcomes, bttsArchive, timelineRecords = null, now = new Date().toISOString() }) {
   if (index?.source !== "Flashscore" || !Array.isArray(index.weeks)) throw new Error("Invalid Flashscore timeline index.");
   const firstByMatch = new Map();
   for (const week of index.weeks) {
@@ -106,6 +172,7 @@ function buildEvaluation({ index, outcomes, bttsArchive, now = new Date().toISOS
     odds_available:false, roi_available:false,
     groups, entries
   };
+  output.captured_signals_after70_analysis = buildCapturedSignalAfter70Analysis({ signals:output.signals, outcomes, timelineRecords, index, now });
   return output;
 }
 function main() {
@@ -122,4 +189,4 @@ function main() {
   }));
 }
 if (require.main === module) main();
-module.exports = { classify, buildEvaluation };
+module.exports = { classify, buildEvaluation, buildCapturedSignalAfter70Analysis };
