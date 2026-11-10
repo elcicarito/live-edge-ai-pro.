@@ -1442,6 +1442,22 @@
           away.style.cssText = "font-size:11px;color:#c5e7ff;text-align:right;";
           row.append(home, label, away);
           panel.appendChild(row);
+
+          const maximum = Math.max(value.home, value.away, 1);
+          const bars = document.createElement("div");
+          bars.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:3px;margin:2px 0 7px;align-items:center;";
+          const homeTrack = document.createElement("div");
+          homeTrack.style.cssText = "height:6px;background:#26384d;border-radius:5px;overflow:hidden;display:flex;justify-content:flex-end;";
+          const homeFill = document.createElement("div");
+          homeFill.style.cssText = "height:100%;width:" + (value.home / maximum * 100) + "%;background:#39e6a5;border-radius:5px 0 0 5px;";
+          homeTrack.appendChild(homeFill);
+          const awayTrack = document.createElement("div");
+          awayTrack.style.cssText = "height:6px;background:#26384d;border-radius:5px;overflow:hidden;";
+          const awayFill = document.createElement("div");
+          awayFill.style.cssText = "height:100%;width:" + (value.away / maximum * 100) + "%;background:#7dd3fc;border-radius:0 5px 5px 0;";
+          awayTrack.appendChild(awayFill);
+          bars.append(homeTrack, awayTrack);
+          panel.appendChild(bars); 
         });
         target.appendChild(panel);
       });
