@@ -50,7 +50,7 @@ const rawFlashscoreStats=(sotH,sotA,offH,offA)=>[
  {name:"Ball possession",period:"Match",home:"58%",away:"42%",home_numeric:58,away_numeric:42}
 ];
 r=engine.analyse({stats:rawFlashscoreStats(4,1,5,2)},[
- make(t0,{stats:rawFlashscoreStats(2,1,3,2)})
+ make(t0,rawFlashscoreStats(2,1,3,2))
 ], "2026-11-08T12:05:00Z");
 assert.equal(r.recent.minutes,5);
 assert.equal(r.recent.used.find(x=>x.key==="sot").home,2);
