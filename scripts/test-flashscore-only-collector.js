@@ -130,9 +130,20 @@ function runCollector() {
     const previousWeek = isoWeekKey(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
     const previousTimeline = "flashscore-match-timeline-" + previousWeek + ".jsonl.gz";
     fs.writeFileSync(path.join(tempDir, "data", previousTimeline), zlib.gzipSync(Buffer.from("")));
+    const ancientWeek = "2019-W01";
+    const ancientTimeline = "flashscore-match-timeline-" + ancientWeek + ".jsonl.gz";
+    fs.writeFileSync(path.join(tempDir, "data", ancientTimeline), zlib.gzipSync(Buffer.from("historical\n")));
+    fs.writeFileSync(path.join(tempDir, "data", "flashscore-match-archive.json"), JSON.stringify({
+      schema_version: 1, source: "Flashscore", created_at: "2019-01-01T00:00:00.000Z",
+      updated_at: "2019-01-01T00:00:00.000Z", matches: {
+        "ancient-match": { id: "ancient-match", home: "Old Home", away: "Old Away",
+          first_seen_at: "2019-01-01T00:00:00.000Z", last_seen_at: "2019-01-01T00:00:00.000Z",
+          snapshots_count: 1, last_snapshot: { collected_at: "2019-01-01T00:00:00.000Z" } }
+      }
+    }));
     fs.writeFileSync(path.join(tempDir, "data", "flashscore-timeline-index.json"), JSON.stringify({
       schema_version: 1, source: "Flashscore",
-      weeks: [{ week: previousWeek, file: previousTimeline }, "invalid-week-entry"]
+      weeks: [{ week: ancientWeek, file: ancientTimeline }, { week: previousWeek, file: previousTimeline }, "invalid-week-entry"]
     }));
 
     await runCollector();
@@ -160,6 +171,11 @@ function runCollector() {
     assert.equal(specialMatch.minute_source, "Flashscore core DI (minute-only clock)");
     assert.equal(archive.matches["test-match-1"].snapshots_count, 2);
     assert.equal(archive.matches["test-match-special"].snapshots_count, 2);
+    assert.ok(archive.matches["ancient-match"], "archive entries older than 90 days must never be deleted");
+    assert.equal(archive.retention_policy, "permanent", "match archive must declare permanent retention");
+    assert.ok(index.weeks.some(item => item.week === "2019-W01"), "ancient timeline weeks must remain indexed");
+    assert.ok(fs.existsSync(path.join(dataDir, "flashscore-match-timeline-2019-W01.jsonl.gz")), "ancient timeline files must never be deleted");
+    assert.equal(index.retention_policy, "permanent", "timeline index must declare permanent retention");
     assert.equal(archive.matches["test-match-1"].score_change_count, 1);
     assert.equal(archive.matches["test-match-1"].stat_change_count, 1);
     assert.ok(index.weeks.some(item => item.week === previousWeek), "previous indexed week must be retained");
@@ -182,7 +198,7 @@ function runCollector() {
     assert.equal(specialTimeline[0].snapshot.live_minute, 31);
     assert.equal(specialTimeline[0].snapshot.live_clock, "31'");
 
-    process.stdout.write("Flashscore collector integration test passed: standard and 2x20 clocks, seconds, separate event/live minute fields, stats, score/stat changes, gzip timeline and index.\n");
+    process.stdout.write("Flashscore collector integration test passed: standard and 2x20 clocks, seconds, separate event/live minute fields, stats, score/stat changes, gzip timeline, permanent retention and index.\n");
   } finally {
     await new Promise(resolve => server.close(resolve));
     fs.rmSync(tempDir, { recursive: true, force: true });

@@ -12,8 +12,7 @@ const weekKey = (() => { const d = new Date(); const day = (d.getUTCDay() + 6) %
 const TIMELINE_FILE = "flashscore-match-timeline-" + weekKey + ".jsonl.gz";
 const TIMELINE_PATH = path.join(DATA, TIMELINE_FILE);
 const TIMELINE_INDEX_PATH = path.join(DATA, "flashscore-timeline-index.json");
-const MAX_ARCHIVE_AGE_MS = 90 * 24 * 60 * 60 * 1000;
-const MAX_TIMELINE_WEEKS = 13;
+// Permanent retention: historical match and timeline data must never be pruned by age.
 const now = new Date().toISOString();
 
 function readJson(file, fallback) {
@@ -298,13 +297,9 @@ async function main() {
     }));
   }
 
-  const cutoff = Date.now() - MAX_ARCHIVE_AGE_MS;
-  for (const [id, item] of Object.entries(archive.matches)) {
-    if (Date.parse(item.last_seen_at || "") < cutoff) delete archive.matches[id];
-  }
   archive.updated_at = now;
   archive.live_match_count = records.length;
-  archive.retention_days = 90;
+  archive.retention_policy = "permanent";
 
   const current = {
     collected_at: now,
@@ -350,15 +345,10 @@ async function main() {
     .map(item => typeof item === "string" ? item : item?.week)
     .filter(week => typeof week === "string" && /^\d{4}-W\d{2}$/.test(week));
   const allWeeks = [...new Set([...existingWeeks, weekKey])].sort();
-  const retainedWeeks = allWeeks.slice(-MAX_TIMELINE_WEEKS);
-  for (const oldWeek of allWeeks) {
-    if (retainedWeeks.includes(oldWeek)) continue;
-    const oldFile = path.join(DATA, "flashscore-match-timeline-" + oldWeek + ".jsonl.gz");
-    if (fs.existsSync(oldFile)) fs.unlinkSync(oldFile);
-  }
+  const retainedWeeks = allWeeks;
   atomicJson(TIMELINE_INDEX_PATH, {
     schema_version: 1, source: "Flashscore", updated_at: now,
-    retention_weeks: MAX_TIMELINE_WEEKS,
+    retention_policy: "permanent",
     weeks: retainedWeeks.map(week => ({
       week, file: "flashscore-match-timeline-" + week + ".jsonl.gz"
     }))
