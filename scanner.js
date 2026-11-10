@@ -1610,6 +1610,74 @@
         target.appendChild(row);
       });
     }
+
+    const goalEvents = events.filter(event => event.kind === "⚽ Gól" || event.kind === "⚽ Penalta");
+    if (goalEvents.length) {
+      const goalHeading = document.createElement("div");
+      goalHeading.textContent = "GÓLY A OKOLITÁ AKTIVITA";
+      goalHeading.style.cssText = "font-size:11px;font-weight:900;color:#dbeafe;margin:14px 0 7px;";
+      target.appendChild(goalHeading);
+      const snapshotMinute = snapshot => {
+        const raw = snapshot?.live_minute ?? snapshot?.minute;
+        const match = String(raw ?? "").match(/\d+/);
+        return match ? Number(match[0]) : null;
+      };
+      const readMetric = (snapshot, pattern) => {
+        const stats = Array.isArray(snapshot?.stats) ? snapshot.stats : [];
+        const item = stats.find(stat =>
+          (!stat.period || String(stat.period).trim().toLowerCase() === "match") &&
+          pattern.test(String(stat.label || ""))
+        );
+        if (!item) return null;
+        const home = Number(String(item.home_numeric ?? item.home ?? "").replace(/[^0-9.-]/g, ""));
+        const away = Number(String(item.away_numeric ?? item.away ?? "").replace(/[^0-9.-]/g, ""));
+        return Number.isFinite(home) && Number.isFinite(away) ? { home, away } : null;
+      };
+      goalEvents.forEach(goal => {
+        const goalMinuteMatch = String(goal.minute || "").match(/\d+/);
+        const goalMinute = goalMinuteMatch ? Number(goalMinuteMatch[0]) : goal.time;
+        const card = document.createElement("div");
+        card.style.cssText = "padding:8px 9px;margin:5px 0;background:#101f31;border:1px solid #36516b;border-radius:8px;";
+        const heading = document.createElement("div");
+        heading.textContent = (goal.minute || "Čas neznámy") + " · " + (goal.detail || "Gól");
+        heading.style.cssText = "font-size:10px;font-weight:900;color:#e2e8f0;margin-bottom:5px;";
+        card.appendChild(heading);
+        const before = [...valid].filter(row => {
+          const minute = snapshotMinute(row.match);
+          return minute !== null && goalMinute !== null && minute <= goalMinute && goalMinute - minute <= 8;
+        }).sort((a, b) => snapshotMinute(b.match) - snapshotMinute(a.match))[0];
+        const after = [...valid].filter(row => {
+          const minute = snapshotMinute(row.match);
+          return minute !== null && goalMinute !== null && minute >= goalMinute && minute - goalMinute <= 8;
+        }).sort((a, b) => snapshotMinute(a.match) - snapshotMinute(b.match))[0];
+        if (before && after && before !== after) {
+          const definitions = [
+            { label: "Strely", pattern: /total shots|shots total|celkové strely|celkove strely/i },
+            { label: "Na bránu", pattern: /shots on target|strely na bránu|strely na branu/i }
+          ];
+          definitions.forEach(definition => {
+            const oldValue = readMetric(before.match, definition.pattern);
+            const newValue = readMetric(after.match, definition.pattern);
+            if (!oldValue || !newValue || newValue.home < oldValue.home || newValue.away < oldValue.away) return;
+            const row = document.createElement("div");
+            row.textContent = definition.label + " · pred: " + oldValue.home + ":" + oldValue.away + " → po: " + newValue.home + ":" + newValue.away + " (+" + (newValue.home - oldValue.home) + ":" + (newValue.away - oldValue.away) + ")";
+            row.style.cssText = "font-size:9px;color:#b7c8d9;padding:3px 0;";
+            card.appendChild(row);
+          });
+          const range = document.createElement("div");
+          range.textContent = "Porovnanie snímok " + (snapshotMinute(before.match) || "—") + "′ až " + (snapshotMinute(after.match) || "—") + "′";
+          range.style.cssText = "font-size:9px;color:#7892ac;margin-top:3px;";
+          card.appendChild(range);
+        } else {
+          const missing = document.createElement("div");
+          missing.textContent = "Nie sú dostupné vhodné snímky do 8 minút pred aj po udalosti.";
+          missing.style.cssText = "font-size:9px;color:#9fb5cb;";
+          card.appendChild(missing);
+        }
+        target.appendChild(card);
+      });
+      addText(target, "Ide o zmenu kumulatívnych štatistík medzi najbližšími dostupnými snímkami pred a po góle. Časová súvislosť neznamená, že gól zmenu aktivity spôsobil.", "10px");
+    }
   }
 
   // Historická kontinuita dát pre konkrétny zápas.
