@@ -156,6 +156,11 @@ function runCollector() {
 
     assert.equal(current.source, "Flashscore");
     assert.equal(current.live_count, 2);
+    assert.equal(current.stats_flagged_count, 1);
+    assert.equal(current.stats_not_flagged_count, 1);
+    assert.equal(current.stats_requested_count, 1);
+    assert.equal(current.stats_flagged_but_empty_count, 0);
+    assert.equal(current.stats_match_count, 1);
     const standardMatch = current.records.find(record => record.match.id === "test-match-1").match;
     const specialMatch = current.records.find(record => record.match.id === "test-match-special").match;
     assert.equal(standardMatch.live_minute, 55, "standard second-half clock must include the 45-minute first half");
