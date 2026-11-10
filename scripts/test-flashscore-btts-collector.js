@@ -17,6 +17,15 @@ assert.equal(candidates[0].predictedSide, "away");
 assert.equal(getBttsCandidates({ ...base, live_minute: 51 }).length, 0);
 assert.equal(getBttsCandidates({ ...base, stage: "1st Half" }).length, 0);
 assert.equal(getBttsCandidates({ ...base, source: "ESPN" }).length, 0);
+// Period-aware Flashscore payload: first-half values must not be mistaken for full-match totals.
+const periodStats = [
+  { name: "Shots on target", period: "1st Half", home: 8, away: 0 },
+  { name: "Total shots", period: "1st Half", home: 12, away: 0 },
+  { name: "Shots on target", period: "Match", home: 3, away: 1 },
+  { name: "Total shots", period: "Match", home: 6, away: 2 }
+];
+assert.equal(getBttsCandidates({ ...base, stats: periodStats }).length, 0,
+  "BTTS thresholds must use Match totals, not inflated first-half-only values");
 assert.equal(getBttsCandidates({ ...base, home_score: 0, away_score: 1,
   stats: [{ name: "Shots on target", home: 3, away: 3 }, { name: "Total shots", home: 4, away: 4 }]
 }).length, 1);
