@@ -1,0 +1,48 @@
+name: Flashscore Daily Archive Integrity Audit
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flashscore-daily-archive-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout application code
+        uses: actions/checkout@v4
+
+      - name: Fetch the dedicated permanent data branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin live-data-v2
+          git checkout FETCH_HEAD -- \
+            data/flashscore-match-archive.json \
+            data/flashscore-timeline-index.json \
+            data/flashscore-archive-integrity.json
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            git checkout FETCH_HEAD -- "data/$file"
+          done < <(node -e '
+            const fs = require("fs");
+            const index = JSON.parse(fs.readFileSync("data/flashscore-timeline-index.json", "utf8"));
+            for (const item of index.weeks || []) {
+              if (item && /^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(item.file || "")) {
+                console.log(item.file);
+              } else {
+                throw new Error("Invalid timeline index entry");
+              }
+            }
+          ')
+
+      - name: Verify archive checksums, gzip and JSONL integrity
+        run: node scripts/flashscore-archive-integrity.js data --verify
