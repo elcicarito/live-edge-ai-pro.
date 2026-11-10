@@ -27,8 +27,15 @@ function numeric(value) {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 function statPair(stats, names) {
+  const rows = Array.isArray(stats) ? stats : [];
   const wanted = names.map(x => x.toLowerCase());
-  const item = (Array.isArray(stats) ? stats : []).find(row =>
+  // Flashscore can return Match, 1st Half and 2nd Half rows together.
+  // BTTS thresholds must use whole-match totals, never a half-only subtotal.
+  const hasPeriodMetadata = rows.some(row => typeof row?.period === "string" && row.period.trim());
+  const relevantRows = hasPeriodMetadata
+    ? rows.filter(row => String(row.period || "").trim().toLowerCase() === "match")
+    : rows; // Backward compatibility for older archived/test snapshots without period labels.
+  const item = relevantRows.find(row =>
     wanted.includes(String(row.label || row.name || "").trim().toLowerCase())
   );
   if (!item) return null;
