@@ -32,6 +32,10 @@ function labelObservations(observations, outcomes) {
   const matches = outcomes?.matches && typeof outcomes.matches === "object" ? outcomes.matches : {};
   const labeled = observations.map(row => {
     const copy = { ...row };
+    delete copy.labels;
+    delete copy.label_horizon;
+    delete copy.outcome_confirmed_at;
+    delete copy.outcome_revision_count;
     const rawId = String(row.match_id || "").replace(/^flashscore:/, "");
     const outcome = matches[rawId];
     if (!outcome || outcome.status !== "CONFIRMED" ||
