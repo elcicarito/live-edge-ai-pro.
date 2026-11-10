@@ -75,7 +75,7 @@
     const activityShare=total>0?home/total*100:null;
     const pressure=cumulativePressure(current.match.stats||[]);
     const homeIndex=activityShare===null?(pressure?.home??null):Math.round((pressure?pressure.home*.30:50*.30)+activityShare*.70);
-    return {time:current.time,minutes,homeRate,awayRate,activityHome:home,activityAway:away,
+    return {time:current.time,startTime:previous.time,endTime:current.time,minutes,homeRate,awayRate,activityHome:home,activityAway:away,
       activityShare,home:homeIndex,away:homeIndex===null?null:100-homeIndex,used};
   }
   function analyse(match,records,collectedAt){
@@ -86,8 +86,16 @@
     all.push({time:now,match});
     all.sort((a,b)=>a.time-b.time);
     const unique=all.filter((x,i)=>i===0||x.time!==all[i-1].time);
-    const points=[];
-    for(let i=1;i<unique.length;i++){const p=interval(unique[i-1],unique[i]);if(p)points.push(p);}
+    const points=[],consecutivePoints=[];
+    let previousValidIntervalEnd=null;
+    for(let i=1;i<unique.length;i++){
+      const p=interval(unique[i-1],unique[i]);
+      if(!p){previousValidIntervalEnd=null;consecutivePoints.length=0;continue;}
+      points.push(p);
+      if(previousValidIntervalEnd===unique[i-1].time)consecutivePoints.push(p);
+      else {consecutivePoints.length=0;consecutivePoints.push(p);}
+      previousValidIntervalEnd=unique[i].time;
+    }
     const pressure=cumulativePressure(match?.stats||[]);
     const lastPoint=points[points.length-1]||null;
     const latest=lastPoint&&Math.abs(lastPoint.time-now)<1000?lastPoint:null;
@@ -96,8 +104,8 @@
       minutes:Number(latest.minutes.toFixed(1)),used:latest.used
     }:null;
     let acceleration=null;
-    if(points.length>=2){
-      const a=points[points.length-2],b=points[points.length-1];
+    if(consecutivePoints.length>=2){
+      const a=consecutivePoints[consecutivePoints.length-2],b=consecutivePoints[consecutivePoints.length-1];
       const hd=Number((b.homeRate-a.homeRate).toFixed(1)),ad=Number((b.awayRate-a.awayRate).toFixed(1));
       const classify=x=>x>=1.5?"ZRÝCHĽUJE":x<=-1.5?"SPOMAĽUJE":"STABILNÉ";
       acceleration={homeDelta:hd,awayDelta:ad,homeState:classify(hd),awayState:classify(ad),
