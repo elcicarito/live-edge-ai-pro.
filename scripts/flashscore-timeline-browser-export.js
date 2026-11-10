@@ -15,6 +15,15 @@ function buildRecentTimeline(dataDir = DATA, nowMs = Date.now(), retentionMs = D
     throw new Error("Neplatný Flashscore timeline index.");
   }
 
+  const currentPath = path.join(dataDir, "flashscore-primary-current.json");
+  const current = JSON.parse(fs.readFileSync(currentPath, "utf8"));
+  if (current.source !== "Flashscore" || !Array.isArray(current.records)) {
+    throw new Error("Neplatný Flashscore primary current feed.");
+  }
+  const liveIds = new Set(current.records
+    .map(record => record && (record.match || record))
+    .filter(match => match && match.status === "live" && match.id)
+    .map(match => String(match.id)));
   const cutoff = nowMs - retentionMs;
   const seen = new Set();
   const rows = [];
@@ -37,7 +46,7 @@ function buildRecentTimeline(dataDir = DATA, nowMs = Date.now(), retentionMs = D
       const snap = entry.snapshot || {};
       const time = Date.parse(snap.collected_at || "");
       const id = String(entry.match_id || "");
-      if (!id || !Number.isFinite(time) || time < cutoff || time > nowMs + 60000) continue;
+      if (!id || !liveIds.has(id) || !Number.isFinite(time) || time < cutoff || time > nowMs + 60000) continue;
       const key = id + "|" + time;
       if (seen.has(key)) continue;
       seen.add(key);
