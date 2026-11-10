@@ -4312,7 +4312,31 @@
           const league = String(match.competition || match.league || "Neznáma súťaž");
           meta.textContent = league + " · " + score + (minute && minute !== "?" ? " · " + minute + (minute === "HT" ? "" : "′") : "");
           meta.style.cssText = "font-size:9px;color:#8fa6bf;margin-top:3px;overflow-wrap:anywhere;";
-          info.append(teams, meta);
+
+          // Trend je odvodený iba z dvoch posledných platných intervalov reálnych snímok.
+          const trend = calculatePressureAcceleration(match, historyData, item.collectedAt);
+          const trendLine = document.createElement("div");
+          trendLine.style.cssText = "font-size:9px;margin-top:5px;line-height:1.4;overflow-wrap:anywhere;";
+          if (trend.ready) {
+            const marker = state => state === "ZRÝCHĽUJE" ? "↑" : state === "SPOMAĽUJE" ? "↓" : "→";
+            const homeColor = trend.homeState === "ZRÝCHĽUJE" ? "#4ade80" : trend.homeState === "SPOMAĽUJE" ? "#fbbf24" : "#9fb2c8";
+            const awayColor = trend.awayState === "ZRÝCHĽUJE" ? "#4ade80" : trend.awayState === "SPOMAĽUJE" ? "#fbbf24" : "#9fb2c8";
+            const homeTrend = document.createElement("span");
+            homeTrend.textContent = marker(trend.homeState) + " Domáci " + trend.homeState.toLowerCase() + " (" + (trend.homeDelta > 0 ? "+" : "") + trend.homeDelta + ")";
+            homeTrend.style.color = homeColor;
+            const separator = document.createElement("span");
+            separator.textContent = " · ";
+            separator.style.color = "#64748b";
+            const awayTrend = document.createElement("span");
+            awayTrend.textContent = marker(trend.awayState) + " Hostia " + trend.awayState.toLowerCase() + " (" + (trend.awayDelta > 0 ? "+" : "") + trend.awayDelta + ")";
+            awayTrend.style.color = awayColor;
+            trendLine.append(homeTrend, separator, awayTrend);
+          } else {
+            trendLine.textContent = "Trend: čakám na dve platné porovnania meraní";
+            trendLine.style.color = "#8296ad";
+            trendLine.title = trend.reason || "Nedostatok historických meraní";
+          }
+          info.append(teams, meta, trendLine);
           const badge = document.createElement("div");
           const status = priority.rank === 2 ? "SIGNÁL" : priority.rank === 1 ? "VYŠŠÍ TLAK" : "SLEDOVAŤ";
           const color = priority.rank === 2 ? "#39e6a5" : priority.rank === 1 ? "#fbbf24" : "#7dd3fc";
