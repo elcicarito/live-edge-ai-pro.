@@ -3364,6 +3364,44 @@
       d.style.cssText = "font-size:11px;color:#dbeafe;margin-top:4px;";
       card.append(h,d); target.appendChild(card);
     });
+    const retrospectiveEntries = Array.isArray(late?.entries) ? late.entries : [];
+    const retrospectiveDetails = document.createElement("details");
+    retrospectiveDetails.style.cssText = "margin:8px 0 14px;border:1px solid #24516a;border-radius:10px;background:#0d1b2a;overflow:hidden;";
+    const retrospectiveSummary = document.createElement("summary");
+    retrospectiveSummary.textContent = "ZOBRAZIŤ RETROSPEKTÍVNE VYHODNOTENÉ ZÁPASY (" + retrospectiveEntries.length + ")";
+    retrospectiveSummary.style.cssText = "cursor:pointer;list-style:none;padding:12px;font-size:11px;font-weight:900;color:#a5f3fc;";
+    retrospectiveDetails.appendChild(retrospectiveSummary);
+    if (!retrospectiveEntries.length) {
+      const empty = document.createElement("div");
+      empty.textContent = "Zatiaľ nie sú dostupné zápasy, ktoré splnili retrospektívne podmienky po 70. minúte.";
+      empty.style.cssText = "padding:0 12px 12px;font-size:11px;color:#94a3b8;";
+      retrospectiveDetails.appendChild(empty);
+    } else {
+      retrospectiveEntries.forEach(item => {
+        const row = document.createElement("div");
+        row.style.cssText = "margin:0 8px 8px;padding:10px;border:1px solid #24516a;border-radius:8px;background:#101b2b;";
+        const status = item.status === "WIN" ? "WIN" : item.status === "LOSS" ? "LOSS" : "ČAKÁ NA VÝSLEDOK";
+        const statusColor = item.status === "WIN" ? "#4ade80" : item.status === "LOSS" ? "#f87171" : "#fbbf24";
+        const title = document.createElement("div");
+        title.textContent = (item.home || "?") + " – " + (item.away || "?") + " · " + item.minute + ". min · skóre " + item.home + ":" + item.away;
+        title.style.cssText = "font-weight:800;color:#dbeafe;font-size:12px;line-height:1.45;";
+        const league = document.createElement("div");
+        league.textContent = item.competition || "Súťaž neuvedená";
+        league.style.cssText = "font-size:10px;color:#94a3b8;margin-top:3px;";
+        const stats = document.createElement("div");
+        stats.textContent = item.tier + " · SOT spolu: " + (item.combinedSot ?? "—") + " · strely spolu: " + (item.combinedShots ?? "—");
+        stats.style.cssText = "font-size:10px;color:#cbd5e1;margin-top:5px;";
+        const result = document.createElement("div");
+        result.textContent = status + (item.finalScore ? " · konečný stav " + item.finalScore : "");
+        result.style.cssText = "font-size:10px;font-weight:900;color:" + statusColor + ";margin-top:4px;";
+        const stamp = document.createElement("div");
+        stamp.textContent = item.createdAt ? "Snímka uložená: " + new Date(item.createdAt).toLocaleString("sk-SK") : "Čas snímky nie je dostupný";
+        stamp.style.cssText = "font-size:9px;color:#8293a8;margin-top:4px;";
+        row.append(title, league, stats, result, stamp);
+        retrospectiveDetails.appendChild(row);
+      });
+    }
+    target.appendChild(retrospectiveDetails);
     const capturedLate = data?.captured_signals_after70_analysis;
     const capturedTitle = document.createElement("div");
     capturedTitle.textContent = "VYHODNOTENIE ZACHYTENÝCH BTTS SIGNÁLOV PO 70. MINÚTE";
