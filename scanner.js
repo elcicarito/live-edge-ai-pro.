@@ -1014,6 +1014,7 @@
     };
 
     const heading = document.createElement("div");
+    heading.className = "live-stat-heading";
     heading.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) minmax(82px,1.45fr) minmax(0,1fr);gap:7px;padding:4px 5px 8px;font-size:9px;font-weight:900;letter-spacing:.45px;text-align:center;";
     const homeHeading = document.createElement("span");
     const centerHeading = document.createElement("span");
@@ -1031,9 +1032,11 @@
 
     displayStats.forEach(item => {
       const row = document.createElement("div");
+      row.className = "live-stat-row";
       const isKeyShotStat = /shots? on target|strely na bránu|strely na branu|celkové strely|celkove strely/i.test(String(item.label || ""));
       row.style.cssText = "padding:9px;margin:6px 0;background:" + (isKeyShotStat ? "#14283a" : "#101b2b") + ";border:1px solid " + (isKeyShotStat ? "#32617a" : "#26384f") + ";border-radius:9px;";
       const values = document.createElement("div");
+      values.className = "live-stat-values";
       values.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) minmax(82px,1.45fr) minmax(0,1fr);align-items:center;gap:7px;font-size:12px;";
       const home = document.createElement("strong");
       const away = document.createElement("strong");
