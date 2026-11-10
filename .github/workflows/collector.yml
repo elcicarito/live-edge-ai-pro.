@@ -2497,6 +2497,16 @@ jobs:
         run: |
           node scripts/flashscore-only-collector.js
 
+      - name: Capture and settle Flashscore BTTS signals
+        continue-on-error: true
+        run: |
+          if [ -s data/flashscore-live-current.json ]; then
+            node scripts/flashscore-btts-collector.js
+          else
+            echo "Flashscore current snapshot missing; BTTS capture skipped."
+            exit 1
+          fi
+
       - name: Normalize Flashscore into canonical primary-source candidate
         continue-on-error: true
         run: |
