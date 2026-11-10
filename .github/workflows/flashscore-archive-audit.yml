@@ -36,7 +36,7 @@ jobs:
             const fs = require("fs");
             const index = JSON.parse(fs.readFileSync("data/flashscore-timeline-index.json", "utf8"));
             for (const item of index.weeks || []) {
-              if (item && /^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(item.file || "")) {
+              if (item && /^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(item.file || "")) {
                 console.log(item.file);
               } else {
                 throw new Error("Invalid timeline index entry");
