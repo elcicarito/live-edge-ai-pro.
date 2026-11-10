@@ -1461,6 +1461,40 @@
         });
         target.appendChild(panel);
       });
+      const summary = document.createElement("div");
+      summary.style.cssText = "padding:9px 10px;margin:9px 0;background:#13283a;border:1px solid #36516b;border-radius:9px;";
+      const summaryTitle = document.createElement("div");
+      summaryTitle.textContent = "SÚHRN POZOROVANEJ AKTIVITY";
+      summaryTitle.style.cssText = "font-size:10px;font-weight:900;color:#e2e8f0;margin-bottom:6px;";
+      summary.appendChild(summaryTitle);
+      let summaryMetrics = 0;
+      statDefinitions.forEach(definition => {
+        const totals = intervalRows.reduce((acc, interval) => {
+          const value = interval.values[definition.key];
+          if (value) {
+            acc.home += value.home;
+            acc.away += value.away;
+            acc.bins++;
+          }
+          return acc;
+        }, { home: 0, away: 0, bins: 0 });
+        if (!totals.bins) return;
+        summaryMetrics++;
+        const line = document.createElement("div");
+        line.style.cssText = "display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-top:1px solid #294257;font-size:10px;";
+        const metric = document.createElement("strong");
+        metric.textContent = definition.label + " · " + totals.home + ":" + totals.away;
+        metric.style.cssText = "color:#e2e8f0;";
+        const leader = document.createElement("span");
+        leader.textContent = totals.home === totals.away ? "Vyrovnané" : (totals.home > totals.away ? "Viac domáci" : "Viac hostia");
+        leader.style.cssText = "font-weight:800;color:" + (totals.home === totals.away ? "#cbd5e1" : (totals.home > totals.away ? "#39e6a5" : "#7dd3fc")) + ";text-align:right;";
+        line.append(metric, leader);
+        summary.appendChild(line);
+      });
+      if (summaryMetrics) {
+        target.appendChild(summary);
+        addText(target, "Súčet zahŕňa iba platné pozorované prírastky v zobrazených úsekoch. Každá štatistika sa hodnotí samostatne; nejde o predikciu gólu ani stávkový signál.", "10px");
+      }
       addText(target, "Prírastky sú sčítané zo susedných snímok s odstupom najviac 7 minút a priradené podľa minúty neskoršej snímky. Nezachytávajú aktivitu medzi meraniami.", "10px");
     }
 
