@@ -10,7 +10,8 @@ assert.match(scanner, /const CURRENT_URL = DATA_BASE_URL \+ "flashscore-primary-
 assert.match(scanner, /contents\/data\/flashscore-primary-current\.json\?ref=live-data-v2/);
 assert.match(scanner, /async function loadFlashscoreRecentHistory/);
 assert.match(scanner, /flashscore-timeline-index\.json/);
-assert.match(scanner, /function historyRecords\(historyData, id\)[\s\S]*?matchId\(row\.match\) === id/);
+assert.match(scanner, /function historyRecords\\(historyData, id\\)/);
+assert.match(scanner, /matchId\\(row\\.match\\) === id/);
 assert.match(scanner, /loadFlashscoreRecentHistory\(\)\.catch/);
 assert.doesNotMatch(scanner, /const HISTORY_URL = DATA_BASE_URL \+ "live-history\.json"|LIVE MOMENTUM · ESPN|providerStatus\.ESPN/);
 
