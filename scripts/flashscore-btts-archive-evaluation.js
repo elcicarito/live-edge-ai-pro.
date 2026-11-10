@@ -80,55 +80,43 @@ function buildCapturedSignalAfter70Analysis({ signals, outcomes, timelineRecords
     }
   }
 
-  const post70ByMatch = new Map();
+  // Retrospektíva sleduje iba okamih, keď po zachytení signálu oba tímy
+  // už majú aspoň jeden gól. Strelecké prahy patria výhradne k pôvodnému signálu.
+  const timelineByMatch = new Map();
   for (const record of records) {
     const id = String(record?.match_id || "");
     if (!signalMatches.has(id)) continue;
     const snapshot = record?.snapshot;
-    const minute = num(snapshot?.live_minute);
-    if (!Number.isInteger(minute) || minute <= 70 ||
-        !/2nd\s*half|second\s*half/i.test(String(snapshot?.stage || ""))) continue;
-
-    const state = post70ByMatch.get(id) || {
-      post70SnapshotCount: 0,
-      evaluablePost70SnapshotCount: 0,
-      firstQualified: null
-    };
-    state.post70SnapshotCount += 1;
-
+    const minute = num(snapshot?.live_minute ?? snapshot?.minute);
     const home = num(snapshot?.home_score), away = num(snapshot?.away_score);
-    const sot = pair(snapshot?.stats, ["shots on target"]);
-    const shots = pair(snapshot?.stats, ["total shots"]);
-    if (home !== null && away !== null && sot && shots) {
-      state.evaluablePost70SnapshotCount += 1;
-    }
-
-    const candidate = classify(snapshot);
-    if (candidate && (!state.firstQualified ||
-        candidate.minute < state.firstQualified.minute ||
-        (candidate.minute === state.firstQualified.minute &&
-         String(snapshot?.collected_at || "") < String(state.firstQualified.collectedAt || "")))) {
-      state.firstQualified = {
-        ...candidate,
-        collectedAt: snapshot?.collected_at || null
-      };
-    }
-    post70ByMatch.set(id, state);
+    if (!Number.isInteger(minute) || home === null || away === null) continue;
+    const collectedAt = snapshot?.collected_at || record?.collected_at || null;
+    if (!timelineByMatch.has(id)) timelineByMatch.set(id, []);
+    timelineByMatch.get(id).push({ minute, home, away, collectedAt });
+  }
+  for (const rows of timelineByMatch.values()) {
+    rows.sort((a,b) => a.minute - b.minute ||
+      String(a.collectedAt || "").localeCompare(String(b.collectedAt || "")));
   }
 
   const entries = [...signalMatches.entries()].map(([id, matchSignals]) => {
     const signal = matchSignals.slice().sort((a,b) =>
       Date.parse(a.createdAt || 0) - Date.parse(b.createdAt || 0)
     )[0];
-    const observed = post70ByMatch.get(id) || {
-      post70SnapshotCount: 0,
-      evaluablePost70SnapshotCount: 0,
-      firstQualified: null
-    };
-    const qualified = observed.firstQualified;
-    const after70Status = qualified ? "QUALIFIED" :
-      observed.evaluablePost70SnapshotCount > 0 ? "NOT_QUALIFIED" :
-      observed.post70SnapshotCount > 0 ? "INSUFFICIENT_DATA" : "NO_POST70_DATA";
+    const signalMinute = Number(signal.startMinute);
+    const signalTime = Date.parse(signal.createdAt || "");
+    const rows = timelineByMatch.get(id) || [];
+    const afterSignal = rows.filter(row => {
+      const time = Date.parse(row.collectedAt || "");
+      return Number.isFinite(signalTime) && Number.isFinite(time)
+        ? time >= signalTime
+        : row.minute >= signalMinute;
+    });
+    const alreadyMetAtSignal = Number((String(signal.startScore || "").match(/^(\d+)\s*[:\-]\s*(\d+)$/) || [])[1]) > 0 &&
+      Number((String(signal.startScore || "").match(/^(\d+)\s*[:\-]\s*(\d+)$/) || [])[2]) > 0;
+    const completion = alreadyMetAtSignal
+      ? { minute: signalMinute, home: Number(signal.startScore.split(/[:\-]/)[0]), away: Number(signal.startScore.split(/[:\-]/)[1]), atSignal: true }
+      : afterSignal.find(row => row.home > 0 && row.away > 0) || null;
 
     const final = outcomes?.matches?.[id];
     const finalHome = num(final?.home_score);
@@ -141,60 +129,49 @@ function buildCapturedSignalAfter70Analysis({ signals, outcomes, timelineRecords
       ? (settledHome > 0 && settledAway > 0 ? "WIN" : "LOSS")
       : (["WIN","LOSS"].includes(signal?.status) ? signal.status : "PENDING");
 
+    const completionStatus = completion
+      ? completion.atSignal ? "ALREADY_MET_AT_SIGNAL"
+        : completion.minute > 70 ? "COMPLETED_AFTER_70" : "COMPLETED_BY_70"
+      : status === "LOSS" ? "NOT_COMPLETED"
+        : afterSignal.length ? "NO_COMPLETION_OBSERVED" : "NO_TIMELINE_DATA";
+
     return {
-      matchId: id,
-      homeTeam: signal.home || "",
-      awayTeam: signal.away || "",
-      competition: signal.competition || "",
-      signalStartMinute: Number(signal.startMinute),
-      signalStartScore: signal.startScore || "",
-      signalTier: signal.tier || signal.tierKey || "BTTS",
-      signalSot: num(signal.combinedSot),
-      signalShots: num(signal.combinedShots),
-      signalCreatedAt: signal.createdAt || null,
-      capturedSignalCountForMatch: matchSignals.length,
-      after70Status,
-      post70SnapshotCount: observed.post70SnapshotCount,
-      evaluablePost70SnapshotCount: observed.evaluablePost70SnapshotCount,
-      post70Minute: qualified?.minute ?? null,
-      post70Score: qualified ? qualified.home + ":" + qualified.away : null,
-      post70Tier: qualified?.tier || null,
-      post70Sot: qualified?.combinedSot ?? null,
-      post70Shots: qualified?.combinedShots ?? null,
-      post70CollectedAt: qualified?.collectedAt || null,
+      matchId:id, homeTeam:signal.home || "", awayTeam:signal.away || "",
+      competition:signal.competition || "",
+      signalStartMinute:signalMinute, signalStartScore:signal.startScore || "",
+      signalTier:signal.tier || signal.tierKey || "BTTS",
+      signalSot:num(signal.combinedSot), signalShots:num(signal.combinedShots),
+      signalCreatedAt:signal.createdAt || null,
+      capturedSignalCountForMatch:matchSignals.length,
+      completionStatus,
+      bttsCompletedMinute:completion?.minute ?? null,
+      bttsCompletedScore:completion ? completion.home + ":" + completion.away : null,
+      completionCollectedAt:completion?.collectedAt || null,
       status,
-      finalScore: settledHome !== null && settledAway !== null ? settledHome + ":" + settledAway : null
+      finalScore:settledHome !== null && settledAway !== null ? settledHome + ":" + settledAway : null
     };
   }).sort((a,b) => String(b.signalCreatedAt || "").localeCompare(String(a.signalCreatedAt || "")));
 
-  const wins = entries.filter(x => x.status === "WIN").length;
-  const losses = entries.filter(x => x.status === "LOSS").length;
-  const pending = entries.filter(x => x.status === "PENDING").length;
-  const qualified = entries.filter(x => x.after70Status === "QUALIFIED");
-  const qualifiedWins = qualified.filter(x => x.status === "WIN").length;
-  const qualifiedLosses = qualified.filter(x => x.status === "LOSS").length;
-  const qualifiedPending = qualified.filter(x => x.status === "PENDING").length;
+  const wins=entries.filter(x=>x.status==="WIN").length;
+  const losses=entries.filter(x=>x.status==="LOSS").length;
+  const pending=entries.filter(x=>x.status==="PENDING").length;
+  const after70=entries.filter(x=>x.completionStatus==="COMPLETED_AFTER_70");
+  const by70=entries.filter(x=>["COMPLETED_BY_70","ALREADY_MET_AT_SIGNAL"].includes(x.completionStatus));
   return {
-    schema_version:2,
-    ready:true,
-    method:"Iba skutočne zachytené Flashscore BTTS signály z 46.–50. minúty. Každý zachytený zápas zostáva vo vzorke; samostatne sa označí, či po 70. minúte splnil existujúce BTTS skóre a strelecké prahy, a následne sa vyhodnotí konečné BTTS.",
+    schema_version:3, ready:true,
+    method:"Iba skutočne zachytené Flashscore BTTS signály z 46.–50. minúty. Sleduje sa prvý uložený LIVE snapshot po zachytení signálu, v ktorom oba tímy už skórovali. SOT a strely sa používajú iba pri pôvodnom signále, nie pri retrospektíve.",
     source:"Flashscore BTTS signal archive + permanent Flashscore timeline + confirmed outcomes",
-    generated_at:now,
-    captured_signal_count:signalMatches.size,
-    qualifying_match_count:qualified.length,
-    not_qualifying_match_count:entries.filter(x => x.after70Status === "NOT_QUALIFIED").length,
-    insufficient_data_match_count:entries.filter(x => x.after70Status === "INSUFFICIENT_DATA").length,
-    no_post70_data_match_count:entries.filter(x => x.after70Status === "NO_POST70_DATA").length,
-    sample:entries.length, wins, losses, pending, settled:wins+losses,
-    win_rate:wins+losses ? wins/(wins+losses) : null,
-    qualified_sample:qualified.length,
-    qualified_wins:qualifiedWins,
-    qualified_losses:qualifiedLosses,
-    qualified_pending:qualifiedPending,
-    qualified_settled:qualifiedWins+qualifiedLosses,
-    qualified_win_rate:qualifiedWins+qualifiedLosses ? qualifiedWins/(qualifiedWins+qualifiedLosses) : null,
+    generated_at:now, captured_signal_count:signalMatches.size, sample:entries.length,
+    wins, losses, pending, settled:wins+losses,
+    win_rate:wins+losses?wins/(wins+losses):null,
+    completed_by_70_count:by70.length,
+    completed_after_70_count:after70.length,
+    not_completed_count:entries.filter(x=>x.completionStatus==="NOT_COMPLETED").length,
+    no_completion_observed_count:entries.filter(x=>x.completionStatus==="NO_COMPLETION_OBSERVED").length,
+    no_timeline_data_count:entries.filter(x=>x.completionStatus==="NO_TIMELINE_DATA").length,
+    completed_after_70_wins:after70.filter(x=>x.status==="WIN").length,
     odds_available:false, roi_available:false,
-    note:"WIN/LOSS sa určuje podľa konečného BTTS (oba tímy skórovali). Zápasy bez splnených podmienok po 70. minúte zostávajú v celkovej vzorke ako NOT_QUALIFIED; chýbajúce alebo neúplné snímky sa označujú osobitne.",
+    note:"Čas dokončenia BTTS je minúta prvého uloženého snapshotu, v ktorom oba tímy majú gól; pri intervalovom zbere môže byť neskorší než presná minúta gólu. Konečný WIN/LOSS sa vyhodnocuje samostatne.",
     entries
   };
 }
