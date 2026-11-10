@@ -342,26 +342,49 @@
       const snapshotDate = snapshot.collected_at ? localDateKey(new Date(snapshot.collected_at)) : "";
       if (snapshotDate !== selectedDate) return false;
       const haystack = [
-        entry.home, entry.away, entry.competition, snapshot.live_minute,
+        entry.home, entry.away, entry.competition, entry.country, snapshot.live_minute,
         snapshot.live_clock, snapshot.stage, snapshot.home_score, snapshot.away_score
       ].join(" ").toLocaleLowerCase("sk");
       return !query || haystack.includes(query);
     });
 
-    const groups = new Map();
+    const matchGroups = new Map();
     for (const entry of rows) {
       const key = String(entry.match_id || [
         entry.home || "", entry.away || "", entry.competition || ""
       ].join("|"));
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(entry);
+      if (!matchGroups.has(key)) matchGroups.set(key, []);
+      matchGroups.get(key).push(entry);
     }
-    const matches = [...groups.values()].map(items => items.sort((a, b) =>
+    const matches = [...matchGroups.values()].map(items => items.sort((a, b) =>
       Date.parse(a.snapshot?.collected_at || 0) - Date.parse(b.snapshot?.collected_at || 0)
-    )).sort((a, b) =>
-      Date.parse(b[b.length - 1]?.snapshot?.collected_at || 0) -
-      Date.parse(a[a.length - 1]?.snapshot?.collected_at || 0)
+    ));
+
+    const leagueGroups = new Map();
+    for (const items of matches) {
+      const first = items[0];
+      const country = String(first.country || "Ostatné");
+      const competition = String(first.competition || "Neznáma súťaž");
+      const key = country + "|" + competition;
+      if (!leagueGroups.has(key)) leagueGroups.set(key, { country, competition, matches: [] });
+      leagueGroups.get(key).matches.push(items);
+    }
+    const flagByCountry = {
+      "Bolivia":"🇧🇴","Brazil":"🇧🇷","Colombia":"🇨🇴","Costa Rica":"🇨🇷",
+      "Ecuador":"🇪🇨","England":"🏴","Italy":"🇮🇹","Jamaica":"🇯🇲",
+      "Mexico":"🇲🇽","Mongolia":"🇲🇳","Norway":"🇳🇴","Paraguay":"🇵🇾",
+      "Portugal":"🇵🇹","Romania":"🇷🇴","Spain":"🇪🇸","Uruguay":"🇺🇾"
+    };
+    const leagues = [...leagueGroups.values()].sort((a,b) =>
+      a.country.localeCompare(b.country, "sk") ||
+      a.competition.localeCompare(b.competition, "sk")
     );
+    for (const league of leagues) {
+      league.matches.sort((a,b) =>
+        Date.parse(b[b.length-1]?.snapshot?.collected_at || 0) -
+        Date.parse(a[a.length-1]?.snapshot?.collected_at || 0)
+      );
+    }
 
     flashscoreArchiveResultsEl.innerHTML = "";
     if (flashscoreArchiveCountEl) flashscoreArchiveCountEl.textContent = String(matches.length);
@@ -370,94 +393,112 @@
       return;
     }
 
+    const totalLeagues = leagues.length;
     const overview = document.createElement("div");
     overview.style.cssText = "margin:8px 0 12px;padding:10px 12px;border:1px solid #31445c;border-radius:9px;background:#13243a;color:#d6e1ee;font-size:13px;";
     overview.textContent = matches.length + (matches.length === 1 ? " zápas" : " zápasov") +
-      " · " + rows.length + (rows.length === 1 ? " uložená snímka" : " uložených snímok") +
-      " · zoradené podľa poslednej zaznamenanej snímky";
+      " · " + totalLeagues + (totalLeagues === 1 ? " liga" : " líg") +
+      " · " + rows.length + (rows.length === 1 ? " snímka" : " snímok");
     flashscoreArchiveResultsEl.appendChild(overview);
 
-    for (const items of matches) {
-      const first = items[0];
-      const latest = items[items.length - 1];
-      const latestSnapshot = latest.snapshot || {};
-      const card = document.createElement("details");
-      card.style.cssText = "margin:9px 0;padding:0;border:1px solid #31445c;border-radius:11px;background:#101d2d;color:#fff;overflow:hidden;";
-      const summary = document.createElement("summary");
-      summary.style.cssText = "padding:12px;cursor:pointer;list-style-position:inside;";
-      const heading = document.createElement("div");
-      heading.style.cssText = "display:inline-block;vertical-align:middle;max-width:92%;";
-      const teams = document.createElement("strong");
-      teams.style.cssText = "display:block;font-size:14px;line-height:1.5;";
-      const minute = latestSnapshot.live_clock ||
-        (latestSnapshot.live_minute === null || latestSnapshot.live_minute === undefined || latestSnapshot.live_minute === ""
-          ? (latestSnapshot.stage || "Čas nezistený")
-          : String(latestSnapshot.live_minute).replace(/'$/, "") + "'");
-      teams.textContent = (first.home || "Domáci") + "  " +
-        (latestSnapshot.home_score ?? "–") + " : " + (latestSnapshot.away_score ?? "–") +
-        "  " + (first.away || "Hostia") + "   ·   " + minute;
-      heading.appendChild(teams);
-      const meta = document.createElement("span");
-      meta.style.cssText = "display:block;margin-top:3px;color:#9baabe;font-size:11px;";
-      meta.textContent = (first.competition || "Neznáma súťaž") + " · " +
-        items.length + (items.length === 1 ? " snímka" : " snímok") +
-        " · naposledy " + new Date(latestSnapshot.collected_at || "").toLocaleTimeString("sk-SK");
-      heading.appendChild(meta);
-      summary.appendChild(heading);
-      card.appendChild(summary);
+    for (const league of leagues) {
+      const section = document.createElement("section");
+      section.style.cssText = "margin:14px 0 18px;";
+      const leagueHeader = document.createElement("div");
+      leagueHeader.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;padding:10px 12px;border:1px solid #3b506b;border-radius:10px;background:linear-gradient(110deg,#1b3048,#132238);";
+      const leagueName = document.createElement("strong");
+      leagueName.style.cssText = "font-size:13px;color:#f0f5fb;line-height:1.4;";
+      leagueName.textContent = (flagByCountry[league.country] || "🏳️") + "  " +
+        league.country + "  ·  " + league.competition;
+      const leagueCount = document.createElement("span");
+      leagueCount.style.cssText = "flex:0 0 auto;padding:3px 7px;border-radius:20px;background:#263d58;color:#d5e4f5;font-size:11px;";
+      leagueCount.textContent = String(league.matches.length);
+      leagueHeader.appendChild(leagueName);
+      leagueHeader.appendChild(leagueCount);
+      section.appendChild(leagueHeader);
 
-      const history = document.createElement("div");
-      history.style.cssText = "padding:0 10px 10px;";
-      const historyTitle = document.createElement("p");
-      historyTitle.style.cssText = "margin:4px 2px 9px;color:#b9c9dc;font-size:12px;font-weight:600;";
-      historyTitle.textContent = "ČASOVÁ HISTÓRIA · od najstaršej po najnovšiu";
-      history.appendChild(historyTitle);
+      for (const items of league.matches) {
+        const first = items[0];
+        const latest = items[items.length - 1];
+        const latestSnapshot = latest.snapshot || {};
+        const card = document.createElement("details");
+        card.style.cssText = "margin:7px 0;padding:0;border:1px solid #31445c;border-radius:11px;background:#101d2d;color:#fff;overflow:hidden;";
+        const summary = document.createElement("summary");
+        summary.style.cssText = "padding:12px;cursor:pointer;list-style-position:inside;";
+        const heading = document.createElement("div");
+        heading.style.cssText = "display:inline-block;vertical-align:middle;max-width:92%;";
+        const teams = document.createElement("strong");
+        teams.style.cssText = "display:block;font-size:14px;line-height:1.5;";
+        const minute = latestSnapshot.live_clock ||
+          (latestSnapshot.live_minute === null || latestSnapshot.live_minute === undefined || latestSnapshot.live_minute === ""
+            ? (latestSnapshot.stage || "Čas nezistený")
+            : String(latestSnapshot.live_minute).replace(/'$/, "") + "'");
+        teams.textContent = (first.home || "Domáci") + "  " +
+          (latestSnapshot.home_score ?? "–") + " : " + (latestSnapshot.away_score ?? "–") +
+          "  " + (first.away || "Hostia") + "   ·   " + minute;
+        heading.appendChild(teams);
+        const meta = document.createElement("span");
+        meta.style.cssText = "display:block;margin-top:3px;color:#9baabe;font-size:11px;";
+        meta.textContent = items.length + (items.length === 1 ? " snímka" : " snímok") +
+          " · naposledy " + new Date(latestSnapshot.collected_at || "").toLocaleTimeString("sk-SK");
+        heading.appendChild(meta);
+        summary.appendChild(heading);
+        card.appendChild(summary);
 
-      for (const entry of items) {
-        const snapshot = entry.snapshot || {};
-        const row = document.createElement("div");
-        row.style.cssText = "margin:6px 0;padding:9px;border:1px solid #263b53;border-radius:8px;background:#0c1827;";
-        const line = document.createElement("div");
-        line.style.cssText = "display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px;font-size:12px;";
-        const time = document.createElement("strong");
-        time.textContent = new Date(snapshot.collected_at || "").toLocaleTimeString("sk-SK");
-        const score = document.createElement("strong");
-        const clock = snapshot.live_clock ||
-          (snapshot.live_minute === null || snapshot.live_minute === undefined || snapshot.live_minute === ""
-            ? (snapshot.stage || "—")
-            : String(snapshot.live_minute).replace(/'$/, "") + "'");
-        score.textContent = (snapshot.home_score ?? "–") + " : " + (snapshot.away_score ?? "–") + "  ·  " + clock;
-        line.appendChild(time);
-        line.appendChild(score);
-        row.appendChild(line);
+        const history = document.createElement("div");
+        history.style.cssText = "padding:0 10px 10px;";
+        const historyTitle = document.createElement("p");
+        historyTitle.style.cssText = "margin:4px 2px 9px;color:#b9c9dc;font-size:12px;font-weight:600;";
+        historyTitle.textContent = "ČASOVÁ HISTÓRIA · od najstaršej po najnovšiu";
+        history.appendChild(historyTitle);
 
-        const stats = Array.isArray(snapshot.stats) ? snapshot.stats : [];
-        const statDetails = document.createElement("details");
-        statDetails.style.cssText = "margin-top:6px;color:#cbd8e6;";
-        const statSummary = document.createElement("summary");
-        statSummary.style.cssText = "font-size:11px;cursor:pointer;color:#9fb3ca;";
-        statSummary.textContent = "Štatistiky (" + stats.length + ")";
-        statDetails.appendChild(statSummary);
-        if (stats.length) {
-          for (const stat of stats) {
-            const statLine = document.createElement("div");
-            statLine.style.cssText = "padding:4px 0;border-top:1px solid #203248;font-size:11px;";
-            statLine.textContent = (stat.name || "Štatistika") + ": " +
-              (stat.home ?? "–") + " : " + (stat.away ?? "–") +
-              (stat.period ? " · " + stat.period : "");
-            statDetails.appendChild(statLine);
+        for (const entry of items) {
+          const snapshot = entry.snapshot || {};
+          const row = document.createElement("div");
+          row.style.cssText = "margin:6px 0;padding:9px;border:1px solid #263b53;border-radius:8px;background:#0c1827;";
+          const line = document.createElement("div");
+          line.style.cssText = "display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px;font-size:12px;";
+          const time = document.createElement("strong");
+          time.textContent = new Date(snapshot.collected_at || "").toLocaleTimeString("sk-SK");
+          const score = document.createElement("strong");
+          const clock = snapshot.live_clock ||
+            (snapshot.live_minute === null || snapshot.live_minute === undefined || snapshot.live_minute === ""
+              ? (snapshot.stage || "—")
+              : String(snapshot.live_minute).replace(/'$/, "") + "'");
+          score.textContent = (snapshot.home_score ?? "–") + " : " + (snapshot.away_score ?? "–") + "  ·  " + clock;
+          line.appendChild(time);
+          line.appendChild(score);
+          row.appendChild(line);
+
+          const stats = Array.isArray(snapshot.stats) ? snapshot.stats : [];
+          const statDetails = document.createElement("details");
+          statDetails.style.cssText = "margin-top:6px;color:#cbd8e6;";
+          const statSummary = document.createElement("summary");
+          statSummary.style.cssText = "font-size:11px;cursor:pointer;color:#9fb3ca;";
+          statSummary.textContent = "Štatistiky (" + stats.length + ")";
+          statDetails.appendChild(statSummary);
+          if (stats.length) {
+            for (const stat of stats) {
+              const statLine = document.createElement("div");
+              statLine.style.cssText = "padding:4px 0;border-top:1px solid #203248;font-size:11px;";
+              statLine.textContent = (stat.name || "Štatistika") + ": " +
+                (stat.home ?? "–") + " : " + (stat.away ?? "–") +
+                (stat.period ? " · " + stat.period : "");
+              statDetails.appendChild(statLine);
+            }
+          } else {
+            const noStats = document.createElement("p");
+            noStats.style.cssText = "font-size:11px;color:#8295aa;";
+            noStats.textContent = "Pre túto snímku neboli dostupné štatistiky.";
+            statDetails.appendChild(noStats);
           }
-        } else {
-          const noStats = document.createElement("p");
-          noStats.style.cssText = "font-size:11px;color:#8295aa;";
-          noStats.textContent = "Pre túto snímku neboli dostupné štatistiky.";
-          statDetails.appendChild(noStats);
+          row.appendChild(statDetails);
+          history.appendChild(row);
         }
-        row.appendChild(statDetails);
-        history.appendChild(row);
+        card.appendChild(history);
+        section.appendChild(card);
       }
-      card.appendChild(history);
-      flashscoreArchiveResultsEl.appendChild(card);
+      flashscoreArchiveResultsEl.appendChild(section);
     }
   }
 
@@ -506,6 +547,7 @@
         home: match.home,
         away: match.away,
         competition: match.competition,
+        country: match.country,
         snapshot: match.last_snapshot
       })).filter(entry => entry.snapshot && entry.snapshot.collected_at &&
         isoWeekKey(String(entry.snapshot.collected_at).slice(0, 10)) === week);
