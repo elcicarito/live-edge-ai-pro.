@@ -4,7 +4,8 @@
   // pri častých zberoch môže zrušiť novším commitom; raw súbory sa aktualizujú
   // hneď po commite collectora a nie sú závislé od dokončenia Pages deploya.
   const DATA_BASE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/";
-  const CURRENT_URL = DATA_BASE_URL + "live-current.json";
+  // Main LIVE display now reads the Flashscore-only canonical candidate. The legacy combined feed remains available for rollback during the migration.
+  const CURRENT_URL = DATA_BASE_URL + "flashscore-primary-current.json";
   const HISTORY_URL = DATA_BASE_URL + "live-history.json";
   const MATCH_ARCHIVE_URL = DATA_BASE_URL + "live-archive.json";
   const BTTS_ARCHIVE_URL = DATA_BASE_URL + "flashscore-btts-signal-archive.json";
@@ -201,7 +202,7 @@
       "https://cdn.jsdelivr.net/gh/elcicarito/live-edge-ai-pro.@live-data-v2/"
     );
     const apiUrl = url === CURRENT_URL
-      ? "https://api.github.com/repos/elcicarito/live-edge-ai-pro./contents/data/live-current.json?ref=live-data-v2"
+      ? "https://api.github.com/repos/elcicarito/live-edge-ai-pro./contents/data/flashscore-primary-current.json?ref=live-data-v2"
       : "";
     const candidates = [...new Set([url, fallbackUrl, apiUrl].filter(Boolean))];
     const failures = [];
