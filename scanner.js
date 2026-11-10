@@ -338,11 +338,11 @@
     if (flashscoreRecentHistoryCache.rows.length && now - flashscoreRecentHistoryCache.loadedAt < 90000) return flashscoreRecentHistoryCache.rows;
     const index = await getCachedJSON(DATA_BASE_URL + "flashscore-timeline-index.json", 60000);
     if (!index || index.source !== "Flashscore" || !Array.isArray(index.weeks)) throw new Error("Neplatný Flashscore timeline index.");
-    const weeks = index.weeks.filter(x => x && typeof x.file === "string" && /^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(x.file)).sort((a,b) => String(b.week || "").localeCompare(String(a.week || ""))).slice(0,2);
+    const weeks = index.weeks.filter(x => x && typeof x.file === "string" && /^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(x.file)).sort((a,b) => String(b.week || "").localeCompare(String(a.week || ""))).slice(0,2);
     const cutoff = now - 86400000, seen = new Set(), rows = [];
     for (const week of weeks) {
       const decoded = await fetchFlashscoreTimeline(week.file);
-      for (const line of decoded.split(/\\r?\\n/)) {
+      for (const line of decoded.split(/\r?\n/)) {
         if (!line.trim()) continue;
         let entry;
         try { entry = JSON.parse(line); } catch { continue; }
@@ -2531,7 +2531,7 @@
     });
     renderBreakdown("PODĽA POČIATOČNÉHO SKÓRE", item => {
       const score = String(item.startScore || "").trim();
-      return /^\\d+[:\\-]\\d+$/.test(score) ? score.replace("-", ":") : null;
+      return /^\d+[:\\-]\d+$/.test(score) ? score.replace("-", ":") : null;
     });
     renderBreakdown("PODĽA STRANY", item =>
       item.side === "home" ? "Domáci" : item.side === "away" ? "Hostia" : null
