@@ -2521,6 +2521,11 @@ jobs:
         run: |
           node scripts/build-live-prediction-dataset.js
 
+      - name: Verify and fingerprint permanent Flashscore archive
+        continue-on-error: true
+        run: |
+          node scripts/flashscore-archive-integrity.js
+
       - name: Save collected data
         run: |
           git config user.name "github-actions[bot]"

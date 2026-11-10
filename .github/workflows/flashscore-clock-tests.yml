@@ -7,6 +7,7 @@ on:
       - main
       - flashscore-primary-integration
       - flashscore-permanent-archive
+      - flashscore-archive-integrity
     paths:
       - .github/workflows/flashscore-clock-tests.yml
       - scripts/flashscore-only-collector.js
@@ -15,6 +16,8 @@ on:
       - scripts/test-flashscore-only-collector.js
       - scripts/flashscore-btts-collector.js
       - scripts/test-flashscore-btts-collector.js
+      - scripts/flashscore-archive-integrity.js
+      - scripts/test-flashscore-archive-integrity.js
       - scanner.js
 
 permissions:
@@ -36,6 +39,8 @@ jobs:
           node --check scripts/test-flashscore-only-collector.js
           node --check scripts/flashscore-btts-collector.js
           node --check scripts/test-flashscore-btts-collector.js
+          node --check scripts/flashscore-archive-integrity.js
+          node --check scripts/test-flashscore-archive-integrity.js
           node --check scanner.js
 
       - name: Run Flashscore live-clock integration tests
@@ -43,3 +48,4 @@ jobs:
           node scripts/test-flashscore-only-collector.js
           node scripts/test-flashscore-primary-adapter.js
           node scripts/test-flashscore-btts-collector.js
+          node scripts/test-flashscore-archive-integrity.js
