@@ -3340,7 +3340,13 @@
       lateSummary.textContent = "Vyhodnotenie sa vytvorí po najbližšom zbere archívnych snímok.";
     }
     target.appendChild(lateSummary);
-    const lateGenerated = late?.generated_at ? document.createElement("div") : null;\n    if (lateGenerated) { lateGenerated.textContent = "Aktualizované: " + new Date(late.generated_at).toLocaleString("sk-SK"); lateGenerated.style.cssText = "font-size:10px;color:#94a3b8;margin:0 0 8px;"; target.appendChild(lateGenerated); }\n    const lateGroups = late?.groups || {};
+    const lateGenerated = late?.generated_at ? document.createElement("div") : null;
+    if (lateGenerated) {
+      lateGenerated.textContent = "Aktualizované: " + new Date(late.generated_at).toLocaleString("sk-SK");
+      lateGenerated.style.cssText = "font-size:10px;color:#94a3b8;margin:0 0 8px;";
+      target.appendChild(lateGenerated);
+    }
+    const lateGroups = late?.groups || {};
     [
       ["10_sot5_shots8","1:0 · SOT ≥5 · strely ≥8"],
       ["10_sot5_shots10","1:0 · SOT ≥5 · strely ≥10"],
