@@ -316,6 +316,161 @@ small{
 #hockey-view .hockey-muted{display:block;color:#8293a8;font-size:10px;margin-top:5px}
 @media(max-width:560px){#hockey-view .hockey-match{padding:10px}#hockey-view .hockey-stats-grid{grid-template-columns:1fr 1fr}}
 
+
+/* LIVE EDGE visual refresh v1 — iba prezentácia, bez zásahu do dát a analytiky */
+:root{
+  color-scheme:dark;
+  --page:#080f1c;
+  --surface:#101c2d;
+  --surface-2:#14243a;
+  --surface-3:#1a2d45;
+  --line:#263b55;
+  --text:#edf4fc;
+  --muted:#91a5bd;
+  --blue:#38bdf8;
+  --blue-soft:#102d43;
+  --green:#34d399;
+  --amber:#fbbf24;
+  --red:#fb7185;
+}
+html{background:var(--page);scroll-behavior:smooth}
+body{
+  max-width:1180px;
+  padding:18px;
+  color:var(--text);
+  background:
+    radial-gradient(ellipse at 12% 0%,rgba(56,189,248,.09),transparent 34rem),
+    radial-gradient(ellipse at 92% 8%,rgba(52,211,153,.055),transparent 30rem),
+    var(--page);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  letter-spacing:.01em;
+}
+.app-header{
+  position:relative;
+  padding:15px 17px 18px;
+  margin-bottom:12px;
+  border:1px solid rgba(56,189,248,.18);
+  border-radius:18px;
+  background:linear-gradient(120deg,rgba(20,36,58,.96),rgba(13,25,42,.92));
+  box-shadow:0 12px 32px rgba(0,0,0,.22);
+}
+.brand h1,h1{color:var(--blue);letter-spacing:.045em}
+.brand h1{font-size:clamp(19px,3vw,25px);font-weight:900}
+.brand small{color:#9db2c9;letter-spacing:1.25px}
+.live-indicator{
+  border-color:rgba(52,211,153,.35);
+  background:rgba(16,48,39,.72);
+  color:#6ee7b7;
+}
+.live-dot{background:var(--green);box-shadow:0 0 12px rgba(52,211,153,.7)}
+.sport-switch{
+  position:sticky;top:7px;z-index:20;
+  padding:7px;margin:12px 0 16px;
+  border:1px solid rgba(56,189,248,.14);
+  border-radius:15px;
+  background:rgba(10,21,36,.91);
+  backdrop-filter:blur(14px);
+  box-shadow:0 8px 24px rgba(0,0,0,.2);
+}
+.sport-tab,.basketball-view-tab{
+  min-height:44px;
+  border:1px solid #2b415c;
+  border-radius:10px;
+  background:#14243a;
+  color:#c4d4e6;
+  transition:background .18s ease,border-color .18s ease,transform .18s ease;
+}
+.sport-tab.active,.basketball-view-tab.active{
+  color:#061521;
+  background:linear-gradient(135deg,#38bdf8,#0ea5e9);
+  border-color:#38bdf8;
+  box-shadow:0 4px 14px rgba(14,165,233,.2);
+}
+.card{
+  padding:17px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:linear-gradient(145deg,rgba(18,32,51,.98),rgba(13,25,41,.98));
+  box-shadow:0 9px 26px rgba(0,0,0,.2);
+}
+.card h3{color:#eaf4ff}
+.dashboard-grid{gap:10px}
+.metric{
+  padding:15px;
+  border:1px solid #2b415d;
+  border-radius:14px;
+  background:linear-gradient(145deg,#172b43,#101d30);
+}
+.metric-value{font-variant-numeric:tabular-nums}
+.metric.blue .metric-value{color:var(--blue)}
+.metric.green .metric-value{color:var(--green)}
+.metric-label,.section-kicker{color:#9bb0c8}
+.section-kicker{
+  margin:20px 3px 9px;
+  letter-spacing:1.15px;
+}
+#dashboard-updated{color:#91a5bd}
+button{
+  border-radius:11px;
+  background:linear-gradient(135deg,#38bdf8,#0ea5e9);
+  color:#061521;
+  box-shadow:0 4px 13px rgba(14,165,233,.15);
+  transition:filter .18s ease,transform .18s ease;
+}
+button:hover{filter:brightness(1.08)}
+button:active{transform:translateY(1px)}
+.archive-filters select,.archive-filters input{
+  border-color:#304966;
+  background:#0d1a2b;
+  border-radius:11px;
+}
+.archive-filters button{
+  border-color:#31516e;
+  background:#19334d;
+  color:#d9efff;
+  box-shadow:none;
+}
+.archive-count{
+  background:#12354a;
+  color:#7dd3fc;
+}
+.archive-card summary:after,.stats-card summary:after,.engine-details summary:after{color:var(--blue)}
+#live-signal-status{
+  background:linear-gradient(120deg,#10332d,#122338 75%);
+  border-color:#286b58;
+}
+#signal{color:#d8f5e9}
+#matches .match-category-confirmed{
+  color:#a7f3d0!important;background:#10382e;border-color:#27765b;
+}
+#matches .match-category-other{
+  color:#b5c7da!important;background:#14243a;border-color:#2a405a;
+}
+#matches .match-league-confirmed{
+  background:#0e2926!important;border-color:#286b58!important;
+}
+#matches .match-league-confirmed .priority-match-card{
+  background:linear-gradient(145deg,#12372e,#10243a 75%)!important;
+  border-color:#347e63!important;
+}
+#matches .match-league-confirmed .priority-match-card > div:first-child > div:nth-child(2){
+  background:#174638!important;border-color:#347e63!important;
+}
+#matches .no-signal-match-card{background:#0e1b2d!important;border-color:#263d57!important}
+#hockey-view .hockey-match{background:#122139;border-color:#2b4562;border-radius:14px}
+#hockey-view .hockey-match-head{color:var(--blue)}
+details>summary{outline-offset:4px}
+:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+@media(max-width:700px){
+  body{padding:10px}
+  .app-header{padding:13px 12px 15px;border-radius:15px}
+  .card{padding:13px;border-radius:14px}
+  .sport-switch{top:4px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;transition:none!important}
+}
+
 </style>
 </head>
 
