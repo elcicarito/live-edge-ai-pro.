@@ -51,6 +51,7 @@ function buildQualityReport(dataDir = DATA) {
   const files = [];
   let malformedRows = 0;
   const statNameCounts = new Map();
+  const perMatchCoverage = new Map();
   const historicalStatsStatus = { available: 0, not_flagged_unavailable: 0, flagged_but_empty: 0, error: 0, unknown_legacy: 0 };
 
   for (const week of index.weeks) {
@@ -90,6 +91,14 @@ function buildQualityReport(dataDir = DATA) {
       else historicalStatsStatus.unknown_legacy++;
 
       if (id) byMatch.set(id, (byMatch.get(id) || 0) + 1);
+      if (id) {
+        const item = perMatchCoverage.get(id) || { snapshots: 0, snapshots_with_stats: 0, timestamps: [], snapshots_with_clock: 0 };
+        item.snapshots++;
+        if (hasStats) item.snapshots_with_stats++;
+        if (hasClock) item.snapshots_with_clock++;
+        if (hasTimestamp) item.timestamps.push(timestamp);
+        perMatchCoverage.set(id, item);
+      }
       if (hasTimestamp) snapshotsWithTimestamp++;
       else missing.collected_at++;
       if (hasScore) snapshotsWithScore++;
@@ -122,6 +131,43 @@ function buildQualityReport(dataDir = DATA) {
   }
 
   const matchesWithStats = matches.filter(match => Array.isArray(match?.last_snapshot?.stats) && match.last_snapshot.stats.length > 0).length;
+  const matchCoverageRows = matches.map(match => {
+    const id = String(match?.id || match?.match_id || match?.event_id || "");
+    const item = perMatchCoverage.get(id) || { snapshots: 0, snapshots_with_stats: 0, timestamps: [], snapshots_with_clock: 0 };
+    const times = [...new Set(item.timestamps)].sort((a, b) => a - b);
+    const gaps = times.slice(1).map((time, i) => (time - times[i]) / 60000).filter(gap => gap > 0);
+    const spanMinutes = times.length > 1 ? Number(((times[times.length - 1] - times[0]) / 60000).toFixed(2)) : 0;
+    return {
+      match_id: id,
+      snapshots: item.snapshots,
+      snapshots_with_stats: item.snapshots_with_stats,
+      stats_snapshot_coverage: ratio(item.snapshots_with_stats, item.snapshots),
+      snapshots_with_clock: item.snapshots_with_clock,
+      span_minutes: spanMinutes,
+      max_gap_minutes: gaps.length ? Number(Math.max(...gaps).toFixed(2)) : null,
+      gaps_over_7_minutes: gaps.filter(gap => gap > 7).length
+    };
+  });
+  const coverageCount = predicate => matchCoverageRows.filter(predicate).length;
+  const coverageBuckets = [
+    { label: "0–4", count: coverageCount(row => row.snapshots < 5) },
+    { label: "5–9", count: coverageCount(row => row.snapshots >= 5 && row.snapshots < 10) },
+    { label: "10–19", count: coverageCount(row => row.snapshots >= 10 && row.snapshots < 20) },
+    { label: "20–49", count: coverageCount(row => row.snapshots >= 20 && row.snapshots < 50) },
+    { label: "50+", count: coverageCount(row => row.snapshots >= 50) }
+  ];
+  const temporalCoverage = {
+    matches_with_5plus_snapshots: coverageCount(row => row.snapshots >= 5),
+    matches_with_10plus_snapshots: coverageCount(row => row.snapshots >= 10),
+    matches_with_20plus_snapshots: coverageCount(row => row.snapshots >= 20),
+    matches_with_30plus_minutes_span: coverageCount(row => row.span_minutes >= 30),
+    matches_with_60plus_minutes_span: coverageCount(row => row.span_minutes >= 60),
+    matches_with_10plus_snapshots_and_30min_span: coverageCount(row => row.snapshots >= 10 && row.span_minutes >= 30),
+    matches_with_5plus_stats_snapshots: coverageCount(row => row.snapshots_with_stats >= 5),
+    matches_with_5plus_stats_snapshots_and_30min_span: coverageCount(row => row.snapshots_with_stats >= 5 && row.span_minutes >= 30),
+    snapshot_count_distribution: coverageBuckets,
+    note: "Počty a časový rozsah opisujú množstvo uložených dát, nie úplnosť celého zápasu ani štatistickú spoľahlivosť. Rozsah sa počíta z collected_at; zápasy bez platných časových značiek majú rozsah 0."
+  };
   const statCoverage = [...statNameCounts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([name, count]) => ({ name, snapshots: count, coverage: ratio(count, snapshotCount) }));
@@ -181,6 +227,7 @@ function buildQualityReport(dataDir = DATA) {
       timeline_snapshots: snapshotCount,
       malformed_timeline_rows: malformedRows
     },
+    temporal_coverage: temporalCoverage,
     coverage: {
       match_stats_latest_snapshot: ratio(matchesWithStats, matches.length),
       match_stats_any_snapshot: ratio(matchesWithStatsAnySnapshot.size, matches.length),
@@ -215,6 +262,7 @@ function buildQualityReport(dataDir = DATA) {
       within_3_minutes: ratio(intervals.filter(value => value <= 3).length, intervals.length),
       over_5_minutes: intervals.filter(value => value > 5).length
     },
+    match_coverage: matchCoverageRows,
     files,
     assessment: {
       suitable_for_exploratory_analysis: snapshotCount > 0 && malformedRows === 0,
