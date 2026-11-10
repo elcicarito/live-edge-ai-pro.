@@ -958,21 +958,28 @@
     return String(minute);
   }
 
+  function statLabel(stat) {
+    return String(stat?.label || stat?.name || stat?.type || stat?.category || "").trim();
+  }
+
   function statValue(stats, keyword) {
-    const item = (stats || []).find(s =>
-      String(s.label || "").toLowerCase().includes(keyword)
+    const candidates = (Array.isArray(stats) ? stats : []).filter(stat =>
+      statLabel(stat).toLowerCase().includes(keyword)
     );
-
+    if (!candidates.length) return null;
+    const hasPeriod = candidates.some(stat => String(stat?.period || "").trim());
+    const item = hasPeriod
+      ? candidates.find(stat => String(stat?.period || "").trim().toLowerCase() === "match")
+      : candidates[0];
     if (!item) return null;
-
-    const home = Number(item.home);
-    const away = Number(item.away);
-
-    if (!Number.isFinite(home) || !Number.isFinite(away)) {
-      return null;
-    }
-
-    return { home, away };
+    const toNumber = value => {
+      if (value === null || value === undefined || String(value).trim() === "") return null;
+      const number = Number(String(value).replace("%", "").replace(",", "."));
+      return Number.isFinite(number) ? number : null;
+    };
+    const home = toNumber(item.home_numeric ?? item.home);
+    const away = toNumber(item.away_numeric ?? item.away);
+    return home === null || away === null ? null : { home, away };
   }
 
   function calculatePressure(stats) {
@@ -1024,8 +1031,8 @@
     const data = periods.map(period => {
       const periodStats = stats.filter(item => normalize(item?.period) === period.key);
       const unique = rows.map(row => {
-        const item = periodStats.find(stat => row.test.test(String(stat?.label || "")));
-        return item ? { label: row.label, home: item.home, away: item.away, suffix: /possession/i.test(item.label) ? "%" : "" } : null;
+        const item = periodStats.find(stat => row.test.test(statLabel(stat)));
+        return item ? { label: row.label, home: item.home, away: item.away, suffix: /possession/i.test(statLabel(item)) ? "%" : "" } : null;
       }).filter(Boolean);
       return { ...period, stats: unique };
     }).filter(period => period.stats.length);
@@ -1110,7 +1117,12 @@
 
   function renderCurrentStats(card, stats, match = null, historyData = null, collectedAt = null) {
     const available = Array.isArray(stats)
-      ? stats.filter(item =>
+      ? stats.map(item => ({
+          ...item,
+          label: statLabel(item),
+          home: item?.home_numeric ?? item?.home ?? item?.home_value ?? null,
+          away: item?.away_numeric ?? item?.away ?? item?.away_value ?? null
+        })).filter(item =>
           item &&
           String(item.label || "").trim() &&
           (!item.period || String(item.period).trim().toLowerCase() === "match") &&
@@ -1440,7 +1452,7 @@
       const stats = Array.isArray(snapshot?.stats) ? snapshot.stats : [];
       const item = stats.find(stat =>
         (!stat.period || String(stat.period).trim().toLowerCase() === "match") &&
-        definition.test.test(String(stat.label || ""))
+        definition.test.test(statLabel(stat))
       );
       if (!item) return null;
       const home = statNumber(item.home_numeric ?? item.home);
@@ -1695,7 +1707,7 @@
         const stats = Array.isArray(snapshot?.stats) ? snapshot.stats : [];
         const item = stats.find(stat =>
           (!stat.period || String(stat.period).trim().toLowerCase() === "match") &&
-          pattern.test(String(stat.label || ""))
+          pattern.test(statLabel(stat))
         );
         if (!item) return null;
         const home = Number(String(item.home_numeric ?? item.home ?? "").replace(/[^0-9.-]/g, ""));
