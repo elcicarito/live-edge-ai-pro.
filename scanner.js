@@ -371,15 +371,29 @@
   }
 
   async function fetchFlashscoreTimeline(file) {
-    const url = DATA_BASE_URL + file + "?t=" + Date.now();
-    const response = await fetchWithTimeout(url, { cache: "no-store" }, 20000);
-    if (!response.ok) throw new Error("HTTP " + response.status + " pri načítaní " + file);
     if (typeof DecompressionStream === "undefined") {
       throw new Error("Tento prehliadač nepodporuje čítanie komprimovaného archívu.");
     }
-    const compressed = await response.arrayBuffer();
-    const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
-    return new TextDecoder().decode(await new Response(stream).arrayBuffer());
+    const rawUrl = DATA_BASE_URL + file;
+    const cdnUrl = rawUrl.replace(
+      "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/",
+      "https://cdn.jsdelivr.net/gh/elcicarito/live-edge-ai-pro.@live-data-v2/"
+    );
+    const failures = [];
+    for (const baseUrl of [...new Set([rawUrl, cdnUrl])]) {
+      try {
+        const url = baseUrl + (baseUrl.includes("?") ? "&" : "?") + "t=" + Date.now();
+        const response = await fetchWithTimeout(url, { cache: "no-store" }, 10000);
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        const compressed = await response.arrayBuffer();
+        if (!compressed.byteLength) throw new Error("Prázdny archívny súbor");
+        const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
+        return new TextDecoder().decode(await new Response(stream).arrayBuffer());
+      } catch (error) {
+        failures.push(baseUrl + ": " + (error?.message || String(error)));
+      }
+    }
+    throw new Error("Archív sa nepodarilo načítať z GitHub Raw ani CDN. " + failures.join(" | "));
   }
  
   async function loadFlashscoreRecentHistory() {
