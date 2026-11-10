@@ -10,7 +10,7 @@
   const BTTS_ARCHIVE_URL = DATA_BASE_URL + "flashscore-btts-signal-archive.json";
   const SIGNAL_KEY = "live_edge_signals_v6";
 
-  const MIN_GAP_MINUTES = 3;
+  const MIN_GAP_MINUTES = 1.5;
   const MAX_GAP_MINUTES = 15;
 
   const MAX_DATA_AGE_MS = 7 * 60 * 1000;
