@@ -90,4 +90,18 @@ r=engine.analyse({stats:stats(3,1,4,2)},[
 ],"2026-11-08T12:25:00Z");
 assert.equal(r.recent,null);
 assert.equal(r.acceleration,null);
+// Acceleration must not compare valid intervals separated by a rejected time gap.
+r=engine.analyse({stats:stats(4,1,5,2)},[
+ make(t0,stats(1,1,2,1)),
+ make(t0+300000,stats(2,1,3,2)),
+ make(t0+1500000,stats(3,1,4,2))
+],"2026-11-08T12:27:00Z");
+assert.equal(r.recent.minutes,2);
+assert.equal(r.acceleration,null,"a rejected interval breaks acceleration continuity");
+// Three consecutive snapshots with valid 5-minute intervals should enable acceleration.
+r=engine.analyse({stats:stats(4,1,5,2)},[
+ make(t0,stats(1,1,2,1)),
+ make(t0+300000,stats(2,1,3,2))
+],"2026-11-08T12:10:00Z");
+assert.ok(r.acceleration,"two adjacent valid intervals should enable acceleration");
 console.log("Momentum engine tests passed.");
