@@ -70,10 +70,14 @@ r=engine.analyse({stats:stats(1,2,2,2)},[
 assert.ok(r.recent);
 assert.ok(!r.recent.used.some(x=>x.key==="sot"));
 assert.ok(r.recent.used.some(x=>x.key==="off"));
-// Too-short and too-long intervals are not used.
+// The 2-minute collector cadence is valid; only intervals below 1.5 min are rejected.
 r=engine.analyse({stats:stats(2,1,3,2)},[
  make(t0,stats(1,1,2,1))
 ],"2026-11-08T12:02:00Z");
+assert.equal(r.recent.minutes,2);
+r=engine.analyse({stats:stats(2,1,3,2)},[
+ make(t0,stats(1,1,2,1))
+],"2026-11-08T12:01:00Z");
 assert.equal(r.recent,null);
 r=engine.analyse({stats:stats(2,1,3,2)},[
  make(t0,stats(1,1,2,1))
