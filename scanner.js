@@ -2197,11 +2197,32 @@
     target.appendChild(svg);
 
     const legend = document.createElement("div");
-    legend.style.cssText = "display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px;color:#cbd5e1;";
-    legend.textContent = "🟢 Domáci  ·  ⚪ Hostia";
-    target.appendChild(legend);
-
+    legend.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px;margin:5px 0 7px;";
+    const makeLegendItem = (name, value, color) => {
+      const item = document.createElement("div");
+      item.style.cssText = "min-width:0;padding:7px 8px;border:1px solid " + color + "55;border-radius:8px;background:#142338;";
+      const label = document.createElement("div");
+      label.textContent = name;
+      label.style.cssText = "font-size:9px;font-weight:800;color:" + color + ";overflow-wrap:anywhere;";
+      const score = document.createElement("div");
+      score.textContent = value + "/100";
+      score.style.cssText = "font-size:15px;font-weight:950;color:#f1f5f9;font-variant-numeric:tabular-nums;margin-top:2px;";
+      item.append(label, score);
+      return item;
+    };
     const latest = visible[visible.length - 1];
+    legend.append(
+      makeLegendItem("🟢 " + (match.home || "Domáci"), latest.home, "#4ade80"),
+      makeLegendItem("⚪ " + (match.away || "Hostia"), latest.away, "#cbd5e1")
+    );
+    target.appendChild(legend);
+    const coverage = document.createElement("div");
+    coverage.textContent = "Vzorka: " + visible.length + " meraní · časový rozsah: " +
+      Math.round((visible[visible.length - 1].time - visible[0].time) / 60000) + " min";
+    coverage.style.cssText = "font-size:9px;color:#8296ad;margin:0 0 7px;";
+    target.appendChild(coverage);
+
+
     const first = visible[0];
     const previous = visible[visible.length - 2];
     const delta = (latest.home - latest.away) - (previous.home - previous.away);
