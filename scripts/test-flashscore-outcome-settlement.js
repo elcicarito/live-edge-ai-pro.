@@ -71,6 +71,7 @@ const server = http.createServer((req, res) => {
     assert.equal(first.corrected_scores, 1, "a changed finished score must be audited as a correction");
     assert.equal(first.newly_confirmed, 0);
     assert.equal(output.matches["finished-corrected"].final_score, "2 : 1");
+    assert.equal(output.matches["finished-corrected"].snapshots_count, 3);
     assert.equal(output.matches["finished-corrected"].revisions.length, 1);
     assert.equal(output.matches["finished-corrected"].revisions[0].final_score, "1 : 0");
     assert.equal(output.matches["not-finished"], undefined, "a live match must never be settled");
