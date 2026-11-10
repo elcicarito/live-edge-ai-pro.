@@ -4795,10 +4795,6 @@
     matchDetailPanel = detail;
     if (noSignal) detail.classList.add("no-signal-expand-detail");
     detail.style.cssText = "border-top:1px solid #293b52;padding-top:8px;";
-    const detailSummary = document.createElement("summary");
-    detailSummary.textContent = "📊 OTVORIŤ PREHĽAD ZÁPASU";
-    detailSummary.style.cssText = "cursor:pointer;list-style:none;font-size:13px;font-weight:900;color:#39e6a5;padding:8px 2px;";
-    detail.appendChild(detailSummary);
 
     const makeSection = (title, open = false) => {
       const section = document.createElement("details");
