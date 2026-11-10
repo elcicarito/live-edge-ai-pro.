@@ -18,7 +18,11 @@ function buildRecentTimeline(dataDir = DATA, nowMs = Date.now(), retentionMs = D
   const cutoff = nowMs - retentionMs;
   const seen = new Set();
   const rows = [];
-  for (const week of index.weeks) {
+  const recentWeeks = index.weeks
+    .filter(week => week && typeof week.file === "string")
+    .sort((a, b) => String(b.week || "").localeCompare(String(a.week || "")))
+    .slice(0, 2);
+  for (const week of recentWeeks) {
     if (!week || typeof week.file !== "string" ||
         !/^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(week.file)) {
       throw new Error("Neplatná timeline položka v indexe.");
