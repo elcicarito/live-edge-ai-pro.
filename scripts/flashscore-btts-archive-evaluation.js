@@ -226,7 +226,6 @@ function main() {
     pending:result.captured_signals_after70_analysis.pending,
     generated_at:result.captured_signals_after70_analysis.generated_at
   }));
-  }));
 }
 if (require.main === module) main();
 module.exports = { classify, buildEvaluation, buildCapturedSignalAfter70Analysis };
