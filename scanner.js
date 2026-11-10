@@ -293,9 +293,13 @@
       "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/",
       "https://cdn.jsdelivr.net/gh/elcicarito/live-edge-ai-pro.@live-data-v2/"
     );
-    const apiUrl = url === CURRENT_URL
-      ? "https://api.github.com/repos/elcicarito/live-edge-ai-pro./contents/data/flashscore-primary-current.json?ref=live-data-v2"
-      : "";
+    const apiBase = "https://api.github.com/repos/elcicarito/live-edge-ai-pro.";
+    const apiPath = url === CURRENT_URL
+      ? "data/flashscore-primary-current.json"
+      : url === RECENT_TIMELINE_URL
+        ? "data/flashscore-live-timeline-recent.json"
+        : "";
+    const apiUrl = apiPath ? apiBase + "/contents/" + apiPath + "?ref=live-data-v2" : "";
     const candidates = [...new Set([url, fallbackUrl, apiUrl].filter(Boolean))];
     const failures = [];
 
@@ -304,30 +308,40 @@
         const response = await fetchWithTimeout(
           candidate + (candidate.includes("?") ? "&" : "?") + "t=" + Date.now(),
           { cache: "no-store" },
-          12000
+          15000
         );
         if (!response.ok) throw new Error("HTTP " + response.status);
         const payload = await response.json();
 
-        // GitHub Contents API vracia obálku s base64 obsahom súboru.
-        // Ostatné zdroje vracajú priamo JSON dátového súboru.
-        if (
-          candidate === apiUrl &&
-          payload &&
-          typeof payload.content === "string" &&
-          payload.encoding === "base64"
-        ) {
+        if (candidate === apiUrl && payload && payload.encoding === "base64" &&
+            typeof payload.content === "string" && payload.content.trim()) {
           const binary = atob(payload.content.replace(/\\s/g, ""));
           const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
           return JSON.parse(new TextDecoder().decode(bytes));
         }
-        return payload;
+        if (candidate !== apiUrl) return payload;
+
+        // GitHub Contents API vynecháva obsah súborov nad 1 MB.
+        // SHA z metadata preto použijeme na stiahnutie skutočného Git Blob objektu.
+        if (!payload.sha) throw new Error("GitHub Contents API nevrátilo SHA súboru");
+        const blobResponse = await fetchWithTimeout(apiBase + "/git/blobs/" + payload.sha, {
+          cache: "no-store",
+          headers: { Accept: "application/vnd.github+json" }
+        }, 25000);
+        if (!blobResponse.ok) throw new Error("Git Blobs HTTP " + blobResponse.status);
+        const blob = await blobResponse.json();
+        if (blob.encoding !== "base64" || typeof blob.content !== "string") {
+          throw new Error("GitHub Blob nevrátil base64 obsah");
+        }
+        const binary = atob(blob.content.replace(/\\s/g, ""));
+        const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+        return JSON.parse(new TextDecoder().decode(bytes));
       } catch (error) {
         failures.push(candidate + ": " + (error?.message || String(error)));
       }
     }
 
-    throw new Error("Nepodarilo sa načítať LIVE dáta z hlavného, záložného ani GitHub API zdroja. " + failures.join(" | "));
+    throw new Error("Nepodarilo sa načítať LIVE dáta z hlavného, záložného ani GitHub API/Blob zdroja. " + failures.join(" | "));
   }
 
   // Pomocné archívy sa nemenia tak často ako LIVE snapshot.
