@@ -394,6 +394,10 @@ body{
   box-shadow:0 9px 26px rgba(0,0,0,.2);
 }
 .card h3{color:#eaf4ff}
+.match-search-wrap{margin:8px 0 10px;display:grid;gap:5px}
+.match-search-wrap label{font-size:10px;font-weight:800;letter-spacing:.7px;color:#91a5bd}
+.match-search-wrap input{width:100%;box-sizing:border-box;background:#0d1929;color:#edf6ff;border:1px solid #2b4662;border-radius:10px;padding:11px 13px;font:inherit;font-size:13px;outline:none}
+.match-search-wrap input:focus{border-color:#38bdf8;box-shadow:0 0 0 3px #38bdf822}
 .dashboard-grid{gap:10px}
 .metric{
   padding:15px;
@@ -499,6 +503,10 @@ details>summary{outline-offset:4px}
 <div id="signal" hidden></div>
 
 <div class="section-kicker">⚽ SLEDOVANÉ ZÁPASY</div>
+<div class="match-search-wrap">
+  <label for="live-match-search">RÝCHLE VYHĽADÁVANIE ZÁPASOV</label>
+  <input id="live-match-search" type="search" autocomplete="off" placeholder="Hľadať tím, ligu alebo minútu…">
+</div>
 <div class="card">
   <p id="matches">Načítavam LIVE zápasy...</p>
 </div>
@@ -627,7 +635,7 @@ OBNOVIŤ SKENER
 })();
 </script>
 <script src="./momentum-engine.js?v=2"></script>
-<script src="./scanner.js?v=104"></script>
+<script src="./scanner.js?v=105"></script>
 <script src="./basketball.js?v=12"></script>
 <script src="./hockey.js?v=1"></script>
 
