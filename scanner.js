@@ -131,8 +131,8 @@
     const collectorTime = Date.parse(latestCollectorAt || "");
     const collectorAge = Number.isFinite(collectorTime) ? Math.max(0, now - collectorTime) : null;
     const ageText = collectorAge === null ? "nedostupný"
-      : collectorAge < 60000 ? Math.floor(collectorAge / 1000) + " s"
-      : Math.floor(collectorAge / 60000) + " min";
+      : collectorAge < 60000 ? Math.floor(collectorAge / 1000) + " s · ČERSTVÉ"
+      : Math.floor(collectorAge / 60000) + " min · " + (collectorAge <= 3 * 60 * 1000 ? "ČERSTVÉ" : collectorAge <= MAX_DATA_AGE_MS ? "ONESKORENÉ" : "ZASTARANÉ");
     const timeText = value => value ? new Date(value).toLocaleTimeString("sk-SK") : "—";
     const state = pageLoadState === "LOADING" ? "Načítavam dáta…"
       : pageLoadState === "ERROR" ? "Chyba načítania"
@@ -161,7 +161,7 @@
     add("Stránka", state, stateColor);
     add("Posledné úspešné načítanie", timeText(pageLastSuccessAt));
     add("Posledný pokus", timeText(pageLastAttemptAt));
-    add("Vek dát zo zberača", ageText, collectorAge !== null && collectorAge <= MAX_DATA_AGE_MS ? "#39e6a5" : "#fbbf24");
+    add("Vek dát zo zberača", ageText, collectorAge === null || collectorAge > MAX_DATA_AGE_MS ? "#f87171" : collectorAge > 3 * 60 * 1000 ? "#fbbf24" : "#39e6a5");
     liveDataHealthEl.appendChild(grid);
     if (pageLastError) {
       const error = document.createElement("div");
