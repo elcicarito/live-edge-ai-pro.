@@ -2526,6 +2526,11 @@ jobs:
         run: |
           node scripts/flashscore-archive-integrity.js
 
+      - name: Build Flashscore AI archive quality report
+        continue-on-error: true
+        run: |
+          node scripts/flashscore-archive-quality.js
+
       - name: Save collected data
         run: |
           git config user.name "github-actions[bot]"
