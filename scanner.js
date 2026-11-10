@@ -4795,12 +4795,6 @@
     addMiniTag("WIN", signalCounts.WIN, "#4ade80");
     addMiniTag("LOSS", signalCounts.LOSS, "#f87171");
     addMiniTag("NEVYRIEŠENÉ", signalCounts.UNRESOLVED, "#fbbf24");
-    if (!relatedSignals.length) {
-      const noSignal = document.createElement("span");
-      noSignal.textContent = "Bez zaznamenaného signálu";
-      noSignal.style.cssText = "font-size:11px;color:#94a3b8;";
-      signalSummary.appendChild(noSignal);
-    }
     card.appendChild(signalSummary);
 
     const detail = document.createElement("details");
