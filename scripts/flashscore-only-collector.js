@@ -147,6 +147,19 @@ function makeMatch(raw, competition, stats, statsError, commentary, commentaryEr
     live_minute: clock?.live_minute ?? null,
     live_clock: clock?.live_clock ?? null,
     minute_source: clock?.source ?? null,
+    clock_metadata_available: Boolean(detail?.live_clock_metadata),
+    core_minute_raw: numberOf(detail?.live_clock_metadata?.core_minute),
+    stage_start_epoch: numberOf(detail?.live_clock_metadata?.stage_start_epoch),
+    clock_diagnostic: clock
+      ? "clock_ok"
+      : detailError
+        ? "details_request_failed"
+        : !detail?.live_clock_metadata
+          ? "metadata_missing"
+          : !numberOf(detail?.live_clock_metadata?.core_minute) &&
+            !numberOf(detail?.live_clock_metadata?.stage_start_epoch)
+            ? "DI_and_stage_start_missing"
+            : "clock_derivation_failed",
     clock_error: detailError || null,
     last_event_minute: commentary.lastEventMinute,
     last_event_minute_source: commentary.lastEventMinute ? "Flashscore commentary MB" : null,
@@ -172,6 +185,10 @@ function snapshotOf(match) {
     stage: match.stage,
     live_clock: match.live_clock,
     minute_source: match.minute_source,
+    clock_metadata_available: match.clock_metadata_available,
+    core_minute_raw: match.core_minute_raw,
+    stage_start_epoch: match.stage_start_epoch,
+    clock_diagnostic: match.clock_diagnostic,
     home_score: match.home_score,
     away_score: match.away_score,
     stats: match.stats
@@ -301,6 +318,20 @@ async function main() {
     commentary_error_count: records.filter(x => x.commentary_error).length,
     clock_match_count: records.filter(x => x.live_clock !== null).length,
     clock_error_count: records.filter(x => x.clock_error).length,
+    clock_diagnostic_counts: records.reduce((out, item) => {
+      const key = item.clock_diagnostic || "unknown";
+      out[key] = (out[key] || 0) + 1;
+      return out;
+    }, {}),
+    clock_missing_samples: records.filter(item => !item.live_clock).slice(0, 20).map(item => ({
+      id: item.id,
+      match: item.home + " - " + item.away,
+      stage: item.stage,
+      clock_diagnostic: item.clock_diagnostic,
+      clock_metadata_available: item.clock_metadata_available,
+      core_minute_raw: item.core_minute_raw,
+      stage_start_epoch: item.stage_start_epoch
+    })),
     errors: errors.slice(0, 30),
     records: records.map(match => ({ collected_at: now, match }))
   };
@@ -342,6 +373,8 @@ async function main() {
     commentary_error_count: records.filter(x => x.commentary_error).length,
     live_minute_count: records.filter(x => x.live_minute !== null && x.live_minute !== undefined && x.live_minute !== "").length,
     live_clock_count: records.filter(x => Boolean(x.live_clock)).length,
+    clock_diagnostic_counts: current.clock_diagnostic_counts,
+    clock_missing_samples: current.clock_missing_samples,
     last_event_minute_count: records.filter(x => Boolean(x.last_event_minute)).length,
     commentary_samples: records.slice(0, 8).map(x => ({
       match: x.home + " - " + x.away,
