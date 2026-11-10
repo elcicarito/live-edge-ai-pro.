@@ -45,6 +45,8 @@ const built=buildEvaluation({
 });
 const retrospective=built.captured_signals_after70_analysis;
 assert.equal(Object.hasOwn(built,"after70_analysis"),false);
+assert.equal(retrospective.schema_version,2);
+assert.equal(retrospective.ready,true);
 assert.equal(retrospective.captured_signal_count,3);
 assert.equal(retrospective.sample,3);
 assert.equal(retrospective.qualifying_match_count,1);
