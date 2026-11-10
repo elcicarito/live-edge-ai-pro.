@@ -1,6 +1,11 @@
 name: Flashscore Daily Archive Integrity Audit
 
 on:
+  push:
+    paths:
+      - "scripts/flashscore-archive-quality.js"
+      - "scripts/test-flashscore-archive-quality.js"
+      - ".github/workflows/flashscore-archive-audit.yml"
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
@@ -43,6 +48,29 @@ jobs:
               }
             }
           ')
+
+      - name: Test per-match archive quality metrics
+        run: node scripts/test-flashscore-archive-quality.js
+
+      - name: Build read-only archive coverage report
+        run: |
+          node scripts/flashscore-archive-quality.js data
+          node - <<'NODE'
+          const report = require("./data/flashscore-archive-quality.json");
+          const c = report.temporal_coverage;
+          const lines = [
+            "## Flashscore archive coverage",
+            "",
+            "- Archived matches: " + report.summary.archived_matches,
+            "- Matches with 10+ snapshots: " + c.matches_with_10plus_snapshots,
+            "- Matches spanning 30+ minutes: " + c.matches_with_30plus_minutes_span,
+            "- Matches with 10+ snapshots and 30+ minutes: " + c.matches_with_10plus_snapshots_and_30min_span,
+            "- Matches with 5+ statistics snapshots and 30+ minutes: " + c.matches_with_5plus_stats_snapshots_and_30min_span,
+            "",
+            c.note
+          ].join("\\n");
+          require("node:fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines + "\\n");
+          NODE
 
       - name: Verify archive checksums, gzip and JSONL integrity
         run: node scripts/flashscore-archive-integrity.js data --verify
