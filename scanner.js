@@ -2663,10 +2663,6 @@
       ["10_sot5_shots10", "1:0 · SOT ≥5 · strely ≥10"],
       ["10_sot5_shots12", "1:0 · SOT ≥5 · strely ≥12"],
       ["01_sot6_shots8", "0:1 · SOT ≥6 · strely ≥8"],
-      ["70plus_10_sot5_shots8", "70+ · 1:0 · SOT ≥5 · strely ≥8"],
-      ["70plus_10_sot5_shots10", "70+ · 1:0 · SOT ≥5 · strely ≥10"],
-      ["70plus_10_sot5_shots12", "70+ · 1:0 · SOT ≥5 · strely ≥12"],
-      ["70plus_01_sot6_shots8", "70+ · 0:1 · SOT ≥6 · strely ≥8"]
     ];
     const totalWins = signals.filter(x => x.status === "WIN").length;
     const totalLosses = signals.filter(x => x.status === "LOSS").length;
@@ -2692,6 +2688,38 @@
       summary.style.cssText = "font-size:12px;line-height:1.6;color:#e2e8f0;";
       card.append(heading, summary);
       target.appendChild(card);
+    });
+    const late = data?.after70_analysis;
+    const lateTitle = document.createElement("div");
+    lateTitle.textContent = "VYHODNOTENIE BTTS PO 70. MINÚTE · HISTORICKÁ VZORKA";
+    lateTitle.style.cssText = "font-size:14px;font-weight:900;color:#67e8f9;margin:18px 0 7px;";
+    target.appendChild(lateTitle);
+    const lateSummary = document.createElement("div");
+    lateSummary.style.cssText = "padding:12px;border:1px solid #0e7490;border-radius:10px;background:#0b2230;margin-bottom:10px;";
+    if (late) {
+      const rate = late.win_rate == null ? "zatiaľ bez vyhodnotených výsledkov" : Math.round(late.win_rate * 100) + "%";
+      lateSummary.textContent = "Vzorka: " + late.sample + " zápasov · WIN: " + late.wins + " · LOSS: " + late.losses + " · čaká na výsledok: " + late.pending + " · úspešnosť: " + rate + ". Jeden záznam na zápas; vybraný najsilnejší splnený prah. Kurzy nie sú v historických snímkach dostupné, preto sa ROI nepočíta.";
+    } else {
+      lateSummary.textContent = "Vyhodnotenie sa vytvorí po najbližšom zbere archívnych snímok.";
+    }
+    target.appendChild(lateSummary);
+    const lateGroups = late?.groups || {};
+    [
+      ["10_sot5_shots8","1:0 · SOT ≥5 · strely ≥8"],
+      ["10_sot5_shots10","1:0 · SOT ≥5 · strely ≥10"],
+      ["10_sot5_shots12","1:0 · SOT ≥5 · strely ≥12"],
+      ["01_sot6_shots8","0:1 · SOT ≥6 · strely ≥8"]
+    ].forEach(([key,label]) => {
+      const g = lateGroups[key] || {sample:0,wins:0,losses:0,pending:0,settled:0,win_rate:null};
+      const card = document.createElement("div");
+      card.style.cssText = "margin:6px 0;padding:9px 11px;border:1px solid #24516a;border-radius:8px;background:#101b2b;";
+      const h = document.createElement("div");
+      h.textContent = label;
+      h.style.cssText = "font-weight:800;color:#a5f3fc;font-size:12px;";
+      const d = document.createElement("div");
+      d.textContent = "N=" + g.sample + " · WIN " + g.wins + " · LOSS " + g.losses + " · čaká " + g.pending + " · úspešnosť " + (g.win_rate == null ? "—" : Math.round(g.win_rate*100)+"%");
+      d.style.cssText = "font-size:11px;color:#dbeafe;margin-top:4px;";
+      card.append(h,d); target.appendChild(card);
     });
     const recent = signals.sort((a,b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)).slice(0,150);
     addText(target, "JEDNOTLIVÉ BTTS SIGNÁLY", "15px");
