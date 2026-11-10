@@ -3772,6 +3772,50 @@
 
     card.appendChild(header);
 
+    // Rýchly prehľad LIVE štatistík – iba reálne dostupné hodnoty.
+    const quickStats = document.createElement("div");
+    if (noSignal) quickStats.classList.add("no-signal-expand-stats", "no-signal-quick-stats");
+    quickStats.style.cssText = "display:flex;flex-wrap:wrap;gap:5px;margin:3px 0 9px;";
+    const quickFind = pattern => {
+      const item = displayStats.find(stat =>
+        pattern.test(String(stat.label || stat.name || stat.category || "").toLowerCase())
+      );
+      if (!item) return null;
+      const toNumber = value => {
+        if (value === null || value === undefined || value === "") return null;
+        const parsed = Number(String(value).replace(/[%\\s]/g, "").replace(",", "."));
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+      const home = toNumber(item.home_numeric ?? item.home);
+      const away = toNumber(item.away_numeric ?? item.away);
+      if (home === null || away === null) return null;
+      return { home, away, suffix: item.suffix || "" };
+    };
+    const addQuickStat = (label, value, suffix = "") => {
+      if (!value || value.home === null || value.away === null) return;
+      const chip = document.createElement("span");
+      chip.textContent = `${label} ${value.home} : ${value.away}${suffix || value.suffix || ""}`;
+      chip.style.cssText = "font-size:10px;font-weight:800;color:#d5e2ef;background:#142338;border:1px solid #2b4059;border-radius:7px;padding:4px 7px;font-variant-numeric:tabular-nums;white-space:nowrap;";
+      quickStats.appendChild(chip);
+    };
+    const quickSot = quickFind(/shots? on target|shots? on goal|strely na br[aá]nu/);
+    const quickOff = quickFind(/shots? off target|strely mimo br[aá]nu/);
+    let quickTotal = quickFind(/total shots|shots total|celkov[eé] strely/);
+    if (!quickTotal && quickSot && quickOff) {
+      quickTotal = {
+        home: quickSot.home + quickOff.home,
+        away: quickSot.away + quickOff.away
+      };
+    }
+    addQuickStat("SOT", quickSot);
+    addQuickStat("STRELY", quickTotal);
+    addQuickStat("ROHY", quickFind(/corners|rohy/));
+    addQuickStat("DRŽANIE", quickFind(/possession|dr[zž]anie lopty/), "%");
+    addQuickStat("STRELY MIMO", quickFind(/shots off target/));
+    addQuickStat("ŽK", quickFind(/yellow cards|[zž]lt[eé] karty/));
+    addQuickStat("ČK", quickFind(/red cards|[cč]erven[eé] karty/));
+    if (quickStats.childElementCount) card.appendChild(quickStats);
+
     const leagueLine = document.createElement("div");
     leagueLine.textContent = `${getCompetitionFlag(match)} ${match.competition || "Neznáma súťaž"}`;
     leagueLine.style.cssText = "font-size:12px;color:#a8b8cc;margin:2px 0 9px;";
@@ -3797,42 +3841,7 @@
       card.appendChild(expandButton);
     }
 
-    // Rýchly prehľad LIVE štatistík – iba reálne dostupné hodnoty.
-    const quickStats = document.createElement("div");
-    if (noSignal) quickStats.classList.add("no-signal-expand-stats", "no-signal-quick-stats");
-    quickStats.style.cssText = "display:flex;flex-wrap:wrap;gap:5px;margin:3px 0 9px;";
-    const quickFind = pattern => {
-      const item = displayStats.find(stat => pattern.test(String(stat.label || "").toLowerCase()));
-      if (!item) return null;
-      const home = Number(item.home);
-      const away = Number(item.away);
-      if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
-      return { home, away, suffix: item.suffix || "" };
-    };
-    const addQuickStat = (label, value, suffix = "") => {
-      if (!value) return;
-      const chip = document.createElement("span");
-      chip.textContent = `${label} ${value.home} : ${value.away}${suffix || value.suffix || ""}`;
-      chip.style.cssText = "font-size:10px;font-weight:800;color:#d5e2ef;background:#142338;border:1px solid #2b4059;border-radius:7px;padding:4px 7px;font-variant-numeric:tabular-nums;white-space:nowrap;";
-      quickStats.appendChild(chip);
-    };
-    const quickSot = quickFind(/shots? on target|shots? on goal|strely na br[aá]nu/);
-    const quickOff = quickFind(/shots? off target|strely mimo br[aá]nu/);
-    let quickTotal = quickFind(/total shots|shots total|celkov[eé] strely/);
-    if (!quickTotal && quickSot && quickOff) {
-      quickTotal = {
-        home: quickSot.home + quickOff.home,
-        away: quickSot.away + quickOff.away
-      };
-    }
-    addQuickStat("SOT", quickSot);
-    addQuickStat("STRELY", quickTotal);
-    addQuickStat("ROHY", quickFind(/corners|rohy/));
-    addQuickStat("DRŽANIE", quickFind(/possession|dr[zž]anie lopty/), "%");
-    addQuickStat("STRELY MIMO", quickFind(/shots off target/));
-    addQuickStat("ŽK", quickFind(/yellow cards|[zž]lt[eé] karty/));
-    addQuickStat("ČK", quickFind(/red cards|[cč]erven[eé] karty/));
-    if (quickStats.childElementCount) card.appendChild(quickStats);
+
 
     const priority = getMatchPriority(match, historyData, collectedAt, matchAllowsSignals, staleMode, signalArchive, bttsArchive);
 
