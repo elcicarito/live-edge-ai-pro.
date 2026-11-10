@@ -5446,9 +5446,12 @@
   setInterval(scan, SCAN_INTERVAL_MS);
 
   // Mobilné prehliadače môžu pozastaviť časovače na karte na pozadí.
-  // Po návrate do aplikácie obnov LIVE dáta ihneď, nie až pri ďalšom intervale.
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) scan();
-  });
-  window.addEventListener("online", () => scan());
+  // Po návrate do aplikácie alebo obnovení stránky obnov LIVE dáta ihneď.
+  function refreshOnResume() {
+    if (document.visibilityState === "visible") scan();
+  }
+  document.addEventListener("visibilitychange", refreshOnResume);
+  window.addEventListener("pageshow", refreshOnResume);
+  window.addEventListener("focus", refreshOnResume);
+  window.addEventListener("online", refreshOnResume);
 })();
