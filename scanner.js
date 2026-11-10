@@ -5021,12 +5021,20 @@
     const currentGreen = allowSignals && match.source !== "Flashscore" &&
       Boolean(makeSignal(match, threat, snapshot, collectedAt));
     const confirmed = currentGreen || hasOpenGreen || hasOpenBtts;
-    const score = threat ? Math.max(threat.home, threat.away) : 0;
+    // Current cumulative pressure is available from the live stats alone.
+    // Interval activity remains a separate, history-dependent refinement.
+    const score = threat
+      ? Math.max(threat.home, threat.away)
+      : pressure
+        ? Math.max(pressure.home, pressure.away)
+        : 0;
+    const scoreBasis = threat ? "INTERVALOVÝ TLAK" : pressure ? "KUMULATÍVNA PREVAHA" : "BEZ ŠTATISTÍ";
 
     if (confirmed) {
       return {
         rank: 2,
         score,
+        scoreBasis,
         label: score > 0 ? "⚡ POTVRDENÝ SIGNÁL · " + score + "/100" : "⚡ POTVRDENÝ SIGNÁL",
         color: "#8fffd0",
         background: "#123b2d",
@@ -5038,6 +5046,7 @@
       return {
         rank: 1,
         score,
+        scoreBasis,
         label: "⚠ ZVÝŠENÝ TLAK · " + score + "/100",
         color: "#fcd38d",
         background: "#422b12",
@@ -5045,7 +5054,7 @@
       };
     }
 
-    return { rank: 0, score, label: null, color: "", background: "", border: "" };
+    return { rank: 0, score, scoreBasis, label: null, color: "", background: "", border: "" };
   }
 
   function renderMatchesGrouped(items, historyData, allowSignals, staleMode, signalArchive, bttsArchive) {
@@ -5065,7 +5074,7 @@
       title.style.cssText = "font-size:12px;font-weight:900;letter-spacing:.8px;color:#c8e7ff;margin-bottom:4px;";
       pressureOverview.appendChild(title);
       const subtitle = document.createElement("div");
-      subtitle.textContent = "Najvyššie aktuálne skóre tlaku · orientačný prehľad, nie stávkový signál";
+      subtitle.textContent = "Kumulatívna prevaha z aktuálnych štatistík; intervalový tlak sa doplní po platných časových meraniach. Nie je to stávkový signál.";
       subtitle.style.cssText = "font-size:10px;color:#8fa6bf;margin-bottom:9px;line-height:1.4;";
       pressureOverview.appendChild(subtitle);
 
@@ -5148,7 +5157,7 @@
           const status = priority.rank === 2 ? "SIGNÁL" : priority.rank === 1 ? "VYŠŠÍ TLAK" : "SLEDOVAŤ";
           const color = priority.rank === 2 ? "#39e6a5" : priority.rank === 1 ? "#fbbf24" : "#7dd3fc";
           badge.textContent = priority.score + "/100";
-          badge.title = status + " · orientačné skóre tlaku, nie pravdepodobnosť gólu";
+          badge.title = status + " · " + (priority.scoreBasis || "skóre tlaku") + " · nie pravdepodobnosť gólu";
           badge.setAttribute("aria-label", status + ", skóre tlaku " + priority.score + " zo 100");
           badge.style.cssText = "white-space:nowrap;font-size:13px;font-weight:950;color:" + color + ";font-variant-numeric:tabular-nums;padding:7px 9px;border:1px solid " + color + "66;border-radius:9px;background:" + (priority.rank === 2 ? "#12372e" : priority.rank === 1 ? "#352a16" : "#12263a") + ";";
           const meter = document.createElement("div");
