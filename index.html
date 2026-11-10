@@ -394,6 +394,10 @@ body{
   box-shadow:0 9px 26px rgba(0,0,0,.2);
 }
 .card h3{color:#eaf4ff}
+.live-filter-bar{display:flex;gap:7px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:thin}
+.live-filter-btn{flex:0 0 auto;border:1px solid #2b4662;background:#0d1929;color:#a9bbcf;border-radius:999px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
+.live-filter-btn.active{background:#12344b;border-color:#38bdf8;color:#dff6ff;box-shadow:0 0 0 1px #38bdf822}
+.live-filter-btn:focus-visible{outline:2px solid #38bdf8;outline-offset:2px}
 .match-search-wrap{margin:8px 0 10px;display:grid;gap:5px}
 .match-search-wrap label{font-size:10px;font-weight:800;letter-spacing:.7px;color:#91a5bd}
 .match-search-wrap input{width:100%;box-sizing:border-box;background:#0d1929;color:#edf6ff;border:1px solid #2b4662;border-radius:10px;padding:11px 13px;font:inherit;font-size:13px;outline:none}
@@ -506,6 +510,12 @@ details>summary{outline-offset:4px}
 <div class="match-search-wrap">
   <label for="live-match-search">RÝCHLE VYHĽADÁVANIE ZÁPASOV</label>
   <input id="live-match-search" type="search" autocomplete="off" placeholder="Hľadať tím, ligu alebo minútu…">
+</div>
+<div class="live-filter-bar" role="group" aria-label="Filtrovanie LIVE zápasov">
+  <button type="button" class="live-filter-btn active" data-live-filter="all" aria-pressed="true">Všetky</button>
+  <button type="button" class="live-filter-btn" data-live-filter="confirmed" aria-pressed="false">⚡ Signály</button>
+  <button type="button" class="live-filter-btn" data-live-filter="pressure" aria-pressed="false">⚠ Tlak</button>
+  <button type="button" class="live-filter-btn" data-live-filter="none" aria-pressed="false">Bez signálu</button>
 </div>
 <div class="card">
   <p id="matches">Načítavam LIVE zápasy...</p>
