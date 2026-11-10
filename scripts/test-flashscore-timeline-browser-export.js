@@ -18,7 +18,7 @@ try {
     { match_id: "match-a", snapshot: {
       collected_at: "2026-11-10T20:58:00Z", stage: "2nd Half", live_minute: 88,
       home_score: 1, away_score: 2,
-      stats: [{ name: "Shots on target", home_numeric: 4, away_numeric: 3 }]
+      stats: [{ name: "Shots on target", home_numeric: 4, away_numeric: 3 }, { name: "Yellow cards", home_numeric: 2, away_numeric: 1 }]
     } },
     { match_id: "match-a", snapshot: {
       collected_at: "2026-11-10T20:56:00Z", stage: "2nd Half", live_minute: 86,
@@ -44,6 +44,7 @@ try {
   assert.equal(output.rows[0].match.live_minute, 86);
   assert.equal(output.rows[1].match.stats[0].label, "Shots on target");
   assert.equal(output.rows[1].match.stats[0].home, 4);
+  assert.equal(output.rows[1].match.stats.length, 1);
   console.log("Flashscore browser timeline export tests passed.");
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
