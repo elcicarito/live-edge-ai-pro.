@@ -2645,6 +2645,9 @@
       addText(panel, "Zrýchlenie/spomalenie: čakám na ďalší platný interval.", "10px");
     }
     if (result.trend.length >= 2) {
+      if (!result.recent) {
+        addText(panel, "HISTORICKÝ PRIEBEH · Graf zobrazuje posledné platné intervalové meranie, nie aktuálny tlak. Aktuálne intervalové meranie čaká na nové platné porovnanie.", "10px");
+      }
       const svgNS = "http://www.w3.org/2000/svg";
       const svg = document.createElementNS(svgNS, "svg");
       svg.setAttribute("viewBox", "0 0 320 130");
@@ -2704,6 +2707,10 @@
         item.append(swatch,textNode);legend.appendChild(item);
       };
       const latest=points[points.length-1];
+      const latestValidLabel=document.createElement("div");
+      latestValidLabel.textContent="POSLEDNÝ PLATNÝ INTERVAL · "+timeLabel(latest.time);
+      latestValidLabel.style.cssText="font-size:9px;font-weight:800;letter-spacing:.35px;color:"+(result.recent?"#94a3b8":"#fbbf24")+";margin:2px 0 5px;";
+      panel.appendChild(latestValidLabel);
       addLegend("DOMÁCI","#22c55e",latest.home);
       addLegend("HOSTIA","#94a3b8",latest.away);
       panel.appendChild(legend);
