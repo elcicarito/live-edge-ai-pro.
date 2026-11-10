@@ -1340,6 +1340,114 @@
     target.appendChild(rail);
     addText(target, "Zobrazených " + selected.length + " z " + valid.length + " uložených meraní · posledné meranie je zvýraznené.", "10px");
 
+    // Aktivita v intervaloch sa odvodzuje iba z rozdielov dvoch susedných
+    // kumulatívnych Flashscore snímok; dlhé medzery a resetované počítadlá vynecháme.
+    const intervalDefinitions = [
+      { start: 1, end: 15, label: "01–15′" },
+      { start: 16, end: 30, label: "16–30′" },
+      { start: 31, end: 45, label: "31–45′" },
+      { start: 46, end: 60, label: "46–60′" },
+      { start: 61, end: 75, label: "61–75′" },
+      { start: 76, end: 90, label: "76–90′" },
+      { start: 91, end: 120, label: "90+′" }
+    ];
+    const statDefinitions = [
+      { key: "shots", label: "Strely" , test: /total shots|shots total|celkové strely|celkove strely/i },
+      { key: "sot", label: "Na bránu", test: /shots on target|strely na bránu|strely na branu/i },
+      { key: "corners", label: "Rohy", test: /corner kicks|corners|rohov/i }
+    ];
+    const intervalTotals = new Map();
+    let validIntervals = 0;
+    const minuteOf = snapshot => {
+      const raw = snapshot?.live_minute ?? snapshot?.minute;
+      const parsed = Number(String(raw ?? "").replace(/[^0-9]/g, ""));
+      return Number.isFinite(parsed) && parsed >= 1 && parsed <= 120 ? parsed : null;
+    };
+    const statNumber = value => {
+      const parsed = Number(String(value ?? "").replace(",", ".").replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    };
+    const getCumulativeStat = (snapshot, definition) => {
+      const stats = Array.isArray(snapshot?.stats) ? snapshot.stats : [];
+      const item = stats.find(stat =>
+        (!stat.period || String(stat.period).trim().toLowerCase() === "match") &&
+        definition.test.test(String(stat.label || ""))
+      );
+      if (!item) return null;
+      const home = statNumber(item.home_numeric ?? item.home);
+      const away = statNumber(item.away_numeric ?? item.away);
+      return home === null || away === null ? null : { home, away };
+    };
+    for (let index = 1; index < records.length; index++) {
+      const previous = records[index - 1];
+      const current = records[index];
+      const gap = (current.time - previous.time) / 60000;
+      const minute = minuteOf(current.match);
+      if (!(gap > 0 && gap <= 7) || minute === null) continue;
+      const interval = intervalDefinitions.find(item => minute >= item.start && minute <= item.end);
+      if (!interval) continue;
+      const deltas = {};
+      let hasDelta = false;
+      statDefinitions.forEach(definition => {
+        const oldValue = getCumulativeStat(previous.match, definition);
+        const newValue = getCumulativeStat(current.match, definition);
+        if (!oldValue || !newValue || newValue.home < oldValue.home || newValue.away < oldValue.away) return;
+        deltas[definition.key] = {
+          home: newValue.home - oldValue.home,
+          away: newValue.away - oldValue.away
+        };
+        hasDelta = true;
+      });
+      if (!hasDelta) continue;
+      if (!intervalTotals.has(interval.label)) {
+        intervalTotals.set(interval.label, { ...interval, count: 0, values: {} });
+      }
+      const total = intervalTotals.get(interval.label);
+      total.count++;
+      Object.entries(deltas).forEach(([key, value]) => {
+        if (!total.values[key]) total.values[key] = { home: 0, away: 0 };
+        total.values[key].home += value.home;
+        total.values[key].away += value.away;
+      });
+      validIntervals++;
+    }
+    const intervalHeading = document.createElement("div");
+    intervalHeading.textContent = "AKTIVITA V ČASOVÝCH ÚSEKOCH";
+    intervalHeading.style.cssText = "font-size:11px;font-weight:900;color:#dbeafe;margin:14px 0 7px;";
+    target.appendChild(intervalHeading);
+    const intervalRows = [...intervalTotals.values()].sort((a, b) => a.start - b.start);
+    if (!intervalRows.length) {
+      addText(target, "Pre časové úseky zatiaľ nie je dosť susedných snímok s platnými kumulatívnymi štatistikami.", "10px");
+    } else {
+      intervalRows.forEach(interval => {
+        const panel = document.createElement("div");
+        panel.style.cssText = "padding:8px 9px;margin:5px 0;background:#101f31;border:1px solid #293d55;border-radius:8px;";
+        const title = document.createElement("div");
+        title.textContent = interval.label + " · " + interval.count + (interval.count === 1 ? " platný interval merania" : " platné intervaly merania");
+        title.style.cssText = "font-size:10px;font-weight:900;color:#9fb5cb;margin-bottom:5px;";
+        panel.appendChild(title);
+        statDefinitions.forEach(definition => {
+          const value = interval.values[definition.key];
+          if (!value) return;
+          const row = document.createElement("div");
+          row.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;padding:3px 0;";
+          const home = document.createElement("strong");
+          home.textContent = "+" + value.home;
+          home.style.cssText = "font-size:11px;color:#baf7df;";
+          const label = document.createElement("span");
+          label.textContent = definition.label;
+          label.style.cssText = "font-size:9px;color:#9fb5cb;text-align:center;";
+          const away = document.createElement("strong");
+          away.textContent = "+" + value.away;
+          away.style.cssText = "font-size:11px;color:#c5e7ff;text-align:right;";
+          row.append(home, label, away);
+          panel.appendChild(row);
+        });
+        target.appendChild(panel);
+      });
+      addText(target, "Prírastky sú sčítané zo susedných snímok s odstupom najviac 7 minút a priradené podľa minúty neskoršej snímky. Nezachytávajú aktivitu medzi meraniami.", "10px");
+    }
+
     // Incidenty sa čítajú iba z polí, ktoré sú skutočne uložené vo Flashscore snímkach.
     const sources = [...records.map(row => row.match), match];
     const found = new Map();
