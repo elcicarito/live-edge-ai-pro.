@@ -12,6 +12,7 @@ on:
       - flashscore-dashboard-primary-feed
       - flashscore-training-observations
       - flashscore-only-collector-pipeline
+      - flashscore-confirmed-outcome-archive
       - flashscore-archive-dashboard-migration
     paths:
       - .github/workflows/flashscore-clock-tests.yml
@@ -29,6 +30,8 @@ on:
       - scanner.js
       - scripts/test-flashscore-dashboard-source.js
       - scripts/flashscore-live-observations.js
+      - scripts/flashscore-outcome-settlement.js
+      - scripts/test-flashscore-outcome-settlement.js
       - scripts/test-flashscore-live-observations.js
 
 permissions:
@@ -58,6 +61,8 @@ jobs:
           node --check scripts/test-flashscore-dashboard-source.js
           node --check scripts/flashscore-live-observations.js
           node --check scripts/test-flashscore-live-observations.js
+          node --check scripts/flashscore-outcome-settlement.js
+          node --check scripts/test-flashscore-outcome-settlement.js
 
       - name: Run Flashscore live-clock integration tests
         run: |
@@ -68,3 +73,4 @@ jobs:
           node scripts/test-flashscore-archive-quality.js
           node scripts/test-flashscore-dashboard-source.js
           node scripts/test-flashscore-live-observations.js
+          node scripts/test-flashscore-outcome-settlement.js
