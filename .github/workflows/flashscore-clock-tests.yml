@@ -10,6 +10,7 @@ on:
       - flashscore-archive-integrity
       - flashscore-ai-data-quality
       - flashscore-dashboard-primary-feed
+      - flashscore-training-observations
     paths:
       - .github/workflows/flashscore-clock-tests.yml
       - scripts/flashscore-archive-quality.js
@@ -24,6 +25,8 @@ on:
       - scripts/test-flashscore-archive-integrity.js
       - scanner.js
       - scripts/test-flashscore-dashboard-source.js
+      - scripts/flashscore-live-observations.js
+      - scripts/test-flashscore-live-observations.js
 
 permissions:
   contents: read
@@ -50,6 +53,8 @@ jobs:
           node --check scripts/test-flashscore-archive-quality.js
           node --check scanner.js
           node --check scripts/test-flashscore-dashboard-source.js
+          node --check scripts/flashscore-live-observations.js
+          node --check scripts/test-flashscore-live-observations.js
 
       - name: Run Flashscore live-clock integration tests
         run: |
@@ -59,3 +64,4 @@ jobs:
           node scripts/test-flashscore-archive-integrity.js
           node scripts/test-flashscore-archive-quality.js
           node scripts/test-flashscore-dashboard-source.js
+          node scripts/test-flashscore-live-observations.js
