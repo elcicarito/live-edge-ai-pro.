@@ -810,6 +810,14 @@
 
     if (match.source === "Flashscore") {
       const flashscoreClock = String(match.live_clock || "").trim();
+      const clockMatch = flashscoreClock.match(/^(\d{1,3}):(\d{2})$/);
+      const timestamp = Date.parse(collectedAt || "");
+      if (clockMatch && Number.isFinite(timestamp)) {
+        const baseSeconds = Number(clockMatch[1]) * 60 + Number(clockMatch[2]);
+        const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+        const totalSeconds = baseSeconds + elapsedSeconds;
+        return String(Math.floor(totalSeconds / 60)) + ":" + String(totalSeconds % 60).padStart(2, "0");
+      }
       return flashscoreClock || raw || "?";
     }
 
@@ -3688,6 +3696,17 @@
 
     const clock = document.createElement("span");
     clock.textContent = minute === "HT" ? "HT" : minute !== "?" ? `${minute}′` : "";
+    const flashscoreBaseClock = String(match.live_clock || "").trim();
+    if (
+      !staleMode &&
+      match.source === "Flashscore" &&
+      /^\d{1,3}:\d{2}$/.test(flashscoreBaseClock) &&
+      Number.isFinite(Date.parse(collectedAt || ""))
+    ) {
+      clock.classList.add("flashscore-live-clock");
+      clock.dataset.clockBase = flashscoreBaseClock;
+      clock.dataset.collectedAt = String(Date.parse(collectedAt));
+    }
     clock.style.cssText = "white-space:nowrap;font-size:12px;font-weight:900;color:#7dd3fc;font-variant-numeric:tabular-nums;padding:5px 6px;background:#102b43;border:1px solid #245477;border-radius:7px;";
 
     const score = document.createElement("div");
@@ -4461,6 +4480,21 @@
     }
   }
 
+  function refreshFlashscoreClocks() {
+    const now = Date.now();
+    document.querySelectorAll(".flashscore-live-clock").forEach(clock => {
+      const match = String(clock.dataset.clockBase || "").match(/^(\d{1,3}):(\d{2})$/);
+      const collectedAt = Number(clock.dataset.collectedAt);
+      if (!match || !Number.isFinite(collectedAt)) return;
+      const baseSeconds = Number(match[1]) * 60 + Number(match[2]);
+      const elapsedSeconds = Math.max(0, Math.floor((now - collectedAt) / 1000));
+      const totalSeconds = baseSeconds + elapsedSeconds;
+      clock.textContent = String(Math.floor(totalSeconds / 60)) + ":" +
+        String(totalSeconds % 60).padStart(2, "0") + "′";
+    });
+  }
+
   scan();
   setInterval(scan, SCAN_INTERVAL_MS);
+  setInterval(refreshFlashscoreClocks, 1000);
 })();
