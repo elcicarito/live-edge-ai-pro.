@@ -939,7 +939,7 @@
     const measures = [
       { key: "possession", weight: 0.10 },
       { key: "shots on target", weight: 0.40 },
-      { key: "dangerous attacks", weight: 0.50 }
+      { key: "shots off target", weight: 0.50 }
     ];
 
     let home = 0;
@@ -1167,7 +1167,7 @@
     unique.forEach(item => {
       const stats = item.match?.stats || [];
       const hasShots = !!statValue(stats, "shots on target");
-      const hasAttacks = !!statValue(stats, "dangerous attacks");
+      const hasAttacks = !!statValue(stats, "shots off target");
       const hasPossession = !!statValue(stats, "possession");
 
       if (hasShots && hasAttacks) momentumReady++;
@@ -1226,7 +1226,7 @@
     const currentStats = match.stats || [];
 
     const currentShots = statValue(currentStats, "shots on target");
-    const currentAttacks = statValue(currentStats, "dangerous attacks");
+    const currentAttacks = statValue(currentStats, "shots off target");
 
     if (!currentShots || !currentAttacks) {
       return {
@@ -1297,7 +1297,7 @@
 
     const oldStats = old.match.stats || [];
     const oldShots = statValue(oldStats, "shots on target");
-    const oldAttacks = statValue(oldStats, "dangerous attacks");
+    const oldAttacks = statValue(oldStats, "shots off target");
 
     if (!oldShots || !oldAttacks) {
       return {
@@ -1390,8 +1390,8 @@
 
       const oldShots = statValue(previous.match.stats || [], "shots on target");
       const shots = statValue(current.match.stats || [], "shots on target");
-      const oldAttacks = statValue(previous.match.stats || [], "dangerous attacks");
-      const attacks = statValue(current.match.stats || [], "dangerous attacks");
+      const oldAttacks = statValue(previous.match.stats || [], "shots off target");
+      const attacks = statValue(current.match.stats || [], "shots off target");
       if (!oldShots || !shots || !oldAttacks || !attacks) continue;
 
       if (shots.home < oldShots.home || shots.away < oldShots.away ||
@@ -1464,8 +1464,8 @@
       const stats = current.match.stats || [];
       const oldShots = statValue(oldStats, "shots on target");
       const shots = statValue(stats, "shots on target");
-      const oldAttacks = statValue(oldStats, "dangerous attacks");
-      const attacks = statValue(stats, "dangerous attacks");
+      const oldAttacks = statValue(oldStats, "shots off target");
+      const attacks = statValue(stats, "shots off target");
       if (!oldShots || !shots || !oldAttacks || !attacks) continue;
 
       if (shots.home < oldShots.home || shots.away < oldShots.away ||
@@ -1797,7 +1797,7 @@
     const panel = document.createElement("div");
     panel.style.cssText = "margin:12px 0;padding:12px;background:#0c1929;border:1px solid #344b65;border-radius:10px;";
     const heading = document.createElement("div");
-    heading.textContent = "LIVE MOMENTUM · ESPN";
+    heading.textContent = "LIVE MOMENTUM · FLASHSCORE";
     heading.style.cssText = "font-size:12px;font-weight:900;letter-spacing:.5px;color:#e2e8f0;margin-bottom:8px;";
     panel.appendChild(heading);
     const engine = window.LiveMomentumEngine;
@@ -3673,7 +3673,7 @@
             homeScore: snapshot.home_score !== null && snapshot.home_score !== undefined && snapshot.home_score !== "" && Number.isFinite(Number(snapshot.home_score)) ? Number(snapshot.home_score) : null,
             awayScore: snapshot.away_score !== null && snapshot.away_score !== undefined && snapshot.away_score !== "" && Number.isFinite(Number(snapshot.away_score)) ? Number(snapshot.away_score) : null,
             sot: readPair(stats, ["shots on target", "shots on goal"]),
-            dangerous: readPair(stats, ["dangerous attacks", "dangerous attack"]),
+            dangerous: readPair(stats, ["shots off target", "dangerous attack"]),
             attacks: readPair(stats, ["attacks", "total attacks"]),
             possession: readPair(stats, ["possession", "ball possession"])
           };
@@ -3856,7 +3856,7 @@
         const finalSot = readPair(rawFinalStats, ["shots on target", "shots on goal"]);
         const finalOff = readPair(rawFinalStats, ["shots off target"]);
         const finalTotal = readPair(rawFinalStats, ["total shots", "shots"]);
-        const finalDangerous = readPair(rawFinalStats, ["dangerous attacks", "dangerous attack"]);
+        const finalDangerous = readPair(rawFinalStats, ["shots off target", "dangerous attack"]);
         const finalAttacks = readPair(rawFinalStats, ["attacks", "total attacks"]);
         if (finalPossession) summaryLine("Držanie lopty (finálne)", finalPossession.home + "% – " + finalPossession.away + "%");
         if (finalTotal) summaryLine("Strely celkom (finálne)", finalTotal.home + " – " + finalTotal.away);
@@ -4156,7 +4156,7 @@
     addQuickStat("STRELY", quickTotal);
     addQuickStat("ROHY", quickFind(/corners|rohy/));
     addQuickStat("DRŽANIE", quickFind(/possession|dr[zž]anie lopty/), "%");
-    addQuickStat("NEB. ÚTOKY", quickFind(/dangerous attacks|nebezpe[cč]n[eé] [uú]toky/));
+    addQuickStat("NEB. ÚTOKY", quickFind(/shots off target|nebezpe[cč]n[eé] [uú]toky/));
     addQuickStat("ŽK", quickFind(/yellow cards|[zž]lt[eé] karty/));
     addQuickStat("ČK", quickFind(/red cards|[cč]erven[eé] karty/));
     if (quickStats.childElementCount) card.appendChild(quickStats);
@@ -4581,8 +4581,8 @@
     try {
       const [current, historyData, signalArchive, bttsArchive, matchArchive, permanentMatchHistory] = await Promise.all([
         getJSON(CURRENT_URL),
-        getCachedJSON(HISTORY_URL, 5 * 60 * 1000).catch(error => {
-          console.warn("História zberu nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
+        loadFlashscoreRecentHistory().catch(error => {
+          console.warn("Flashscore timeline história nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
           return [];
         }),
         Promise.resolve(null),
@@ -4607,15 +4607,7 @@
       engine.innerHTML = "";
 
       addText(engine, "SMART SIGNAL ENGINE v14", "18px");
-      addText(engine, `Zdroj: ${(current.source_providers || [current.source || "neznámy"]).join(" + ")}`);
-      const providerStatus = current.source_status || {};
-      if (providerStatus.ESPN) {
-        addText(engine, `ESPN: ${providerStatus.ESPN.live_count ?? 0} LIVE | ${providerStatus.ESPN.complete ? "kompletný feed" : "neúplný feed"}`);
-      }
-      if (providerStatus.Flashscore) {
-        const fsStatus = providerStatus.Flashscore;
-        addText(engine, `Flashscore: ${fsStatus.live_count ?? 0} LIVE | navyše ${fsStatus.flashscore_only_count ?? 0} | štatistiky ${fsStatus.stats_available_count ?? 0} | ${fsStatus.complete ? "kompletný" : "čiastočný"}`);
-      }
+      addText(engine, "Zdroj LIVE dát a historických meraní: Flashscore");
       addText(engine, `Dáta: ${current.collected_at || "neznámy čas"}`);
       addText(engine, `Posledná kontrola: ${new Date().toLocaleTimeString("sk-SK")}`);
 
@@ -4766,7 +4758,7 @@
           `Priemerný interval: ${collectorHealth.averageGap === null ? "bez porovnania" : collectorHealth.averageGap.toFixed(1) + " min"} | Najdlhšia medzera: ${collectorHealth.maxGap === null ? "—" : collectorHealth.maxGap.toFixed(1) + " min"} | Chyby API: ${collectorHealth.errors}`
         );
       } else {
-        addText(engine, "Za posledných 24 hodín zatiaľ nie je dostupná história zberov.");
+        addText(engine, "Za posledných 24 hodín zatiaľ nie sú dostupné Flashscore časové snímky.");
       }
 
       addText(engine, `Obnovovanie: každých ${SCAN_INTERVAL_MS / 1000} sekúnd`);
