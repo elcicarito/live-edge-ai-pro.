@@ -4805,6 +4805,11 @@
 
     const detail = document.createElement("details");
     matchDetailPanel = detail;
+    // Empty hidden summary prevents the browser fallback label "Podrobnosti".
+    const hiddenDetailSummary = document.createElement("summary");
+    hiddenDetailSummary.textContent = "";
+    hiddenDetailSummary.style.cssText = "display:none!important;";
+    detail.appendChild(hiddenDetailSummary);
     if (noSignal) detail.classList.add("no-signal-expand-detail");
     detail.style.cssText = "border-top:1px solid #293b52;padding-top:8px;";
 
