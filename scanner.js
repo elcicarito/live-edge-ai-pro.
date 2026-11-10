@@ -4751,11 +4751,11 @@
       if (collectorHealth) {
         addText(
           engine,
-          `Zbery: ${collectorHealth.total} | Kompletné: ${collectorHealth.complete} | Neúplné: ${collectorHealth.partial} | Úspešnosť: ${collectorHealth.successRate}%`
+          `Časové zbery: ${collectorHealth.total} | Snímky so štatistikami: ${collectorHealth.complete} | Bez štatistík: ${collectorHealth.partial}`
         );
         addText(
           engine,
-          `Priemerný interval: ${collectorHealth.averageGap === null ? "bez porovnania" : collectorHealth.averageGap.toFixed(1) + " min"} | Najdlhšia medzera: ${collectorHealth.maxGap === null ? "—" : collectorHealth.maxGap.toFixed(1) + " min"} | Chyby API: ${collectorHealth.errors}`
+          `Priemerný interval: ${collectorHealth.averageGap === null ? "bez porovnania" : collectorHealth.averageGap.toFixed(1) + " min"} | Najdlhšia medzera: ${collectorHealth.maxGap === null ? "—" : collectorHealth.maxGap.toFixed(1) + " min"}`
         );
       } else {
         addText(engine, "Za posledných 24 hodín zatiaľ nie sú dostupné Flashscore časové snímky.");
