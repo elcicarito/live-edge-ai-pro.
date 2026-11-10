@@ -173,6 +173,7 @@ function runCollector() {
     assert.equal(standardMatch.last_event_minute_source, "Flashscore commentary MB");
     assert.equal(standardMatch.commentary_count, 1);
     assert.equal(standardMatch.stats[0].name, "Shots on target");
+    assert.equal(standardMatch.stats[0].label, "Shots on target", "timeline stats must expose the canonical label used by Momentum");
     assert.equal(standardMatch.has_statistics, true);
     assert.equal(standardMatch.stats_available, true);
     assert.equal(specialMatch.has_statistics, false);
