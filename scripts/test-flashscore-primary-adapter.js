@@ -20,7 +20,8 @@ const adapted = adaptFlashscoreCurrent({
         live_minute: 63,
         live_clock: "63:12",
         stats: [
-          { name: "Shots on target", home: "5", away: "2", home_numeric: 5, away_numeric: 2 }
+          { name: "Shots on target", category: "Shots", period: "Match", home: "5", away: "2", home_numeric: 5, away_numeric: 2 },
+          { name: "Shots on target", category: "Shots", period: "1st Half", home: "2", away: "1", home_numeric: 2, away_numeric: 1 }
         ]
       }
     },
@@ -46,6 +47,9 @@ assert.equal(adapted.records.length, 2);
 assert.equal(adapted.records[0].match.source, "Flashscore");
 assert.equal(adapted.records[0].match.stats[0].label, "Shots on target");
 assert.equal(adapted.records[0].match.stats[0].home_numeric, 5);
+assert.equal(adapted.records[0].match.stats[0].category, "Shots");
+assert.equal(adapted.records[0].match.stats[0].period, "Match");
+assert.equal(adapted.records[0].match.stats[1].period, "1st Half");
 assert.equal(adapted.validation.clock_available_count, 1);
 assert.equal(adapted.validation.stats_available_count, 1);
 assert.equal(adapted.collection_complete, false);
