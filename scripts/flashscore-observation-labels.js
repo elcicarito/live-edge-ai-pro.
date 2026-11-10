@@ -113,8 +113,7 @@ function labelObservations(observations, outcomes) {
 }
 function parseJsonlGzip(buffer) {
   const text = zlib.gunzipSync(buffer).toString("utf8").trim();
-  return text ? text.split(/\r?
-/).map(line => JSON.parse(line)) : [];
+  return text ? text.split(/\\r?\\n/).map(line => JSON.parse(line)) : [];
 }
 function main(dataDir = DATA) {
   const observationsPath = path.join(dataDir, "flashscore-live-observations.jsonl.gz");
