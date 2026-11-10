@@ -12,7 +12,7 @@ const base = {
   ]
 };
 const candidates = getBttsCandidates(base);
-assert.deepEqual(candidates.map(x => x.tierKey), ["10_sot5_shots8"]);
+assert.deepEqual(candidates.map(x => x.tierKey), ["10_sot5_shots8", "10_sot5_shots10"]);
 assert.equal(candidates[0].predictedSide, "away");
 assert.equal(getBttsCandidates({ ...base, live_minute: 51 }).length, 0);
 assert.equal(getBttsCandidates({ ...base, stage: "1st Half" }).length, 0);
