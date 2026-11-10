@@ -519,7 +519,7 @@ jobs:
 
           function deriveFlashscoreClock(detail, fallbackStage, nowMs = Date.now()) {
             const stage = String(detail?.stage || fallbackStage || "").trim().toLowerCase();
-            if (/half\\s*time|halftime|^ht$/.test(stage)) return { live_minute: "HT", live_clock: "HT", minute_source: "Flashscore stage status" };
+            if (/half\s*time|halftime|^ht$/.test(stage)) return { live_minute: "HT", live_clock: "HT", minute_source: "Flashscore stage status" };
             if (/penalt/.test(stage)) return { live_minute: "PEN", live_clock: "PEN", minute_source: "Flashscore stage status" };
             if (/finished|full.?time|^ft$|after extra time/.test(stage)) return null;
             const metadata = detail?.live_clock_metadata || {};
@@ -532,13 +532,13 @@ jobs:
             const elapsed = Math.max(0, Math.floor(nowMs / 1000 - stageStart));
             let halfMinutes = 45;
             const format = String(metadata.format || "");
-            const custom = format.match(/(\\d+)\\s*[x×]\\s*(\\d+)\\s*(?:minutes?|mins?)/i);
+            const custom = format.match(/(\d+)\s*[x×]\s*(\d+)\s*(?:minutes?|mins?)/i);
             if (custom) halfMinutes = Number(custom[2]);
             let offset = 0;
-            if (/2nd\\s*half|second\\s*half/.test(stage)) offset = halfMinutes * 60;
-            else if (/extra\\s*time.*2nd|extra\\s*time.*second/.test(stage)) offset = halfMinutes * 120 + 15 * 60;
-            else if (/extra\\s*time/.test(stage)) offset = halfMinutes * 120;
-            else if (!/1st\\s*half|first\\s*half/.test(stage)) return null;
+            if (/2nd\s*half|second\s*half/.test(stage)) offset = halfMinutes * 60;
+            else if (/extra\s*time.*2nd|extra\s*time.*second/.test(stage)) offset = halfMinutes * 120 + 15 * 60;
+            else if (/extra\s*time/.test(stage)) offset = halfMinutes * 120;
+            else if (!/1st\s*half|first\s*half/.test(stage)) return null;
             const seconds = offset + elapsed;
             const minute = Math.floor(seconds / 60);
             return { live_minute: minute, live_clock: String(minute) + ":" + String(seconds % 60).padStart(2, "0"), minute_source: "Flashscore eventStageStartTime" };
@@ -672,6 +672,7 @@ jobs:
                     ? raw.competition
                     : raw.competition?.name || raw.tournament?.name || "Flashscore LIVE";
                   const stage = String(raw.stage || raw.status || "live");
+                  const clock = deriveFlashscoreClock(detail, stage);
                   const match = {
                     id: String(raw.id),
                     tracker: { id: "flashscore:" + String(raw.id) },
@@ -682,9 +683,9 @@ jobs:
                     league: competition,
                     status: "live",
                     status_text: String(detail?.stage || stage),
-                    live_minute: deriveFlashscoreClock(detail, stage)?.live_minute ?? null,
-                    live_clock: deriveFlashscoreClock(detail, stage)?.live_clock ?? null,
-                    minute_source: deriveFlashscoreClock(detail, stage)?.minute_source ?? null,
+                    live_minute: clock?.live_minute ?? null,
+                    live_clock: clock?.live_clock ?? null,
+                    minute_source: clock?.minute_source ?? null,
                     start_time: raw.start_time || null,
                     home_score: numericStat(raw.home_score),
                     away_score: numericStat(raw.away_score),
