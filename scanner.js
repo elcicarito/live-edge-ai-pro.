@@ -2133,6 +2133,8 @@
     }
 
     const intervals = [];
+    const consecutiveIntervals = [];
+    let previousValidIntervalEnd = null;
     let rejectedGap = 0, missingShots = 0, resetStats = 0;
     for (let i = 1; i < unique.length; i++) {
       const previous = unique[i - 1];
@@ -2140,6 +2142,8 @@
       const minutes = (current.time - previous.time) / 60000;
       if (!Number.isFinite(minutes) || minutes < MIN_GAP_MINUTES || minutes > MAX_GAP_MINUTES) {
         rejectedGap++;
+        previousValidIntervalEnd = null;
+        consecutiveIntervals.length = 0;
         continue;
       }
 
@@ -2149,30 +2153,41 @@
       const attacks = statValue(current.match.stats || [], "shots off target");
       if (!oldShots || !shots || !oldAttacks || !attacks) {
         missingShots++;
+        previousValidIntervalEnd = null;
+        consecutiveIntervals.length = 0;
         continue;
       }
 
       if (shots.home < oldShots.home || shots.away < oldShots.away ||
           attacks.home < oldAttacks.home || attacks.away < oldAttacks.away) {
         resetStats++;
+        previousValidIntervalEnd = null;
+        consecutiveIntervals.length = 0;
         continue;
       }
 
-      intervals.push({
+      const interval = {
         time: current.time,
         minutes,
         homeRate: ((shots.home - oldShots.home) * 3 + attacks.home - oldAttacks.home) / minutes * 10,
         awayRate: ((shots.away - oldShots.away) * 3 + attacks.away - oldAttacks.away) / minutes * 10
-      });
+      };
+      intervals.push(interval);
+      if (previousValidIntervalEnd === previous.time) consecutiveIntervals.push(interval);
+      else {
+        consecutiveIntervals.length = 0;
+        consecutiveIntervals.push(interval);
+      }
+      previousValidIntervalEnd = current.time;
     }
 
     const diagnostics = { snapshots: unique.length, intervals: intervals.length, rejectedGap, missingShots, resetStats };
-    if (intervals.length < 2) {
-      return { ready: false, ...diagnostics, reason: "Nedostatok platných intervalov." };
+    if (consecutiveIntervals.length < 2) {
+      return { ready: false, ...diagnostics, reason: "Nedostatok dvoch po sebe idúcich platných intervalov." };
     }
 
-    const previous = intervals[intervals.length - 2];
-    const latest = intervals[intervals.length - 1];
+    const previous = consecutiveIntervals[consecutiveIntervals.length - 2];
+    const latest = consecutiveIntervals[consecutiveIntervals.length - 1];
     const homeDelta = Number((latest.homeRate - previous.homeRate).toFixed(1));
     const awayDelta = Number((latest.awayRate - previous.awayRate).toFixed(1));
     const classify = delta => delta >= 2 ? "ZRÝCHĽUJE"
