@@ -24,6 +24,25 @@ assert.equal(r.recent.used.find(x=>x.key==="corners").home,1);
 assert.ok(r.recent.homeRate>r.recent.awayRate);
 assert.equal(r.reliability.coreCoverage,100);
 assert.equal(r.reliability.shotCoverage,100);
+// Period-aware Flashscore rows: Match must win even when 1st Half appears first.
+const byPeriod=(sotH,sotA,offH,offA,cornerH,cornerA,possH,possA,halfSotH,halfSotA)=>[
+ {label:"Shots on target",period:"1st Half",home:halfSotH,away:halfSotA},
+ {label:"Shots on target",period:"Match",home:sotH,away:sotA},
+ {label:"Shots off target",period:"1st Half",home:0,away:5},
+ {label:"Shots off target",period:"Match",home:offH,away:offA},
+ {label:"Corner kicks",period:"1st Half",home:0,away:4},
+ {label:"Corner kicks",period:"Match",home:cornerH,away:cornerA},
+ {label:"Ball possession",period:"1st Half",home:20,away:80},
+ {label:"Ball possession",period:"Match",home:possH,away:possA}
+];
+r=engine.analyse({stats:byPeriod(3,1,2,1,2,0,60,40,0,5)},[
+ make(t0,byPeriod(2,1,1,1,1,0,60,40,0,4))
+],"2026-11-08T12:05:00Z");
+assert.equal(r.recent.used.find(x=>x.key==="sot").home,1);
+assert.equal(r.recent.used.find(x=>x.key==="off").home,1);
+assert.equal(r.recent.used.find(x=>x.key==="corners").home,1);
+assert.ok(r.pressure.home>60,"cumulative pressure must use Match rows, not 1st Half rows");
+
 // Dangerous attacks alone must never create momentum.
 r=engine.analyse({stats:[{label:"Dangerous Attacks",home:50,away:2}]},[
  make(t0,{stats:[{label:"Dangerous Attacks",home:40,away:1}]})
