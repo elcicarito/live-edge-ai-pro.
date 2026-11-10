@@ -2216,11 +2216,21 @@
       makeLegendItem("⚪ " + (match.away || "Hostia"), latest.away, "#cbd5e1")
     );
     target.appendChild(legend);
+    const sampleSpan = Math.round((visible[visible.length - 1].time - visible[0].time) / 60000);
     const coverage = document.createElement("div");
     coverage.textContent = "Vzorka: " + visible.length + " meraní · časový rozsah: " +
-      Math.round((visible[visible.length - 1].time - visible[0].time) / 60000) + " min";
-    coverage.style.cssText = "font-size:9px;color:#8296ad;margin:0 0 7px;";
+      sampleSpan + " min";
+    coverage.style.cssText = "font-size:9px;color:#8296ad;margin:0 0 3px;";
     target.appendChild(coverage);
+
+    const quality = document.createElement("div");
+    const sampleIsShort = visible.length < 4 || sampleSpan < 10;
+    quality.textContent = sampleIsShort
+      ? "Krátka vzorka – trend ber iba orientačne."
+      : "Viac meraní v čase – trend je čitateľnejší, nie však štatisticky potvrdený.";
+    quality.style.cssText = "font-size:9px;font-weight:700;color:" +
+      (sampleIsShort ? "#fbbf24" : "#7dd3c7") + ";margin:0 0 7px;";
+    target.appendChild(quality);
 
 
     const first = visible[0];
