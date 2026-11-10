@@ -4582,9 +4582,11 @@
     else if (compact) card.classList.add("compact-match-card");
     else card.classList.add("priority-match-card");
 
-    card.style.cssText = compact
-      ? "background:#0d1929;padding:7px;margin:5px 0;border-radius:9px;border:1px solid #293d55;"
-      : "background:#0d1929;padding:12px;margin:12px 0;border-radius:12px;border:1px solid #31445c;";
+    card.style.cssText = noSignal
+      ? "background:linear-gradient(110deg,#101a29,#0d1929);padding:7px;margin:5px 0;border-radius:9px;border:1px solid #293d55;"
+      : compact
+        ? "background:#0d1929;padding:7px;margin:5px 0;border-radius:9px;border:1px solid #293d55;"
+        : "background:linear-gradient(110deg,#302813 0%,#172234 42%,#101b2a 100%);padding:12px;margin:12px 0;border-radius:12px;border:1px solid #b88a2b;border-left:4px solid #facc15;box-shadow:0 5px 18px #eab30818;";
 
     const minute = staleMode
       ? String(match.live_minute ?? "?").trim() || "?"
@@ -5181,8 +5183,8 @@
         categoryItems
           .slice()
           .sort((a, b) =>
-            getPriority(b).score - getPriority(a).score ||
-            latestSignalTime(b) - latestSignalTime(a)
+            latestSignalTime(b) - latestSignalTime(a) ||
+            getPriority(b).score - getPriority(a).score
           )
           .forEach(item => renderMatch(
             item.match,
