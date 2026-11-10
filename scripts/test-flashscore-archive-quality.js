@@ -42,6 +42,10 @@ try {
   const report = buildQualityReport(dir);
   assert.equal(report.summary.archived_matches, 3);
   assert.equal(report.summary.timeline_snapshots, 4);
+  assert.equal(report.temporal_coverage.matches_with_5plus_snapshots, 0);
+  assert.equal(report.temporal_coverage.matches_with_10plus_snapshots_and_30min_span, 0);
+  assert.equal(report.match_coverage.length, 3);
+  assert.equal(report.match_coverage.find(row => row.match_id === "a").span_minutes, 2);
   assert.equal(report.summary.matches_with_stats_latest_snapshot, 1);
   assert.equal(report.summary.matches_with_stats_any_snapshot, 1);
   assert.equal(report.coverage.match_stats_any_snapshot, 0.3333);
