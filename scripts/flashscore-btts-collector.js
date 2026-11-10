@@ -57,13 +57,12 @@ function getBttsCandidates(match) {
     : Array.isArray(match.flashscore_stats) ? match.flashscore_stats : [];
   const sot = statPair(stats, ["shots on target"]);
   const total = statPair(stats, ["total shots"]);
-  const off = statPair(stats, ["shots off target"]);
   if (!sot || (!total && !off)) return [];
 
   const combinedSot = sot.home + sot.away;
-  const combinedShots = total
-    ? total.home + total.away
-    : combinedSot + off.home + off.away;
+  // Total Shots is a distinct Flashscore statistic; never estimate it from SOT + off-target.
+  if (!total) return [];
+  const combinedShots = total.home + total.away;
   const candidates = [];
 
   if (homeScore === 1 && awayScore === 0 && combinedSot >= 5) {
@@ -94,7 +93,36 @@ function getBttsCandidates(match) {
     ...candidate, minute, homeScore, awayScore, combinedSot, combinedShots
   }));
 }
-function isFinished(detail) {
+
+function getBttsAfter70Candidate(match) {
+  if (!match || match.source !== "Flashscore") return null;
+  const minute = numeric(match.live_minute);
+  if (!Number.isInteger(minute) || minute <= 70) return null;
+  if (!/2nd\\s*half|second\\s*half/i.test(String(match.stage || match.status_text || ""))) return null;
+  const homeScore = numeric(match.home_score);
+  const awayScore = numeric(match.away_score);
+  if (homeScore === null || awayScore === null) return null;
+  const stats = Array.isArray(match.stats) && match.stats.length
+    ? match.stats
+    : Array.isArray(match.flashscore_stats) ? match.flashscore_stats : [];
+  const sot = statPair(stats, ["shots on target"]);
+  const total = statPair(stats, ["total shots"]);
+  if (!sot || !total) return null;
+  const combinedSot = sot.home + sot.away;
+  const combinedShots = total.home + total.away;
+  let tier = null, tierKey = null, predictedSide = null;
+  if (homeScore === 1 && awayScore === 0 && combinedSot >= 5 && combinedShots >= 12) {
+    tier = "70+ · 1:0 · SOT ≥5 · strely ≥12"; tierKey = "70plus_10_sot5_shots12"; predictedSide = "away";
+  } else if (homeScore === 1 && awayScore === 0 && combinedSot >= 5 && combinedShots >= 10) {
+    tier = "70+ · 1:0 · SOT ≥5 · strely ≥10"; tierKey = "70plus_10_sot5_shots10"; predictedSide = "away";
+  } else if (homeScore === 1 && awayScore === 0 && combinedSot >= 5 && combinedShots >= 8) {
+    tier = "70+ · 1:0 · SOT ≥5 · strely ≥8"; tierKey = "70plus_10_sot5_shots8"; predictedSide = "away";
+  } else if (homeScore === 0 && awayScore === 1 && combinedSot >= 6 && combinedShots >= 8) {
+    tier = "70+ · 0:1 · SOT ≥6 · strely ≥8"; tierKey = "70plus_01_sot6_shots8"; predictedSide = "home";
+  }
+  return tier ? { tier, tierKey, predictedSide, minute, homeScore, awayScore, combinedSot, combinedShots } : null;
+}
+\nfunction isFinished(detail) {
   const status = String(detail?.status || detail?.stage || detail?.status_text || "").toLowerCase();
   return /finished|full.?time|after extra time|after penalties|^ft$/.test(status);
 }
@@ -126,7 +154,7 @@ async function run({ current, archive, detailsFetcher = getDetails, now = new Da
     const age = Date.now() - Date.parse(collectedAt);
     if (!Number.isFinite(age) || age < -60000 || age > 7 * 60 * 1000) continue;
 
-    for (const candidate of getBttsCandidates(match)) {
+    const standardCandidates = getBttsCandidates(match);\n    const lateCandidate = getBttsAfter70Candidate(match);\n    // The 70+ group records only the strongest qualifying tier once per match.\n    for (const candidate of [...standardCandidates, ...(lateCandidate ? [lateCandidate] : [])]) {
       const signalId = "flashscore_btts_" + id + "_" + candidate.tierKey;
       if (output.signals.some(item => item.signalId === signalId)) continue;
       output.signals.push({
@@ -223,4 +251,4 @@ if (require.main === module) main().catch(error => {
   console.error("FLASHSCORE BTTS COLLECTOR FAILED:", error);
   process.exit(1);
 });
-module.exports = { getBttsCandidates, run, isFinished };
+module.exports = { getBttsCandidates, getBttsAfter70Candidate, run, isFinished };
