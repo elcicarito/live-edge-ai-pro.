@@ -122,7 +122,8 @@ function getBttsAfter70Candidate(match) {
   }
   return tier ? { tier, tierKey, predictedSide, minute, homeScore, awayScore, combinedSot, combinedShots } : null;
 }
-\nfunction isFinished(detail) {
+
+function isFinished(detail) {
   const status = String(detail?.status || detail?.stage || detail?.status_text || "").toLowerCase();
   return /finished|full.?time|after extra time|after penalties|^ft$/.test(status);
 }
