@@ -32,5 +32,5 @@ assert.deepEqual(result.observations[0].labels, {
   remaining_total_goals: 3,
   remaining_goal_result: "AWAY"
 });
-assert.equal(result.observations[1].label_status, "AWAITING_CONFIRMED_FLASHSCORE_OUTCOME");
+assert.equal(result.observations[1].label_status, "AWAITING_CONFIRMED_FLASHSCORE_OUTCOME");\nassert.equal(result.matchQuality.confirmed_matches, 1);\nassert.equal(result.matchQuality.confirmed_matches_without_stats, 1);
 console.log("Flashscore confirmed observation labeling tests passed.");
