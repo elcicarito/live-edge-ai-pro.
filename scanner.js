@@ -6,10 +6,8 @@
   const DATA_BASE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/";
   // Main LIVE display now reads the Flashscore-only canonical candidate. The legacy combined feed remains available for rollback during the migration.
   const CURRENT_URL = DATA_BASE_URL + "flashscore-primary-current.json";
-  const MATCH_ARCHIVE_URL = DATA_BASE_URL + "live-archive.json";
+  const MATCH_ARCHIVE_URL = DATA_BASE_URL + "flashscore-confirmed-outcomes.json";
   const BTTS_ARCHIVE_URL = DATA_BASE_URL + "flashscore-btts-signal-archive.json";
-  const MATCH_HISTORY_URL = DATA_BASE_URL + "live-match-history.jsonl.gz";
-  const LEGACY_MATCH_HISTORY_URL = DATA_BASE_URL + "live-match-history.jsonl";
   const SIGNAL_KEY = "live_edge_signals_v6";
 
   const MIN_GAP_MINUTES = 3;
@@ -32,8 +30,6 @@
   const bttsSignalArchiveEl = document.getElementById("btts-signal-archive");
   const bttsSignalArchiveCountEl = document.getElementById("btts-signal-archive-count");
   let matchArchiveData = null;
-  let matchHistoryData = [];
-  let matchHistoryPromise = null;
   let archiveLeagueFilter = "";
   let archiveDateFilter = "";
   let archiveDateDraft = "";
@@ -614,77 +610,6 @@
   let lastRenderedMatchArchive = null;
   let lastRenderedPerformanceGreen = null;
   let lastRenderedPerformanceBtts = null;
-
-  async function loadPermanentMatchHistory() {
-    if (!matchHistoryPromise) {
-      const parseLines = content => {
-        const byMatchId = new Map();
-        const unkeyed = [];
-        for (const line of content.split("\n").filter(Boolean)) {
-          let entry;
-          try { entry = JSON.parse(line); } catch { continue; }
-          const id = entry?.match_id === null || entry?.match_id === undefined
-            ? ""
-            : String(entry.match_id);
-          if (!id) {
-            unkeyed.push(entry);
-            continue;
-          }
-          const previous = byMatchId.get(id);
-          if (!previous) {
-            byMatchId.set(id, entry);
-            continue;
-          }
-          const snapshots = new Map();
-          for (const snapshot of [
-            ...(Array.isArray(previous.snapshots) ? previous.snapshots : []),
-            ...(Array.isArray(entry.snapshots) ? entry.snapshots : [])
-          ]) {
-            const stamp = String(snapshot?.collected_at || "");
-            if (!stamp) continue;
-            const old = snapshots.get(stamp);
-            if (!old || (
-              (!Array.isArray(old.stats) || old.stats.length === 0) &&
-              Array.isArray(snapshot.stats) && snapshot.stats.length > 0
-            )) snapshots.set(stamp, snapshot);
-          }
-          byMatchId.set(id, {
-            ...previous,
-            ...entry,
-            final_match: entry.final_match || previous.final_match,
-            snapshots: [...snapshots.values()].sort((a, b) =>
-              Date.parse(a.collected_at || 0) - Date.parse(b.collected_at || 0)
-            )
-          });
-        }
-        return [...byMatchId.values(), ...unkeyed];
-      };
-
-      matchHistoryPromise = (async () => {
-        try {
-          const response = await fetch(MATCH_HISTORY_URL + "?t=" + Date.now(), {
-            cache: "no-store"
-          });
-          if (!response.ok) throw new Error("HTTP " + response.status + " – gzip archív");
-          if (typeof DecompressionStream !== "function") throw new Error("Prehliadač nepodporuje gzip dekompresiu.");
-          const compressed = await response.arrayBuffer();
-          const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
-          return parseLines(await new Response(stream).text());
-        } catch (gzipError) {
-          // Kompatibilita počas migrácie a pre starší archívny súbor.
-          const legacy = await fetch(LEGACY_MATCH_HISTORY_URL + "?t=" + Date.now(), {
-            cache: "no-store", headers: { "Cache-Control": "no-cache" }
-          });
-          if (!legacy.ok) throw gzipError;
-          return parseLines(await legacy.text());
-        }
-      })().catch(error => {
-        console.warn("Trvalá história zápasov nie je dostupná:", error);
-        return [];
-      });
-    }
-    return matchHistoryPromise;
-  }
 
   function getStatus(match) {
     const value = match?.status;
