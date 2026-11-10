@@ -224,6 +224,13 @@ async function settleOutcomes(dataDir = DATA, now = new Date()) {
   if (!outcomes.matches || typeof outcomes.matches !== "object") outcomes.matches = {};
   const dates = selectDates(archive, outcomes, now.getTime());
   let changed = !existing;
+  for (const [id, outcome] of Object.entries(outcomes.matches)) {
+    const archivedMatch = archive.matches[id];
+    if (archivedMatch && !Number.isInteger(outcome.snapshots_count)) {
+      outcome.snapshots_count = Number(archivedMatch.snapshots_count || 0);
+      changed = true;
+    }
+  }
   let checkedDates = 0;
   let feedMatches = 0;
   let newConfirmed = 0;
