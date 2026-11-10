@@ -4196,7 +4196,7 @@
     scanning = true;
 
     try {
-      const [current, historyData, signalArchive, bttsArchive, matchArchive, permanentMatchHistory] = await Promise.all([
+      const [current, historyData, signalArchive, bttsArchive, matchArchive] = await Promise.all([
         getJSON(CURRENT_URL),
         loadFlashscoreRecentHistory().catch(error => {
           console.warn("Flashscore timeline história nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
@@ -4208,13 +4208,11 @@
           return null;
         }),
         getCachedJSON(MATCH_ARCHIVE_URL, 10 * 60 * 1000).catch(error => {
-          console.warn("Archív zápasov nie je dostupný:", error);
+          console.warn("Flashscore výsledkový archív nie je dostupný:", error);
           return null;
         }),
-        loadPermanentMatchHistory()
       ]);
 
-      matchHistoryData = Array.isArray(permanentMatchHistory) ? permanentMatchHistory : [];
       await loadFlashscoreLiveShadow();
 
       const collectedTime = Date.parse(current.collected_at || "");
@@ -4277,7 +4275,7 @@
           lastRenderedMatchArchive = matchArchive;
         }
         renderSystemStats(current, signalArchive, matchArchive);
-        renderApiDataQuality(current, matchArchive, matchHistoryData);
+        renderApiDataQuality(current, matchArchive, []);
         if (
         signalArchive !== lastRenderedPerformanceGreen ||
         bttsArchive !== lastRenderedPerformanceBtts
@@ -4425,7 +4423,7 @@
       if (matchArchiveChanged) {
         renderMatchArchive(matchArchive);
         lastRenderedMatchArchive = matchArchive;
-        renderApiDataQuality(current, matchArchive, matchHistoryData);
+        renderApiDataQuality(current, matchArchive, []);
       }
       renderSystemStats(current, signalArchive, matchArchive);
       if (
