@@ -1181,6 +1181,63 @@
     return historyData.filter(row => row?.match && matchId(row.match) === id && Number.isFinite(Number(row.time)) && isLive(row.match)).map(row => ({ time: Number(row.time), match: row.match })).sort((x, y) => x.time - y.time);
   }
 
+  // Časová os priebehu zobrazuje iba skutočne uložené Flashscore LIVE snímky.
+  // Neodhaduje udalosti ani nedopĺňa chýbajúce skóre/minúty.
+  function renderMatchTimeline(target, match, historyData, collectedAt) {
+    const id = matchId(match);
+    if (!id) {
+      addText(target, "Časová os čaká na identifikátor zápasu.");
+      return;
+    }
+    const records = historyRecords(historyData, id).slice();
+    const currentTime = Date.parse(collectedAt || "");
+    if (Number.isFinite(currentTime) && !records.some(row => Math.abs(row.time - currentTime) < 1000)) {
+      records.push({ time: currentTime, match });
+    }
+    records.sort((a, b) => a.time - b.time);
+    const valid = records.filter(row =>
+      row.match &&
+      row.match.home_score !== null && row.match.home_score !== undefined &&
+      row.match.away_score !== null && row.match.away_score !== undefined
+    );
+    if (!valid.length) {
+      addText(target, "Zatiaľ nie sú dostupné uložené LIVE snímky so skóre.");
+      return;
+    }
+    const limit = 8;
+    const selected = valid.length <= limit
+      ? valid
+      : Array.from({ length: limit }, (_, index) => valid[Math.round(index * (valid.length - 1) / (limit - 1))]);
+    const rail = document.createElement("div");
+    rail.className = "match-timeline-rail";
+    rail.style.cssText = "display:grid;grid-template-columns:repeat(" + selected.length + ",minmax(0,1fr));gap:6px;align-items:stretch;";
+    selected.forEach((record, index) => {
+      const snapshot = record.match;
+      const point = document.createElement("div");
+      point.className = "match-timeline-point";
+      point.style.cssText = "min-width:0;padding:8px 5px;text-align:center;background:#101f31;border:1px solid #29435f;border-radius:9px;position:relative;";
+      const minuteValue = snapshot.live_minute ?? snapshot.minute ?? snapshot.status_text ?? snapshot.stage ?? "";
+      const minute = String(minuteValue).trim();
+      const clock = document.createElement("div");
+      clock.textContent = minute ? (/HT|FT|PEN|AET/i.test(minute) ? minute : minute.replace(/[^0-9+]/g, "") + "′") : "—";
+      clock.style.cssText = "font-size:10px;color:#9fb5cb;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+      const score = document.createElement("div");
+      score.textContent = String(snapshot.home_score) + ":" + String(snapshot.away_score);
+      score.style.cssText = "font-size:14px;font-weight:900;color:#e2f0fb;font-variant-numeric:tabular-nums;margin:5px 0;";
+      const stamp = document.createElement("div");
+      stamp.textContent = new Date(record.time).toLocaleTimeString("sk-SK", { hour:"2-digit", minute:"2-digit" });
+      stamp.style.cssText = "font-size:9px;color:#7892ac;font-variant-numeric:tabular-nums;";
+      point.append(clock, score, stamp);
+      if (index === selected.length - 1) {
+        point.style.borderColor = "#2c8b6b";
+        point.style.background = "#102b29";
+      }
+      rail.appendChild(point);
+    });
+    target.appendChild(rail);
+    addText(target, "Zobrazených " + selected.length + " z " + valid.length + " uložených meraní · posledné meranie je zvýraznené.", "10px");
+  }
+
   // Historická kontinuita dát pre konkrétny zápas.
   // Ide iba o diagnostiku; nemení tlak, Momentum ani generovanie signálov.
   function getMatchReliability(match, historyData, collectedAt) {
@@ -4161,6 +4218,8 @@
     const threat = calculateThreat(pressure, snapshot);
     const momentumReliability = getMatchReliability(match, historyData, collectedAt);
     const pressureAcceleration = calculatePressureAcceleration(match, historyData, collectedAt);
+    addText(momentumSection, "ČASOVÁ OS PRIEBEHU · ULOŽENÉ STAVY", "12px");
+    renderMatchTimeline(momentumSection, match, historyData, collectedAt);
     renderMomentumEnginePanel(momentumSection, match, historyData, collectedAt);
 
     if (!matchAllowsSignals) {
