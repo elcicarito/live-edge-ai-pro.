@@ -26,7 +26,64 @@ function normalizeStats(stats) {
   }));
 }
 
-function adaptFlashscoreCurrent(input) {
+function buildRecentHistory(currentRecords) {
+  const indexPath = path.join(DATA, "flashscore-timeline-index.json");
+  let index;
+  try { index = JSON.parse(fs.readFileSync(indexPath, "utf8")); }
+  catch { return []; }
+  if (index?.source !== "Flashscore" || !Array.isArray(index.weeks)) return [];
+
+  const activeIds = new Set(currentRecords.map(record => String(record.match.id)));
+  if (!activeIds.size) return [];
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const rows = [];
+  const weeks = index.weeks
+    .filter(item => item && typeof item.file === "string" &&
+      /^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(item.file))
+    .sort((a, b) => String(b.week || "").localeCompare(String(a.week || "")))
+    .slice(0, 2);
+
+  for (const week of weeks) {
+    const filePath = path.join(DATA, week.file);
+    if (!fs.existsSync(filePath)) continue;
+    const decoded = require("node:zlib").gunzipSync(fs.readFileSync(filePath), { maxOutputLength: 64 * 1024 * 1024 }).toString("utf8");
+    for (const line of decoded.split(/\\r?\\n/)) {
+      if (!line.trim()) continue;
+      let entry;
+      try { entry = JSON.parse(line); } catch { continue; }
+      const id = String(entry.match_id || "");
+      const snapshot = entry.snapshot || {};
+      const time = Date.parse(snapshot.collected_at || "");
+      if (!activeIds.has(id) || !Number.isFinite(time) || time < cutoff || time > Date.now() + 60000) continue;
+      const stats = (Array.isArray(snapshot.stats) ? snapshot.stats : [])
+        .filter(stat => !stat.period || String(stat.period).toLowerCase() === "match")
+        .filter(stat => /shots on target|shots off target|total shots|ball possession|corner kicks/i.test(String(stat.name || stat.label || "")))
+        .map(stat => ({
+          label: String(stat.label || stat.name || ""),
+          home: stat.home_numeric ?? stat.home ?? null,
+          away: stat.away_numeric ?? stat.away ?? null
+        }));
+      rows.push({
+        time,
+        match: {
+          id, source: "Flashscore", status: "live",
+          status_text: String(snapshot.stage || "LIVE"),
+          stage: snapshot.stage || null,
+          live_minute: snapshot.live_minute ?? null,
+          live_clock: snapshot.live_clock || null,
+          home_score: snapshot.home_score ?? null,
+          away_score: snapshot.away_score ?? null,
+          stats
+        }
+      });
+    }
+  }
+  const unique = new Map();
+  for (const row of rows) unique.set(String(row.match.id) + "|" + row.time, row);
+  return [...unique.values()].sort((a, b) => a.time - b.time);
+}
+
+function adaptFlashscoreCurrent(input, options = {}) {
   if (!input || input.source !== "Flashscore" || !Array.isArray(input.records)) {
     throw new Error("Neplatný Flashscore current snapshot.");
   }
@@ -49,6 +106,7 @@ function adaptFlashscoreCurrent(input) {
 
   const clockCount = records.filter(record => Boolean(record.match.live_clock)).length;
   const statsCount = records.filter(record => record.match.stats_available).length;
+  const recentHistory = options.recentHistory || [];
   return {
     schema_version: 1,
     source: "Flashscore",
@@ -65,6 +123,8 @@ function adaptFlashscoreCurrent(input) {
     fixture_count: input.fixture_count ?? records.length,
     live_count: records.length,
     records,
+    recent_history: recentHistory,
+    recent_history_count: recentHistory.length,
     // Promotion remains blocked until live clock, score and stats checks pass.
     collection_complete: false,
     data_status: "partial",
@@ -84,11 +144,13 @@ function adaptFlashscoreCurrent(input) {
 
 function main() {
   const input = JSON.parse(fs.readFileSync(INPUT, "utf8"));
-  const output = adaptFlashscoreCurrent(input);
+  const recentHistory = buildRecentHistory(input.records.map(record => record?.match ? { match: record.match } : null).filter(Boolean));
+  const output = adaptFlashscoreCurrent(input, { recentHistory });
   fs.writeFileSync(OUTPUT, JSON.stringify(output, null, 2) + "\n");
   console.log(JSON.stringify({
     source: output.source,
     records: output.records.length,
+    recent_history: output.recent_history_count,
     clock_available: output.validation.clock_available_count,
     stats_available: output.validation.stats_available_count,
     promotion_ready: output.promotion_ready,
@@ -98,4 +160,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { adaptFlashscoreCurrent, normalizeStats };
+module.exports = { adaptFlashscoreCurrent, normalizeStats, buildRecentHistory };
