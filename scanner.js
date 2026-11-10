@@ -4242,7 +4242,7 @@
       return {
         rank: 2,
         score,
-        label: "⚡ POTVRDENÝ SIGNÁL",
+        label: score > 0 ? "⚡ POTVRDENÝ SIGNÁL · " + score + "/100" : "⚡ POTVRDENÝ SIGNÁL",
         color: "#8fffd0",
         background: "#123b2d",
         border: "#39e6a5"
@@ -4253,7 +4253,7 @@
       return {
         rank: 1,
         score,
-        label: "⚠ ZVÝŠENÝ TLAK",
+        label: "⚠ ZVÝŠENÝ TLAK · " + score + "/100",
         color: "#fcd38d",
         background: "#422b12",
         border: "#f59e0b"
@@ -4306,7 +4306,10 @@
       if (!compact) {
         categoryItems
           .slice()
-          .sort((a, b) => latestSignalTime(b) - latestSignalTime(a))
+          .sort((a, b) =>
+            getPriority(b).score - getPriority(a).score ||
+            latestSignalTime(b) - latestSignalTime(a)
+          )
           .forEach(item => renderMatch(
             item.match,
             historyData,
