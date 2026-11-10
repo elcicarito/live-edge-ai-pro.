@@ -3744,6 +3744,7 @@
 
     // Hlavička zápasu a farebný stavový štítok.
     const header = document.createElement("div");
+    header.classList.add("match-card-header");
 
     header.style.cssText = `
       display:flex;
@@ -3758,23 +3759,28 @@
     teams.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;width:100%;";
 
     const homeName = document.createElement("div");
+    homeName.classList.add("match-team-name");
     homeName.textContent = match.home || "Domáci";
     homeName.style.cssText = "min-width:0;overflow-wrap:anywhere;font-size:14px;font-weight:800;line-height:1.25;color:#f1f5f9;";
 
     const scoreGroup = document.createElement("div");
+    scoreGroup.classList.add("match-score-group");
     scoreGroup.style.cssText = "display:flex;align-items:center;justify-content:center;gap:5px;";
 
     const clock = document.createElement("span");
+    clock.classList.add("match-clock");
     clock.textContent = minute === "HT" ? "HT" : minute !== "?" ? `${minute}′` : "";
     clock.style.cssText = "white-space:nowrap;font-size:12px;font-weight:900;color:#7dd3fc;font-variant-numeric:tabular-nums;padding:5px 6px;background:#102b43;border:1px solid #245477;border-radius:7px;";
 
     const score = document.createElement("div");
+    score.classList.add("match-score");
     score.textContent = `${Number(match.home_score || 0)} : ${Number(match.away_score || 0)}`;
     score.style.cssText = "white-space:nowrap;font-size:23px;font-weight:900;letter-spacing:.5px;color:#fff;font-variant-numeric:tabular-nums;padding:4px 10px;background:#17283d;border:1px solid #38516e;border-radius:10px;";
     scoreGroup.append(score);
     if (clock.textContent) scoreGroup.prepend(clock);
 
     const awayName = document.createElement("div");
+    awayName.classList.add("match-team-name");
     awayName.textContent = match.away || "Hostia";
     awayName.style.cssText = "min-width:0;overflow-wrap:anywhere;text-align:right;font-size:14px;font-weight:800;line-height:1.25;color:#f1f5f9;";
 
@@ -3796,6 +3802,7 @@
 
     // Rýchly prehľad LIVE štatistík – iba reálne dostupné hodnoty.
     const quickStats = document.createElement("div");
+    quickStats.classList.add("match-quick-stats");
     if (noSignal) quickStats.classList.add("no-signal-expand-stats", "no-signal-quick-stats");
     quickStats.style.cssText = "display:flex;flex-wrap:wrap;gap:5px;margin:3px 0 9px;";
     const quickFind = pattern => {
@@ -3816,6 +3823,7 @@
     const addQuickStat = (label, value, suffix = "") => {
       if (!value || value.home === null || value.away === null) return;
       const chip = document.createElement("span");
+      chip.classList.add("match-quick-stat");
       chip.textContent = `${label} ${value.home} : ${value.away}${suffix || value.suffix || ""}`;
       chip.style.cssText = "font-size:10px;font-weight:800;color:#d5e2ef;background:#142338;border:1px solid #2b4059;border-radius:7px;padding:4px 7px;font-variant-numeric:tabular-nums;white-space:nowrap;";
       quickStats.appendChild(chip);
@@ -3846,9 +3854,17 @@
     }
 
     const leagueLine = document.createElement("div");
+    leagueLine.classList.add("match-league-line");
     leagueLine.textContent = `${getCompetitionFlag(match)} ${match.competition || "Neznáma súťaž"}`;
     leagueLine.style.cssText = "font-size:12px;color:#a8b8cc;margin:2px 0 9px;";
     card.appendChild(leagueLine);
+    const collectedDate = collectedAt ? new Date(collectedAt) : null;
+    if (collectedDate && Number.isFinite(collectedDate.getTime())) {
+      const dataStamp = document.createElement("div");
+      dataStamp.classList.add("match-data-stamp");
+      dataStamp.textContent = `ZBER DÁT · ${collectedDate.toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+      card.appendChild(dataStamp);
+    }
     if (match.source === "Flashscore") {
       addText(card, "ZDROJ: FLASHSCORE · ZELENÝ MODEL VYPNUTÝ · BTTS MONITORING PRI SPLNENÍ PODMIENOK", "10px");
     } else if (match.stats_source === "Flashscore") {
