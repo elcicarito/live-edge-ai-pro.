@@ -23,6 +23,8 @@ jobs:
           git fetch --depth=1 origin live-data-v2
           git checkout origin/live-data-v2 -- data/
           mkdir -p data
+          # Remove the temporary oversized browser export; the app reads the permanent gzip timeline directly.
+          rm -f data/flashscore-live-timeline-recent.json
 
       - name: Checkout pinned Flashscore scraper
         uses: actions/checkout@v4
@@ -112,11 +114,6 @@ jobs:
       - name: Build Flashscore archive quality report
         continue-on-error: true
         run: node scripts/flashscore-archive-quality.js
-
-      - name: Test browser-friendly Flashscore timeline export
-        run: node scripts/test-flashscore-timeline-browser-export.js
-      - name: Export recent Flashscore timeline for the app
-        run: node scripts/flashscore-timeline-browser-export.js
 
       - name: Export Flashscore-only training observations
         run: node scripts/flashscore-live-observations.js
