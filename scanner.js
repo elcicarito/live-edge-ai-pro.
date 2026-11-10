@@ -6,7 +6,6 @@
   const DATA_BASE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/";
   // Main LIVE display now reads the Flashscore-only canonical candidate. The legacy combined feed remains available for rollback during the migration.
   const CURRENT_URL = DATA_BASE_URL + "flashscore-primary-current.json";
-  const HISTORY_URL = DATA_BASE_URL + "live-history.json";
   const MATCH_ARCHIVE_URL = DATA_BASE_URL + "live-archive.json";
   const BTTS_ARCHIVE_URL = DATA_BASE_URL + "flashscore-btts-signal-archive.json";
   const MATCH_HISTORY_URL = DATA_BASE_URL + "live-match-history.jsonl.gz";
@@ -261,6 +260,7 @@
   let flashscoreArchiveRows = [];
   let flashscoreArchiveIndex = null;
   let flashscoreArchiveLoadedWeek = "";
+  let flashscoreRecentHistoryCache = { loadedAt: 0, rows: [] };
 
   async function loadFlashscoreLiveShadow() {
     if (!flashscoreLiveShadowStatusEl || !flashscoreLiveShadowListEl) return;
@@ -332,6 +332,34 @@
     const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
     return new TextDecoder().decode(await new Response(stream).arrayBuffer());
   }
+ 
+  async function loadFlashscoreRecentHistory() {
+    const now = Date.now();
+    if (flashscoreRecentHistoryCache.rows.length && now - flashscoreRecentHistoryCache.loadedAt < 90000) return flashscoreRecentHistoryCache.rows;
+    const index = await getCachedJSON(DATA_BASE_URL + "flashscore-timeline-index.json", 60000);
+    if (!index || index.source !== "Flashscore" || !Array.isArray(index.weeks)) throw new Error("Neplatný Flashscore timeline index.");
+    const weeks = index.weeks.filter(x => x && typeof x.file === "string" && /^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(x.file)).sort((a,b) => String(b.week || "").localeCompare(String(a.week || ""))).slice(0,2);
+    const cutoff = now - 86400000, seen = new Set(), rows = [];
+    for (const week of weeks) {
+      const decoded = await fetchFlashscoreTimeline(week.file);
+      for (const line of decoded.split(/\\r?\\n/)) {
+        if (!line.trim()) continue;
+        let entry;
+        try { entry = JSON.parse(line); } catch { continue; }
+        const snap = entry.snapshot || {}, time = Date.parse(snap.collected_at || ""), id = String(entry.match_id || "");
+        if (!id || !Number.isFinite(time) || time < cutoff || time > now + 60000) continue;
+        const key = id + "|" + time;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const stats = (Array.isArray(snap.stats) ? snap.stats : []).map(x => ({...x, label:x.label || x.name || "", home:x.home_numeric ?? x.home, away:x.away_numeric ?? x.away}));
+        rows.push({time, match:{id, source:"Flashscore", status:"live", status_text:String(snap.stage || "LIVE"), stage:snap.stage || null, live_minute:snap.live_minute ?? null, live_clock:snap.live_clock || null, home_score:snap.home_score ?? null, away_score:snap.away_score ?? null, stats}});
+      }
+    }
+    rows.sort((a,b)=>a.time-b.time);
+    flashscoreRecentHistoryCache = {loadedAt:now, rows};
+    return rows;
+  }
+
 
   function renderFlashscoreArchive() {
     if (!flashscoreArchiveResultsEl) return;
