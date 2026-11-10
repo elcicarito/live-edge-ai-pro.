@@ -55,6 +55,7 @@ function allStats(payload) {
           category: group.category || null,
           period: period.period || null,
           name: stat.name || null,
+          label: stat.name || null,
           home: stat.home_value ?? stat.home ?? null,
           away: stat.away_value ?? stat.away ?? null,
           home_numeric: numberOf(stat.home_value ?? stat.home),
