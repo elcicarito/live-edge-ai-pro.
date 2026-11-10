@@ -5,9 +5,12 @@ on:
   push:
     branches:
       - main
+      - flashscore-primary-integration
     paths:
       - .github/workflows/flashscore-clock-tests.yml
       - scripts/flashscore-only-collector.js
+      - scripts/flashscore-primary-adapter.js
+      - scripts/test-flashscore-primary-adapter.js
       - scripts/test-flashscore-only-collector.js
       - scanner.js
 
@@ -25,8 +28,12 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check scripts/flashscore-only-collector.js
+          node --check scripts/flashscore-primary-adapter.js
+          node --check scripts/test-flashscore-primary-adapter.js
           node --check scripts/test-flashscore-only-collector.js
           node --check scanner.js
 
       - name: Run Flashscore live-clock integration tests
-        run: node scripts/test-flashscore-only-collector.js
+        run: |
+          node scripts/test-flashscore-only-collector.js
+          node scripts/test-flashscore-primary-adapter.js
