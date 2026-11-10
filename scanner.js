@@ -5004,6 +5004,7 @@
     const pressureOverview = document.getElementById("live-pressure-overview");
     if (pressureOverview) {
       pressureOverview.innerHTML = "";
+      pressureOverview.style.cssText = "padding:13px 14px;border:1px solid #29475c;border-left:3px solid #39bfa2;border-radius:13px;background:linear-gradient(135deg,#14263a 0%,#101b2a 100%);box-shadow:0 7px 20px #0003;";
       const title = document.createElement("div");
       title.textContent = "🔥 TOP LIVE TLAK";
       title.style.cssText = "font-size:12px;font-weight:900;letter-spacing:.8px;color:#c8e7ff;margin-bottom:4px;";
@@ -5032,7 +5033,7 @@
           const row = document.createElement("button");
           row.type = "button";
           row.setAttribute("aria-label", "Prejsť na zápas " + (match.home || "Domáci") + " – " + (match.away || "Hostia"));
-          row.style.cssText = "display:grid;width:100%;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:9px;padding:8px 0;border:0;border-top:1px solid #263c55;background:transparent;text-align:left;cursor:pointer;";
+          row.style.cssText = "display:grid;width:100%;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 9px;margin:7px 0 0;border:1px solid #2b435b;border-radius:10px;background:linear-gradient(110deg,#172a40,#122033);text-align:left;cursor:pointer;";
           row.addEventListener("click", () => {
             matchSearchTerm = "";
             if (matchSearchEl) matchSearchEl.value = "";
@@ -5056,7 +5057,7 @@
           info.style.cssText = "min-width:0;";
           const teams = document.createElement("div");
           teams.textContent = (match.home || "Domáci") + " – " + (match.away || "Hostia");
-          teams.style.cssText = "font-size:11px;font-weight:800;color:#e5effb;overflow-wrap:anywhere;";
+          teams.style.cssText = "font-size:12px;font-weight:900;color:#edf6ff;overflow-wrap:anywhere;line-height:1.3;";
           const meta = document.createElement("div");
           const minute = getDisplayedMinute(match, item.collectedAt);
           const score = String(match.home_score ?? "?") + " : " + String(match.away_score ?? "?");
@@ -5092,8 +5093,16 @@
           const status = priority.rank === 2 ? "SIGNÁL" : priority.rank === 1 ? "VYŠŠÍ TLAK" : "SLEDOVAŤ";
           const color = priority.rank === 2 ? "#39e6a5" : priority.rank === 1 ? "#fbbf24" : "#7dd3fc";
           badge.textContent = priority.score + "/100";
-          badge.title = status;
-          badge.style.cssText = "white-space:nowrap;font-size:12px;font-weight:900;color:" + color + ";font-variant-numeric:tabular-nums;padding:6px 8px;border:1px solid " + color + "55;border-radius:8px;background:" + (priority.rank === 2 ? "#12372e" : priority.rank === 1 ? "#352a16" : "#12263a") + ";";
+          badge.title = status + " · orientačné skóre tlaku, nie pravdepodobnosť gólu";
+          badge.setAttribute("aria-label", status + ", skóre tlaku " + priority.score + " zo 100");
+          badge.style.cssText = "white-space:nowrap;font-size:13px;font-weight:950;color:" + color + ";font-variant-numeric:tabular-nums;padding:7px 9px;border:1px solid " + color + "66;border-radius:9px;background:" + (priority.rank === 2 ? "#12372e" : priority.rank === 1 ? "#352a16" : "#12263a") + ";";
+          const meter = document.createElement("div");
+          meter.setAttribute("aria-hidden", "true");
+          meter.style.cssText = "height:4px;margin-top:7px;border-radius:5px;background:#26394d;overflow:hidden;";
+          const fill = document.createElement("div");
+          fill.style.cssText = "height:100%;width:" + Math.max(0, Math.min(100, Number(priority.score) || 0)) + "%;border-radius:5px;background:" + color + ";opacity:.9;";
+          meter.appendChild(fill);
+          info.append(teams, meta, trendLine, meter);
           row.append(info, badge);
           pressureOverview.appendChild(row);
         });
