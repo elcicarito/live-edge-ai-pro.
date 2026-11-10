@@ -4269,6 +4269,62 @@
       getMatchPriority(item.match, historyData, item.collectedAt, allowSignals, staleMode, signalArchive, bttsArchive)
     ]));
     const getPriority = item => priorityByItem.get(item) || { rank: 0, score: 0 };
+
+    // Prehľad TOP LIVE tlaku je iba navigačný panel; nemení signály ani ich podmienky.
+    const pressureOverview = document.getElementById("live-pressure-overview");
+    if (pressureOverview) {
+      pressureOverview.innerHTML = "";
+      const title = document.createElement("div");
+      title.textContent = "🔥 TOP LIVE TLAK";
+      title.style.cssText = "font-size:12px;font-weight:900;letter-spacing:.8px;color:#c8e7ff;margin-bottom:4px;";
+      pressureOverview.appendChild(title);
+      const subtitle = document.createElement("div");
+      subtitle.textContent = "Najvyššie aktuálne skóre tlaku · orientačný prehľad, nie stávkový signál";
+      subtitle.style.cssText = "font-size:10px;color:#8fa6bf;margin-bottom:9px;line-height:1.4;";
+      pressureOverview.appendChild(subtitle);
+
+      const topPressure = items
+        .filter(item => !staleMode && Number.isFinite(getPriority(item).score) && getPriority(item).score > 0)
+        .sort((a, b) => getPriority(b).score - getPriority(a).score)
+        .slice(0, 5);
+
+      if (!topPressure.length) {
+        const empty = document.createElement("div");
+        empty.textContent = staleMode
+          ? "Prehľad čaká na čerstvé LIVE dáta."
+          : "Zatiaľ nie je dostupné kladné skóre tlaku z aktuálnych štatistík.";
+        empty.style.cssText = "font-size:11px;color:#9aacc1;padding:8px 0;";
+        pressureOverview.appendChild(empty);
+      } else {
+        topPressure.forEach((item, index) => {
+          const match = item.match || {};
+          const priority = getPriority(item);
+          const row = document.createElement("div");
+          row.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:9px;padding:8px 0;border-top:1px solid #263c55;";
+          const info = document.createElement("div");
+          info.style.cssText = "min-width:0;";
+          const teams = document.createElement("div");
+          teams.textContent = (match.home || "Domáci") + " – " + (match.away || "Hostia");
+          teams.style.cssText = "font-size:11px;font-weight:800;color:#e5effb;overflow-wrap:anywhere;";
+          const meta = document.createElement("div");
+          const minute = getDisplayedMinute(match, item.collectedAt);
+          const score = String(match.home_score ?? "?") + " : " + String(match.away_score ?? "?");
+          const league = String(match.competition || match.league || "Neznáma súťaž");
+          meta.textContent = league + " · " + score + (minute && minute !== "?" ? " · " + minute + (minute === "HT" ? "" : "′") : "");
+          meta.style.cssText = "font-size:9px;color:#8fa6bf;margin-top:3px;overflow-wrap:anywhere;";
+          info.append(teams, meta);
+          const badge = document.createElement("div");
+          const status = priority.rank === 2 ? "SIGNÁL" : priority.rank === 1 ? "VYŠŠÍ TLAK" : "SLEDOVAŤ";
+          const color = priority.rank === 2 ? "#39e6a5" : priority.rank === 1 ? "#fbbf24" : "#7dd3fc";
+          badge.textContent = priority.score + "/100";
+          badge.title = status;
+          badge.style.cssText = "white-space:nowrap;font-size:12px;font-weight:900;color:" + color + ";font-variant-numeric:tabular-nums;padding:6px 8px;border:1px solid " + color + "55;border-radius:8px;background:" + (priority.rank === 2 ? "#12372e" : priority.rank === 1 ? "#352a16" : "#12263a") + ";";
+          row.append(info, badge);
+          pressureOverview.appendChild(row);
+        });
+      }
+    }
+
     const confirmedItems = items.filter(item => getPriority(item).rank === 2);
     const pressureItems = items.filter(item => getPriority(item).rank === 1);
 
