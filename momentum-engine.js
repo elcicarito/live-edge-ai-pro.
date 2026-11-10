@@ -3,7 +3,7 @@
 // It does not create betting signals or probabilities.
 (function(root){
   "use strict";
-  const MIN_GAP_MINUTES=3, MAX_GAP_MINUTES=15;
+  const MIN_GAP_MINUTES=1.5, MAX_GAP_MINUTES=15;
   const DEFINITIONS=[
     {key:"sot",aliases:["shots on target","shots on goal","on target"],weight:3},
     {key:"off",aliases:["shots off target","off target"],weight:1},
