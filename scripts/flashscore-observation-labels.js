@@ -113,7 +113,8 @@ function labelObservations(observations, outcomes) {
 }
 function parseJsonlGzip(buffer) {
   const text = zlib.gunzipSync(buffer).toString("utf8").trim();
-  return text ? text.split(/\r?\n/).map(line => JSON.parse(line)) : [];
+  return text ? text.split(/\r?
+/).map(line => JSON.parse(line)) : [];
 }
 function main(dataDir = DATA) {
   const observationsPath = path.join(dataDir, "flashscore-live-observations.jsonl.gz");
@@ -122,20 +123,25 @@ function main(dataDir = DATA) {
   const observations = parseJsonlGzip(fs.readFileSync(observationsPath));
   const outcomes = readJson(outcomesPath);
   const result = labelObservations(observations, outcomes);
-  const jsonl = result.observations.map(row => JSON.stringify(row)).join("\n");
+  const jsonl = result.observations.map(row => JSON.stringify(row)).join("
+");
   const temporary = observationsPath + ".tmp";
-  fs.writeFileSync(temporary, zlib.gzipSync(jsonl ? jsonl + "\n" : ""));
+  fs.writeFileSync(temporary, zlib.gzipSync(jsonl ? jsonl + "
+" : ""));
   fs.renameSync(temporary, observationsPath);
   const status = readJson(statusPath);
   status.label_updated_at = new Date().toISOString();
   status.label_counts = result.counts;
-  status.training_eligible_observations = result.counts.confirmed;\n  status.label_match_quality = result.matchQuality;
+  status.training_eligible_observations = result.counts.confirmed;
+  status.label_match_quality = result.matchQuality;
   status.training_ready = false;
   status.training_readiness_note = "Confirmed labels are attached only to explicitly finished Flashscore matches. Dataset quality and minimum sample thresholds must be validated separately before model training.";
   const statusTemporary = statusPath + ".tmp";
-  fs.writeFileSync(statusTemporary, JSON.stringify(status, null, 2) + "\n");
+  fs.writeFileSync(statusTemporary, JSON.stringify(status, null, 2) + "
+");
   fs.renameSync(statusTemporary, statusPath);
-  console.log("FLASHSCORE CONFIRMED LABELS:", JSON.stringify(result.counts));\n  console.log("FLASHSCORE LABEL MATCH QUALITY:", JSON.stringify(result.matchQuality));
+  console.log("FLASHSCORE CONFIRMED LABELS:", JSON.stringify(result.counts));
+  console.log("FLASHSCORE LABEL MATCH QUALITY:", JSON.stringify(result.matchQuality));
 }
 if (require.main === module) {
   try { main(); }
