@@ -10,6 +10,8 @@ assert.match(scanner, /const CURRENT_URL = DATA_BASE_URL \+ "flashscore-primary-
 assert.ok(scanner.includes("data/flashscore-primary-current.json"));
 assert.ok(scanner.includes("flashscore-match-timeline-"));
 assert.ok(scanner.includes("/git/blobs/"));
+assert.ok(scanner.includes("current.recent_history"));
+assert.ok(scanner.includes("recent_history_count"));
 assert.ok(scanner.includes("GitHub API Blob"));
 assert.match(scanner, /async function loadFlashscoreRecentHistory/);
 assert.match(scanner, /flashscore-timeline-index\.json/);
