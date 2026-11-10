@@ -1644,11 +1644,13 @@
         card.appendChild(heading);
         const before = [...valid].filter(row => {
           const minute = snapshotMinute(row.match);
-          return minute !== null && goalMinute !== null && minute <= goalMinute && goalMinute - minute <= 8;
+          // Snimka v rovnakej minúte nemusí byť jednoznačne pred gólom.
+          return minute !== null && goalMinute !== null && minute < goalMinute && goalMinute - minute <= 8;
         }).sort((a, b) => snapshotMinute(b.match) - snapshotMinute(a.match))[0];
         const after = [...valid].filter(row => {
           const minute = snapshotMinute(row.match);
-          return minute !== null && goalMinute !== null && minute >= goalMinute && minute - goalMinute <= 8;
+          // Za "po góle" považujeme až snímku z nasledujúcej minúty.
+          return minute !== null && goalMinute !== null && minute > goalMinute && minute - goalMinute <= 8;
         }).sort((a, b) => snapshotMinute(a.match) - snapshotMinute(b.match))[0];
         if (before && after && before !== after) {
           const definitions = [
