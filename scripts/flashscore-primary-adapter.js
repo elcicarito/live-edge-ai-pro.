@@ -17,6 +17,8 @@ function numberOrNull(value) {
 function normalizeStats(stats) {
   return (Array.isArray(stats) ? stats : []).map(item => ({
     label: String(item?.label || item?.name || "Statistic"),
+    category: item?.category ?? null,
+    period: item?.period ?? null,
     home: item?.home ?? item?.home_value ?? null,
     away: item?.away ?? item?.away_value ?? null,
     home_numeric: numberOrNull(item?.home_numeric ?? item?.home ?? item?.home_value),
