@@ -144,7 +144,7 @@ function buildEvaluation({ index, outcomes, bttsArchive, timelineRecords = null,
         status = finalPredicted > startPredicted ? "WIN" : "LOSS";
       }
       firstByMatch.set(id, {
-        matchId:id, home:record.home || "", away:record.away || "",
+        matchId:id, homeTeam:record.home || "", awayTeam:record.away || "",
         competition:record.competition || "", createdAt:record.snapshot.collected_at || null,
         ...candidate, status, finalScore: finalHome === null || finalAway === null ? null : finalHome + ":" + finalAway
       });
