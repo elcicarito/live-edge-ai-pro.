@@ -42,6 +42,8 @@ assert.equal(capturedBuilt.captured_signals_after70_analysis.captured_signal_cou
 assert.equal(capturedBuilt.captured_signals_after70_analysis.sample,1);
 assert.equal(capturedBuilt.captured_signals_after70_analysis.wins,1);
 assert.equal(capturedBuilt.captured_signals_after70_analysis.entries[0].minute,76);
+assert.equal(capturedBuilt.captured_signals_after70_analysis.entries[0].homeTeam,"Home");
+assert.equal(capturedBuilt.captured_signals_after70_analysis.entries[0].home,1);
 const noCaptured=capturedBuilt.captured_signals_after70_analysis;
 assert.equal(noCaptured.roi_available,false);
 
