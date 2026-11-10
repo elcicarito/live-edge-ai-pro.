@@ -123,11 +123,9 @@ function main(dataDir = DATA) {
   const observations = parseJsonlGzip(fs.readFileSync(observationsPath));
   const outcomes = readJson(outcomesPath);
   const result = labelObservations(observations, outcomes);
-  const jsonl = result.observations.map(row => JSON.stringify(row)).join("
-");
+  const jsonl = result.observations.map(row => JSON.stringify(row)).join("\n");
   const temporary = observationsPath + ".tmp";
-  fs.writeFileSync(temporary, zlib.gzipSync(jsonl ? jsonl + "
-" : ""));
+  fs.writeFileSync(temporary, zlib.gzipSync(jsonl ? jsonl + "\n" : ""));
   fs.renameSync(temporary, observationsPath);
   const status = readJson(statusPath);
   status.label_updated_at = new Date().toISOString();
@@ -137,8 +135,7 @@ function main(dataDir = DATA) {
   status.training_ready = false;
   status.training_readiness_note = "Confirmed labels are attached only to explicitly finished Flashscore matches. Dataset quality and minimum sample thresholds must be validated separately before model training.";
   const statusTemporary = statusPath + ".tmp";
-  fs.writeFileSync(statusTemporary, JSON.stringify(status, null, 2) + "
-");
+  fs.writeFileSync(statusTemporary, JSON.stringify(status, null, 2) + "\n");
   fs.renameSync(statusTemporary, statusPath);
   console.log("FLASHSCORE CONFIRMED LABELS:", JSON.stringify(result.counts));
   console.log("FLASHSCORE LABEL MATCH QUALITY:", JSON.stringify(result.matchQuality));
