@@ -171,6 +171,10 @@ function runCollector() {
     assert.equal(standardMatch.last_event_minute_source, "Flashscore commentary MB");
     assert.equal(standardMatch.commentary_count, 1);
     assert.equal(standardMatch.stats[0].name, "Shots on target");
+    assert.equal(standardMatch.has_statistics, true);
+    assert.equal(standardMatch.stats_available, true);
+    assert.equal(specialMatch.has_statistics, false);
+    assert.equal(specialMatch.stats_available, false);
     assert.equal(specialMatch.live_minute, 31, "2x20 special-rules match must use its 20-minute half");
     assert.equal(specialMatch.live_clock, "31'", "minute-only special-rules clock must use Flashscore's direct minute");
     assert.equal(specialMatch.minute_source, "Flashscore core DI (minute-only clock)");
@@ -202,6 +206,10 @@ function runCollector() {
     assert.equal(standardTimeline[1].stat_changes.length, 1);
     assert.equal(specialTimeline[0].snapshot.live_minute, 31);
     assert.equal(specialTimeline[0].snapshot.live_clock, "31'");
+    assert.equal(standardTimeline[0].snapshot.has_statistics, true);
+    assert.equal(standardTimeline[0].snapshot.stats_available, true);
+    assert.equal(specialTimeline[0].snapshot.has_statistics, false);
+    assert.equal(specialTimeline[0].snapshot.stats_available, false);
 
     process.stdout.write("Flashscore collector integration test passed: standard and 2x20 clocks, seconds, separate event/live minute fields, stats, score/stat changes, gzip timeline, permanent retention and index.\n");
   } finally {
