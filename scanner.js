@@ -418,19 +418,48 @@
           " zápasov. Pre týždeň " + week + " zatiaľ nie sú uložené snímky.";
         return;
       }
+      let timelineError = "";
       if (flashscoreArchiveLoadedWeek !== week) {
-        const text = await fetchFlashscoreTimeline(weekEntry.file);
-        flashscoreArchiveRows = text.split("\n").filter(Boolean).map(line => {
-          try { return JSON.parse(line); } catch { return null; }
-        }).filter(Boolean);
-        flashscoreArchiveLoadedWeek = week;
+        try {
+          const timelineText = await fetchFlashscoreTimeline(weekEntry.file);
+          flashscoreArchiveRows = timelineText.split("\n").filter(Boolean).map(line => {
+            try { return JSON.parse(line); } catch { return null; }
+          }).filter(Boolean);
+          flashscoreArchiveLoadedWeek = week;
+        } catch (error) {
+          timelineError = error.message || String(error);
+          flashscoreArchiveRows = [];
+        }
       }
+
+      // Záložný zdroj: posledná uložená snímka každého zápasu.
+      // Zachová zobrazenie archívu aj vtedy, ak prehliadač nevie načítať gzip timeline.
+      const fallbackRows = Object.values(archive?.matches || {}).map(match => ({
+        match_id: match.id,
+        home: match.home,
+        away: match.away,
+        competition: match.competition,
+        snapshot: match.last_snapshot
+      })).filter(entry => entry.snapshot && entry.snapshot.collected_at &&
+        isoWeekKey(String(entry.snapshot.collected_at).slice(0, 10)) === week);
+      const knownRows = new Set(flashscoreArchiveRows.map(entry =>
+        String(entry.match_id || "") + "|" + String(entry.snapshot?.collected_at || "")
+      ));
+      for (const entry of fallbackRows) {
+        const key = String(entry.match_id || "") + "|" + String(entry.snapshot.collected_at || "");
+        if (!knownRows.has(key)) {
+          flashscoreArchiveRows.push(entry);
+          knownRows.add(key);
+        }
+      }
+
       renderFlashscoreArchive();
       flashscoreArchiveStatusEl.textContent = "Zdroj: Flashscore · " + uniqueMatches +
         " archivovaných zápasov · " + flashscoreArchiveRows.length +
-        " snímok v " + week + ". Zobrazenie je filtrované podľa dátumu.";
+        " dostupných snímok v " + week + ". Zobrazenie je filtrované podľa dátumu." +
+        (timelineError ? " Záložné zobrazenie posledných snímok (chyba timeline: " + timelineError + ")." : "");
     } catch (error) {
-      flashscoreArchiveStatusEl.textContent = "Nový archív ešte nie je dostupný: " + error.message;
+      flashscoreArchiveStatusEl.textContent = "Flashscore archív sa nepodarilo načítať: " + error.message;
       flashscoreArchiveResultsEl.innerHTML = "";
       if (flashscoreArchiveCountEl) flashscoreArchiveCountEl.textContent = "0";
     }
