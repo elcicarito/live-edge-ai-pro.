@@ -1122,81 +1122,19 @@
 
   function getCollectorHealth(historyData, now = Date.now()) {
     if (!Array.isArray(historyData)) return null;
-
-    const windowStart = now - 24 * 60 * 60 * 1000;
-    const batches = historyData
-      .map(batch => ({
-        batch,
-        time: Date.parse(batch.collected_at || "")
-      }))
-      .filter(item =>
-        Number.isFinite(item.time) &&
-        item.time >= windowStart &&
-        item.time <= now
-      )
-      .sort((a, b) => a.time - b.time);
-
-    if (!batches.length) return null;
-
-    const complete = batches.filter(item =>
-      item.batch.collection_complete === true &&
-      item.batch.data_status === "complete"
-    ).length;
-
-    const errors = batches.reduce((sum, item) =>
-      sum + (Array.isArray(item.batch.errors) ? item.batch.errors.length : 0), 0
-    );
-
-    const gaps = [];
-    for (let i = 1; i < batches.length; i++) {
-      const gap = (batches[i].time - batches[i - 1].time) / 60000;
-      if (Number.isFinite(gap) && gap > 0) gaps.push(gap);
-    }
-
-    return {
-      total: batches.length,
-      complete,
-      partial: batches.length - complete,
-      successRate: Math.round(complete / batches.length * 100),
-      errors,
-      averageGap: gaps.length
-        ? gaps.reduce((sum, value) => sum + value, 0) / gaps.length
-        : null,
-      maxGap: gaps.length ? Math.max(...gaps) : null
-    };
+    const cutoff = now - 86400000;
+    const recent = historyData.filter(row => Number.isFinite(Number(row.time)) && Number(row.time) >= cutoff && Number(row.time) <= now);
+    const times = [...new Set(recent.map(row => Number(row.time)))].sort((x, y) => x - y);
+    if (!times.length) return null;
+    const gaps = times.slice(1).map((time, i) => (time - times[i]) / 60000).filter(gap => gap > 0);
+    const withStats = recent.filter(row => Array.isArray(row.match?.stats) && row.match.stats.length > 0).length;
+    return { total: times.length, complete: withStats, partial: Math.max(0, recent.length - withStats), successRate: Math.round(withStats / Math.max(1, recent.length) * 100), errors: 0, averageGap: gaps.length ? gaps.reduce((x, y) => x + y, 0) / gaps.length : null, maxGap: gaps.length ? Math.max(...gaps) : null };
   }
 
   // Súhrnná diagnostika pravidelnosti zberača; nemení signály.
-    function historyRecords(historyData, id) {
-    const snapshots = [];
-
-    if (!Array.isArray(historyData) || !id) return snapshots;
-
-    historyData.forEach(batch => {
-      const validCollection =
-        batch.collection_complete === true ||
-        batch.data_status === "complete";
-
-      if (!validCollection) return;
-      if (!Array.isArray(batch.records)) return;
-
-      batch.records.forEach(record => {
-        const match = record.match;
-
-        if (!match || matchId(match) !== id) return;
-        if (!isLive(match)) return;
-
-        const time = Date.parse(
-          record.collected_at || batch.collected_at || ""
-        );
-
-        if (!Number.isFinite(time)) return;
-
-        snapshots.push({ time, match });
-      });
-    });
-
-    return snapshots.sort((a, b) => a.time - b.time);
+  function historyRecords(historyData, id) {
+    if (!Array.isArray(historyData) || !id) return [];
+    return historyData.filter(row => row?.match && matchId(row.match) === id && Number.isFinite(Number(row.time)) && isLive(row.match)).map(row => ({ time: Number(row.time), match: row.match })).sort((x, y) => x.time - y.time);
   }
 
   // Historická kontinuita dát pre konkrétny zápas.
