@@ -233,17 +233,6 @@ async function main() {
           errors.push(String(raw.id) + " details/clock: " + detailError);
         }
       })());
-      if (raw.has_statistics === true) {
-        tasks.push((async () => {
-          try {
-            const payload = await getJSON("/matches/statistics", { match: String(raw.id) });
-            stats = allStats(payload);
-          } catch (error) {
-            statsError = error.message;
-            errors.push(String(raw.id) + " statistics: " + statsError);
-          }
-        })());
-      }
       tasks.push((async () => {
         try {
           const payload = await getJSON("/matches/commentary", { match: String(raw.id) });
@@ -254,6 +243,21 @@ async function main() {
         }
       })());
       await Promise.all(tasks);
+      const availableTabs = [
+        ...(Array.isArray(raw.available_tabs) ? raw.available_tabs : []),
+        ...(Array.isArray(detail?.available_tabs) ? detail.available_tabs : []),
+        ...(Array.isArray(commentary.availableTabs) ? commentary.availableTabs : [])
+      ].map(value => String(value).toLowerCase());
+      const statisticsTabAvailable = availableTabs.includes("statistics");
+      if (raw.has_statistics === true || statisticsTabAvailable) {
+        try {
+          const payload = await getJSON("/matches/statistics", { match: String(raw.id) });
+          stats = allStats(payload);
+        } catch (error) {
+          statsError = error.message;
+          errors.push(String(raw.id) + " statistics: " + statsError);
+        }
+      }
       records.push(makeMatch(raw, competition, stats, statsError, commentary, commentaryError, detail, detailError));
     }
   });
@@ -314,7 +318,8 @@ async function main() {
     stats_match_count: records.filter(x => x.stats_available).length,
     stats_flagged_count: records.filter(x => x.has_statistics).length,
     stats_not_flagged_count: records.filter(x => !x.has_statistics).length,
-    stats_requested_count: records.filter(x => x.has_statistics).length,
+    stats_tab_available_count: records.filter(x => x.available_tabs.includes("statistics")).length,
+    stats_requested_count: records.filter(x => x.has_statistics || x.available_tabs.includes("statistics")).length,
     stats_flagged_but_empty_count: records.filter(x => x.has_statistics && !x.stats_available && !x.stats_error).length,
     stats_error_count: records.filter(x => x.stats_error).length,
     commentary_error_count: records.filter(x => x.commentary_error).length,
