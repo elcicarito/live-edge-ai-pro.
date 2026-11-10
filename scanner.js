@@ -1014,16 +1014,27 @@
     };
 
     const heading = document.createElement("div");
-    heading.style.cssText = "display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:8px;padding:4px 10px 8px;color:#94a3b8;font-size:10px;font-weight:900;letter-spacing:.5px;text-align:center;";
-    heading.innerHTML = "<span style='text-align:left'>DOMÁCI</span><span>ŠTATISTIKA</span><span style='text-align:right'>HOSTIA</span>";
+    heading.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) minmax(82px,1.45fr) minmax(0,1fr);gap:7px;padding:4px 5px 8px;font-size:9px;font-weight:900;letter-spacing:.45px;text-align:center;";
+    const homeHeading = document.createElement("span");
+    const centerHeading = document.createElement("span");
+    const awayHeading = document.createElement("span");
+    homeHeading.textContent = String(match?.home || "DOMÁCI");
+    centerHeading.textContent = "ŠTATISTIKA";
+    awayHeading.textContent = String(match?.away || "HOSTIA");
+    homeHeading.title = homeHeading.textContent;
+    awayHeading.title = awayHeading.textContent;
+    homeHeading.style.cssText = "color:#39e6a5;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+    centerHeading.style.cssText = "color:#94a3b8;";
+    awayHeading.style.cssText = "color:#7dd3fc;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+    heading.append(homeHeading, centerHeading, awayHeading);
     card.appendChild(heading);
 
     displayStats.forEach(item => {
       const row = document.createElement("div");
       const isKeyShotStat = /shots? on target|strely na bránu|strely na branu|celkové strely|celkove strely/i.test(String(item.label || ""));
-      row.style.cssText = "padding:10px;margin:6px 0;background:" + (isKeyShotStat ? "#14283a" : "#101b2b") + ";border:1px solid " + (isKeyShotStat ? "#32617a" : "#26384f") + ";border-radius:9px;";
+      row.style.cssText = "padding:9px;margin:6px 0;background:" + (isKeyShotStat ? "#14283a" : "#101b2b") + ";border:1px solid " + (isKeyShotStat ? "#32617a" : "#26384f") + ";border-radius:9px;";
       const values = document.createElement("div");
-      values.style.cssText = "display:grid;grid-template-columns:minmax(38px,1fr) minmax(90px,1.7fr) minmax(38px,1fr);align-items:center;gap:8px;font-size:13px;";
+      values.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) minmax(82px,1.45fr) minmax(0,1fr);align-items:center;gap:7px;font-size:12px;";
       const home = document.createElement("strong");
       const away = document.createElement("strong");
       const label = document.createElement("span");
@@ -1031,9 +1042,11 @@
       home.textContent = String(item.home) + suffix;
       away.textContent = String(item.away) + suffix;
       label.textContent = String(item.label);
-      home.style.cssText = "color:#fff;text-align:left;font-variant-numeric:tabular-nums;";
-      away.style.cssText = "color:#fff;text-align:right;font-variant-numeric:tabular-nums;";
-      label.style.cssText = "color:" + (isKeyShotStat ? "#d7e8f5" : "#a8b8cc") + ";text-align:center;font-size:11px;font-weight:" + (isKeyShotStat ? "800" : "600") + ";line-height:1.3;";
+      home.title = home.textContent;
+      away.title = away.textContent;
+      home.style.cssText = "display:block;min-width:0;padding:6px 5px;border-radius:7px;background:#103329;border:1px solid #245b49;color:#baf7df;text-align:left;font-size:12px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;";
+      away.style.cssText = "display:block;min-width:0;padding:6px 5px;border-radius:7px;background:#122b42;border:1px solid #285477;color:#c5e7ff;text-align:right;font-size:12px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;";
+      label.style.cssText = "color:" + (isKeyShotStat ? "#e2f0fb" : "#a8b8cc") + ";text-align:center;font-size:10px;font-weight:" + (isKeyShotStat ? "900" : "700") + ";line-height:1.3;overflow-wrap:anywhere;";
       values.append(home, label, away);
       row.appendChild(values);
 
