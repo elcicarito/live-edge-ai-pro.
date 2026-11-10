@@ -190,6 +190,9 @@ function snapshotOf(match) {
     clock_diagnostic: match.clock_diagnostic,
     home_score: match.home_score,
     away_score: match.away_score,
+    has_statistics: match.has_statistics,
+    stats_available: match.stats_available,
+    stats_error: match.stats_error,
     stats: match.stats
   };
 }
