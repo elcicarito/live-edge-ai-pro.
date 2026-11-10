@@ -937,6 +937,67 @@
     };
   }
 
+  // Porovnanie polčasov používa iba samostatné period hodnoty z Flashscore.
+  function renderHalfPeriodComparison(target, stats, match) {
+    if (!Array.isArray(stats)) return;
+    const periods = [
+      { key: "1st half", label: "1. POLČAS" },
+      { key: "2nd half", label: "2. POLČAS" }
+    ];
+    const normalize = value => String(value || "").trim().toLowerCase();
+    const rows = [
+      { label: "Držanie lopty", test: /possession|dr[zž]anie lopty/ },
+      { label: "Celkové strely", test: /total shots|shots total|celkové strely|celkove strely/ },
+      { label: "Strely na bránu", test: /shots on target|strely na bránu|strely na branu/ },
+      { label: "Rohy", test: /corner kicks|corners|rohov/ },
+      { label: "Fauly", test: /fouls|fauly/ }
+    ];
+    const data = periods.map(period => {
+      const periodStats = stats.filter(item => normalize(item?.period) === period.key);
+      const unique = rows.map(row => {
+        const item = periodStats.find(stat => row.test.test(String(stat?.label || "")));
+        return item ? { label: row.label, home: item.home, away: item.away, suffix: /possession/i.test(item.label) ? "%" : "" } : null;
+      }).filter(Boolean);
+      return { ...period, stats: unique };
+    }).filter(period => period.stats.length);
+    if (!data.length) {
+      addText(target, "Samostatné štatistiky 1. a 2. polčasu Flashscore pre tento zápas neposkytol.", "10px");
+      return;
+    }
+    const heading = document.createElement("div");
+    heading.textContent = "POROVNANIE POLČASOV";
+    heading.style.cssText = "font-size:12px;font-weight:900;color:#dbeafe;margin:14px 0 8px;";
+    target.appendChild(heading);
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid;grid-template-columns:repeat(" + (data.length === 2 ? "2" : "1") + ",minmax(0,1fr));gap:8px;";
+    data.forEach(period => {
+      const panel = document.createElement("div");
+      panel.style.cssText = "min-width:0;padding:9px;background:#101b2b;border:1px solid #293d55;border-radius:10px;";
+      const title = document.createElement("div");
+      title.textContent = period.label;
+      title.style.cssText = "font-size:11px;font-weight:900;color:#39e6a5;margin-bottom:7px;";
+      panel.appendChild(title);
+      period.stats.forEach(item => {
+        const row = document.createElement("div");
+        row.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:5px;align-items:center;padding:5px 0;border-top:1px solid #26384d;";
+        const home = document.createElement("strong");
+        home.textContent = String(item.home) + item.suffix;
+        home.style.cssText = "font-size:11px;color:#baf7df;text-align:left;font-variant-numeric:tabular-nums;";
+        const label = document.createElement("span");
+        label.textContent = item.label;
+        label.style.cssText = "font-size:9px;color:#9fb5cb;text-align:center;";
+        const away = document.createElement("strong");
+        away.textContent = String(item.away) + item.suffix;
+        away.style.cssText = "font-size:11px;color:#c5e7ff;text-align:right;font-variant-numeric:tabular-nums;";
+        row.append(home, label, away);
+        panel.appendChild(row);
+      });
+      grid.appendChild(panel);
+    });
+    target.appendChild(grid);
+    addText(target, "Hodnoty sú samostatné štatistiky daného polčasu, nie odpočítané od celkových hodnôt.", "10px");
+  }
+
   function renderCurrentStats(card, stats, match = null, historyData = null, collectedAt = null) {
     const available = Array.isArray(stats)
       ? stats.filter(item =>
@@ -4276,6 +4337,7 @@
     );
 
     renderCurrentStats(statsSection, displayStats, match, historyData, collectedAt);
+    renderHalfPeriodComparison(statsSection, displayStats, match);
 
     // Starý BTTS archív je vypnutý; nové BTTS záznamy budú vedené oddelene z Flashscore.
 
