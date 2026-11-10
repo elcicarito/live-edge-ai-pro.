@@ -24,13 +24,13 @@ function buildRecentTimeline(dataDir = DATA, nowMs = Date.now(), retentionMs = D
     .slice(0, 2);
   for (const week of recentWeeks) {
     if (!week || typeof week.file !== "string" ||
-        !/^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(week.file)) {
+        !/^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(week.file)) {
       throw new Error("Neplatná timeline položka v indexe.");
     }
     const file = path.join(dataDir, week.file);
     if (!fs.existsSync(file)) throw new Error("Chýba timeline súbor: " + week.file);
     const decoded = zlib.gunzipSync(fs.readFileSync(file)).toString("utf8");
-    for (const line of decoded.split(/\\r?\\n/)) {
+    for (const line of decoded.split(/\r?\n/)) {
       if (!line.trim()) continue;
       let entry;
       try { entry = JSON.parse(line); } catch { continue; }
