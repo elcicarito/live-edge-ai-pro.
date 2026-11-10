@@ -176,6 +176,7 @@ function buildCapturedSignalAfter70Analysis({ signals, outcomes, timelineRecords
   const qualifiedPending = qualified.filter(x => x.status === "PENDING").length;
   return {
     schema_version:2,
+    ready:true,
     method:"Iba skutočne zachytené Flashscore BTTS signály z 46.–50. minúty. Každý zachytený zápas zostáva vo vzorke; samostatne sa označí, či po 70. minúte splnil existujúce BTTS skóre a strelecké prahy, a následne sa vyhodnotí konečné BTTS.",
     source:"Flashscore BTTS signal archive + permanent Flashscore timeline + confirmed outcomes",
     generated_at:now,
