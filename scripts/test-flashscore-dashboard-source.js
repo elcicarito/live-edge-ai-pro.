@@ -16,10 +16,9 @@ assert.match(
   /contents\/data\/flashscore-primary-current\.json\?ref=live-data-v2/,
   "GitHub API fallback must point to the same Flashscore primary file."
 );
-assert.match(
-  scanner,
-  /const HISTORY_URL = DATA_BASE_URL \+ "live-history\.json";/,
-  "Historical history remains on the legacy store during the staged migration."
-);
 
-console.log("Flashscore dashboard primary-source contract tests passed.");
+assert.match(scanner, /async function loadFlashscoreRecentHistory/);
+assert.match(scanner, /flashscore-timeline-index\\.json/);
+assert.match(scanner, /function historyRecords\\(historyData, id\\)[\\s\\S]*?matchId\\(row\\.match\\) === id/);
+assert.doesNotMatch(scanner, /const HISTORY_URL = DATA_BASE_URL \\+ "live-history\\.json"|LIVE MOMENTUM · ESPN|providerStatus\\.ESPN/);
+console.log("Flashscore dashboard primary-source and archive-history contract tests passed.");
