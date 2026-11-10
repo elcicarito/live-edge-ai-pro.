@@ -5403,13 +5403,23 @@
     renderLiveDataHealth();
 
     try {
-      const [current, historyData, signalArchive, bttsArchive, matchArchive] = await Promise.all([
-        getJSON(CURRENT_URL),
-        loadFlashscoreRecentHistory().catch(error => {
-          flashscoreRecentHistoryStatus = { state: "ERROR", count: 0, error: String(error?.message || error) };
-          console.warn("Flashscore timeline história nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
-          return [];
-        }),
+      const current = await getJSON(CURRENT_URL);
+      const historyData = Array.isArray(current.recent_history)
+        ? current.recent_history
+        : await loadFlashscoreRecentHistory().catch(error => {
+            flashscoreRecentHistoryStatus = { state: "ERROR", count: 0, error: String(error?.message || error) };
+            console.warn("Flashscore timeline história nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
+            return [];
+          });
+      if (Array.isArray(current.recent_history)) {
+        flashscoreRecentHistoryStatus = {
+          state: "READY",
+          count: historyData.length,
+          error: ""
+        };
+        flashscoreRecentHistoryCache = { loadedAt: Date.now(), rows: historyData };
+      }
+      const [signalArchive, bttsArchive, matchArchive] = await Promise.all([
         Promise.resolve(null),
         getCachedJSON(BTTS_ARCHIVE_URL, 60 * 1000).catch(error => {
           console.warn("Nový Flashscore BTTS archív zatiaľ nie je dostupný:", error);
