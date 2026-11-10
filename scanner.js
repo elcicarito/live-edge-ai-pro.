@@ -995,6 +995,47 @@
       grid.appendChild(panel);
     });
     target.appendChild(grid);
+
+    const firstHalf = data.find(period => period.key === "1st half");
+    const secondHalf = data.find(period => period.key === "2nd half");
+    if (firstHalf && secondHalf) {
+      const intensityStats = ["Celkové strely", "Strely na bránu", "Rohy"];
+      const comparisons = intensityStats.map(label => {
+        const first = firstHalf.stats.find(item => item.label === label);
+        const second = secondHalf.stats.find(item => item.label === label);
+        if (!first || !second) return null;
+        const number = value => {
+          const parsed = Number(String(value).replace(",", ".").replace(/[^0-9.-]/g, ""));
+          return Number.isFinite(parsed) ? parsed : null;
+        };
+        const values = [number(first.home), number(first.away), number(second.home), number(second.away)];
+        if (values.some(value => value === null)) return null;
+        return { label, home: values[2] - values[0], away: values[3] - values[1] };
+      }).filter(Boolean);
+      if (comparisons.length) {
+        const subheading = document.createElement("div");
+        subheading.textContent = "ZÁMENA INTENZITY · 2. POLČAS VOČI 1.";
+        subheading.style.cssText = "font-size:10px;font-weight:900;letter-spacing:.35px;color:#cbd5e1;margin:12px 0 5px;";
+        target.appendChild(subheading);
+        comparisons.forEach(item => {
+          const row = document.createElement("div");
+          row.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;align-items:center;padding:6px 8px;margin:4px 0;background:#101b2b;border-radius:7px;";
+          const format = value => value > 0 ? "+" + value : String(value);
+          const home = document.createElement("strong");
+          home.textContent = format(item.home);
+          home.style.cssText = "font-size:11px;color:" + (item.home > 0 ? "#39e6a5" : item.home < 0 ? "#fbbf24" : "#94a3b8") + ";";
+          const label = document.createElement("span");
+          label.textContent = item.label;
+          label.style.cssText = "font-size:9px;color:#9fb5cb;text-align:center;";
+          const away = document.createElement("strong");
+          away.textContent = format(item.away);
+          away.style.cssText = "font-size:11px;color:" + (item.away > 0 ? "#7dd3fc" : item.away < 0 ? "#fbbf24" : "#94a3b8") + ";text-align:right;";
+          row.append(home, label, away);
+          target.appendChild(row);
+        });
+        addText(target, "Kladná hodnota znamená viac danej štatistiky v 2. polčase; nejde o skóre ani predikciu gólu.", "10px");
+      }
+    }
     addText(target, "Hodnoty sú samostatné štatistiky daného polčasu, nie odpočítané od celkových hodnôt.", "10px");
   }
 
