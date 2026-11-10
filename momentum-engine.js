@@ -99,7 +99,7 @@
     const pressure=cumulativePressure(match?.stats||[]);
     const lastPoint=points[points.length-1]||null;
     const latest=lastPoint&&Math.abs(lastPoint.time-now)<1000?lastPoint:null;
-    const recent=latest&&latest.activityShare!==null?{
+    const recent=latest?{
       home:latest.home,away:latest.away,homeRate:latest.homeRate,awayRate:latest.awayRate,
       minutes:Number(latest.minutes.toFixed(1)),used:latest.used
     }:null;
