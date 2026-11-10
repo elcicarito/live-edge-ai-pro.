@@ -3,6 +3,8 @@
 
 const fs = require("fs");
 const path = require("path");
+const readline = require("node:readline");
+const zlib = require("node:zlib");
 
 const DATA = path.join(__dirname, "..", "data");
 const INPUT = path.join(DATA, "flashscore-live-current.json");
@@ -26,7 +28,7 @@ function normalizeStats(stats) {
   }));
 }
 
-function buildRecentHistory(currentRecords) {
+async function buildRecentHistory(currentRecords) {
   const indexPath = path.join(DATA, "flashscore-timeline-index.json");
   let index;
   try { index = JSON.parse(fs.readFileSync(indexPath, "utf8")); }
@@ -46,8 +48,9 @@ function buildRecentHistory(currentRecords) {
   for (const week of weeks) {
     const filePath = path.join(DATA, week.file);
     if (!fs.existsSync(filePath)) continue;
-    const decoded = require("node:zlib").gunzipSync(fs.readFileSync(filePath), { maxOutputLength: 64 * 1024 * 1024 }).toString("utf8");
-    for (const line of decoded.split(/\r?\n/)) {
+    const input = fs.createReadStream(filePath).pipe(zlib.createGunzip());
+    const lines = readline.createInterface({ input, crlfDelay: Infinity });
+    for await (const line of lines) {
       if (!line.trim()) continue;
       let entry;
       try { entry = JSON.parse(line); } catch { continue; }
@@ -142,9 +145,9 @@ function adaptFlashscoreCurrent(input, options = {}) {
   };
 }
 
-function main() {
+async function main() {
   const input = JSON.parse(fs.readFileSync(INPUT, "utf8"));
-  const recentHistory = buildRecentHistory(input.records.map(record => record?.match ? { match: record.match } : null).filter(Boolean));
+  const recentHistory = await buildRecentHistory(input.records.map(record => record?.match ? { match: record.match } : null).filter(Boolean));
   const output = adaptFlashscoreCurrent(input, { recentHistory });
   fs.writeFileSync(OUTPUT, JSON.stringify(output, null, 2) + "\n");
   console.log(JSON.stringify({
@@ -159,5 +162,5 @@ function main() {
   }, null, 2));
 }
 
-if (require.main === module) main();
+if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
 module.exports = { adaptFlashscoreCurrent, normalizeStats, buildRecentHistory };
