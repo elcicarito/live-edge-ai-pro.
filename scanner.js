@@ -3328,19 +3328,19 @@
     });
     const late = data?.after70_analysis;
     const lateTitle = document.createElement("div");
-    lateTitle.textContent = "VYHODNOTENIE BTTS PO 70. MINÚTE · HISTORICKÁ VZORKA";
+    lateTitle.textContent = "RETROSPEKTÍVNA ANALÝZA PO 70. MINÚTE · NIE SÚ TO LIVE SIGNÁLY";
     lateTitle.style.cssText = "font-size:14px;font-weight:900;color:#67e8f9;margin:18px 0 7px;";
     target.appendChild(lateTitle);
     const lateSummary = document.createElement("div");
     lateSummary.style.cssText = "padding:12px;border:1px solid #0e7490;border-radius:10px;background:#0b2230;margin-bottom:10px;";
     if (late) {
       const rate = late.win_rate == null ? "zatiaľ bez vyhodnotených výsledkov" : Math.round(late.win_rate * 100) + "%";
-      lateSummary.textContent = "Vzorka: " + late.sample + " zápasov · WIN: " + late.wins + " · LOSS: " + late.losses + " · čaká na výsledok: " + late.pending + " · úspešnosť: " + rate + ". Jeden záznam na zápas; vybraný najsilnejší splnený prah. Kurzy nie sú v historických snímkach dostupné, preto sa ROI nepočíta.";
+      lateSummary.textContent = "Toto nie sú zachytené LIVE upozornenia. Ide o spätné vyhľadanie podmienok v uložených Flashscore snímkach. Vzorka: " + late.sample + " zápasov · WIN: " + late.wins + " · LOSS: " + late.losses + " · čaká na výsledok: " + late.pending + " · úspešnosť: " + rate + ". Jeden záznam na zápas; vybraný najsilnejší splnený prah. Kurzy v snímkach nie sú dostupné, preto sa ROI nepočíta.";
     } else {
       lateSummary.textContent = "Vyhodnotenie sa vytvorí po najbližšom zbere archívnych snímok.";
     }
     target.appendChild(lateSummary);
-    const lateGroups = late?.groups || {};
+    const lateGenerated = late?.generated_at ? document.createElement("div") : null;\n    if (lateGenerated) { lateGenerated.textContent = "Aktualizované: " + new Date(late.generated_at).toLocaleString("sk-SK"); lateGenerated.style.cssText = "font-size:10px;color:#94a3b8;margin:0 0 8px;"; target.appendChild(lateGenerated); }\n    const lateGroups = late?.groups || {};
     [
       ["10_sot5_shots8","1:0 · SOT ≥5 · strely ≥8"],
       ["10_sot5_shots10","1:0 · SOT ≥5 · strely ≥10"],
