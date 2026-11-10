@@ -76,7 +76,7 @@ function buildRecentTimeline(dataDir = DATA, nowMs = Date.now(), retentionMs = D
 
 function exportRecentTimeline(dataDir = DATA, nowMs = Date.now(), retentionMs = DAY_MS) {
   const output = buildRecentTimeline(dataDir, nowMs, retentionMs);
-  fs.writeFileSync(OUTPUT.replace(DATA, dataDir), JSON.stringify(output));
+  fs.writeFileSync(path.join(dataDir, "flashscore-live-timeline-recent.json"), JSON.stringify(output));
   return output;
 }
 
