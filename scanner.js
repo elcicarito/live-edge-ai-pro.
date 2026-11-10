@@ -1236,6 +1236,73 @@
     });
     target.appendChild(rail);
     addText(target, "Zobrazených " + selected.length + " z " + valid.length + " uložených meraní · posledné meranie je zvýraznené.", "10px");
+
+    // Incidenty sa čítajú iba z polí, ktoré sú skutočne uložené vo Flashscore snímkach.
+    const sources = [...records.map(row => row.match), match];
+    const found = new Map();
+    const walk = (value, depth = 0) => {
+      if (!value || typeof value !== "object" || depth > 7) return;
+      if (Array.isArray(value)) {
+        value.forEach(item => walk(item, depth + 1));
+        return;
+      }
+      if (Array.isArray(value.incidents)) value.incidents.forEach(event => {
+        if (!event || typeof event !== "object") return;
+        const rawType = String(event.type || event.type_name || event.incident_type || event.type_id || "").trim();
+        const rawText = String(event.text || event.description || event.name || "").trim();
+        const combined = (rawType + " " + rawText).toLowerCase();
+        let kind = "";
+        if (/goal|gól|score/.test(combined)) kind = "⚽ Gól";
+        else if (/red.?card|červená|red card/.test(combined)) kind = "🟥 Červená karta";
+        else if (/yellow.?card|žltá|yellow card/.test(combined)) kind = "🟨 Žltá karta";
+        else if (/substitution|stried|substitut/.test(combined)) kind = "🔄 Striedanie";
+        else if (/penalty|penalta/.test(combined)) kind = "⚽ Penalta";
+        else if (/var/.test(combined)) kind = "📺 VAR";
+        else kind = rawType || rawText;
+        if (!kind) return;
+        const minuteRaw = event.time ?? event.minute ?? event.elapsed ?? event.match_time ?? "";
+        const minute = String(minuteRaw).trim();
+        const player = String(event.player || event.player_name || event.scorer || event.name || "").trim();
+        const assist = String(event.assist || event.assist_player || "").trim();
+        const team = String(event.team || event.team_name || event.participant_name || "").trim();
+        const detail = [player, assist && "asistencia: " + assist, team].filter(Boolean).join(" · ");
+        const key = [kind, minute, player, team, rawText].join("|").toLowerCase();
+        if (!found.has(key)) found.set(key, { kind, minute, detail, time: Number(minuteRaw) || 0 });
+      });
+      Object.values(value).forEach(child => {
+        if (child && typeof child === "object") walk(child, depth + 1);
+      });
+    };
+    sources.forEach(source => walk(source));
+    const events = [...found.values()].sort((a, b) => a.time - b.time).slice(0, 12);
+    const eventHeading = document.createElement("div");
+    eventHeading.textContent = "SKUTOČNÉ UDALOSTI ZÁPASU";
+    eventHeading.style.cssText = "font-size:11px;font-weight:900;color:#dbeafe;margin:14px 0 7px;";
+    target.appendChild(eventHeading);
+    if (!events.length) {
+      addText(target, "Flashscore zatiaľ neposkytol uložené góly, karty ani striedania pre tento zápas.", "10px");
+    } else {
+      events.forEach(event => {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;align-items:flex-start;gap:9px;padding:8px 9px;margin:5px 0;background:#101f31;border:1px solid #293d55;border-radius:8px;";
+        const minute = document.createElement("strong");
+        minute.textContent = event.minute ? event.minute + (/[0-9]/.test(event.minute) && !/[′']/.test(event.minute) ? "′" : "") : "—";
+        minute.style.cssText = "min-width:32px;color:#9fb5cb;font-size:11px;";
+        const description = document.createElement("div");
+        description.style.cssText = "min-width:0;font-size:11px;color:#e2e8f0;font-weight:800;";
+        const label = document.createElement("div");
+        label.textContent = event.kind;
+        description.appendChild(label);
+        if (event.detail) {
+          const extra = document.createElement("div");
+          extra.textContent = event.detail;
+          extra.style.cssText = "font-size:10px;color:#94a3b8;font-weight:500;margin-top:3px;overflow-wrap:anywhere;";
+          description.appendChild(extra);
+        }
+        row.append(minute, description);
+        target.appendChild(row);
+      });
+    }
   }
 
   // Historická kontinuita dát pre konkrétny zápas.
