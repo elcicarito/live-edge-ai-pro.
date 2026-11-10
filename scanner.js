@@ -3364,6 +3364,40 @@
       d.style.cssText = "font-size:11px;color:#dbeafe;margin-top:4px;";
       card.append(h,d); target.appendChild(card);
     });
+    const capturedLate = data?.captured_signals_after70_analysis;
+    const capturedTitle = document.createElement("div");
+    capturedTitle.textContent = "VYHODNOTENIE ZACHYTENÝCH BTTS SIGNÁLOV PO 70. MINÚTE";
+    capturedTitle.style.cssText = "font-size:14px;font-weight:900;color:#67e8f9;margin:18px 0 7px;";
+    target.appendChild(capturedTitle);
+    const capturedSummary = document.createElement("div");
+    capturedSummary.style.cssText = "padding:12px;border:1px solid #0e7490;border-radius:10px;background:#0b2230;margin-bottom:10px;";
+    if (capturedLate) {
+      const rate = capturedLate.win_rate == null ? "zatiaľ bez vyhodnotených výsledkov" : Math.round(capturedLate.win_rate * 100) + "%";
+      capturedSummary.textContent = "Iba zápasy so skutočne zachyteným BTTS signálom v 46.–50. minúte. Z nich sa vyberie prvá snímka po 70. minúte, ktorá splnila existujúce podmienky. Zachytené zápasy: " + capturedLate.captured_signal_count + " · splnili podmienky po 70. minúte: " + capturedLate.qualifying_match_count + " · WIN: " + capturedLate.wins + " · LOSS: " + capturedLate.losses + " · čaká: " + capturedLate.pending + " · úspešnosť: " + rate + ". Toto je iba vyhodnotenie, nie nový signál. Kurzy nie sú archivované, ROI sa nepočíta.";
+    } else {
+      capturedSummary.textContent = "Vyhodnotenie sa vytvorí po najbližšom zbere.";
+    }
+    target.appendChild(capturedSummary);
+    const capturedGenerated = capturedLate?.generated_at ? document.createElement("div") : null;
+    if (capturedGenerated) {
+      capturedGenerated.textContent = "Aktualizované: " + new Date(capturedLate.generated_at).toLocaleString("sk-SK");
+      capturedGenerated.style.cssText = "font-size:10px;color:#94a3b8;margin:0 0 8px;";
+      target.appendChild(capturedGenerated);
+    }
+    if (capturedLate?.entries?.length) {
+      capturedLate.entries.slice(0,30).forEach(item => {
+        const row = document.createElement("div");
+        row.style.cssText = "margin:6px 0;padding:8px 10px;border:1px solid #24516a;border-radius:8px;background:#101b2b;";
+        const status = item.status === "WIN" ? "WIN" : item.status === "LOSS" ? "LOSS" : "ČAKÁ";
+        const title = document.createElement("div");
+        title.textContent = (item.home || "?") + " – " + (item.away || "?") + " · " + item.minute + ". min · " + item.home + " " + item.homeScore + ":" + item.awayScore + " " + item.away;
+        title.style.cssText = "font-weight:800;color:#dbeafe;font-size:11px;";
+        const detail = document.createElement("div");
+        detail.textContent = item.tier + " · " + status + (item.finalScore ? " · konečný stav " + item.finalScore : "");
+        detail.style.cssText = "font-size:10px;color:#a5f3fc;margin-top:3px;";
+        row.append(title,detail); target.appendChild(row);
+      });
+    }
     const recent = signals.sort((a,b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)).slice(0,150);
     addText(target, "JEDNOTLIVÉ BTTS SIGNÁLY", "15px");
     if (!recent.length) {
