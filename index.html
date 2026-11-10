@@ -452,6 +452,11 @@ body{
   letter-spacing:1.15px;
 }
 #dashboard-updated{color:#91a5bd}
+#live-pressure-overview{
+  margin:8px 0 14px;padding:12px 13px;border:1px solid #2b4662;border-radius:13px;
+  background:linear-gradient(145deg,#12243a,#0d1929);box-shadow:0 6px 18px rgba(0,0,0,.16);
+}
+@media(max-width:560px){#live-pressure-overview{padding:10px 11px;margin:6px 0 11px}}
 button{
   border-radius:11px;
   background:linear-gradient(135deg,#38bdf8,#0ea5e9);
@@ -537,6 +542,11 @@ details>summary{outline-offset:4px}
   <div class="metric metric-status"><div class="metric-value" id="dashboard-data-status">ČAKÁM</div><div class="metric-label">Stav dát</div></div>
 </div>
 <p id="dashboard-updated">Posledná aktualizácia: čakám na prvý zber</p>
+
+<section id="live-pressure-overview" aria-live="polite" aria-label="Najvyšší aktuálny tlak v LIVE zápasoch">
+  <div style="font-size:12px;font-weight:900;color:#c8e7ff">🔥 TOP LIVE TLAK</div>
+  <div style="font-size:10px;color:#8fa6bf;margin-top:5px">Čakám na aktuálne štatistiky zápasov…</div>
+</section>
 
 <div id="signal" hidden></div>
 
@@ -679,7 +689,7 @@ OBNOVIŤ SKENER
 })();
 </script>
 <script src="./momentum-engine.js?v=2"></script>
-<script src="./scanner.js?v=109"></script>
+<script src="./scanner.js?v=110"></script>
 <script src="./basketball.js?v=12"></script>
 <script src="./hockey.js?v=1"></script>
 
