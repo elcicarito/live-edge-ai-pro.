@@ -2142,7 +2142,7 @@
     addText(target, "VÝVOJ MOMENTA · POSLEDNÝCH 45 MINÚT", "12px");
 
     if (visible.length < 2) {
-      addText(target, "Na graf potrebujeme aspoň dve platné historické merania. Zber pokračuje každých približne 5 minút.", "11px");
+      addText(target, "Na graf potrebujeme aspoň dve platné historické merania. Zber pokračuje približne každé 2 minúty.", "11px");
       return { count: visible.length, span: 0, label: "nedostatok meraní" };
     }
 
