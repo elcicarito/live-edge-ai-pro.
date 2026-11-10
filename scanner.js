@@ -50,6 +50,7 @@
     liveMatchFilter = button.dataset.liveFilter || "all";
     applyLiveMatchSearch();
   }));
+  const liveDataHealthEl = document.getElementById("live-data-health");
   const signalEl = document.getElementById("signal");
   const systemStatsEl = document.getElementById("system-stats");
   const matchArchiveEl = document.getElementById("match-archive");
@@ -118,6 +119,58 @@
 
   let scanning = false;
   let signalHistory = [];
+  let pageLastSuccessAt = null;
+  let pageLastAttemptAt = null;
+  let pageLastError = "";
+  let pageLoadState = "WAITING";
+  let latestCollectorAt = null;
+
+  function renderLiveDataHealth() {
+    if (!liveDataHealthEl) return;
+    const now = Date.now();
+    const collectorTime = Date.parse(latestCollectorAt || "");
+    const collectorAge = Number.isFinite(collectorTime) ? Math.max(0, now - collectorTime) : null;
+    const ageText = collectorAge === null ? "nedostupný"
+      : collectorAge < 60000 ? Math.floor(collectorAge / 1000) + " s"
+      : Math.floor(collectorAge / 60000) + " min";
+    const timeText = value => value ? new Date(value).toLocaleTimeString("sk-SK") : "—";
+    const state = pageLoadState === "LOADING" ? "Načítavam dáta…"
+      : pageLoadState === "ERROR" ? "Chyba načítania"
+      : pageLoadState === "SUCCESS" ? "Stránka načítaná"
+      : "Čakám na prvé načítanie";
+    const stateColor = pageLoadState === "ERROR" ? "#f87171"
+      : pageLoadState === "SUCCESS" ? "#39e6a5" : "#fbbf24";
+    liveDataHealthEl.innerHTML = "";
+    const heading = document.createElement("div");
+    heading.textContent = "KONTROLA AKTUALIZÁCIE";
+    heading.style.cssText = "font-size:10px;font-weight:900;letter-spacing:.7px;color:#a9bad0;margin-bottom:7px;";
+    liveDataHealthEl.appendChild(heading);
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;";
+    const add = (label, value, color) => {
+      const item = document.createElement("div");
+      item.style.cssText = "min-width:0;font-size:10px;line-height:1.45;color:#91a2b8;";
+      const name = document.createElement("span");
+      name.textContent = label + ": ";
+      const val = document.createElement("strong");
+      val.textContent = value;
+      val.style.cssText = "color:" + (color || "#e2e8f0") + ";font-weight:800;overflow-wrap:anywhere;";
+      item.append(name, val);
+      grid.appendChild(item);
+    };
+    add("Stránka", state, stateColor);
+    add("Posledné úspešné načítanie", timeText(pageLastSuccessAt));
+    add("Posledný pokus", timeText(pageLastAttemptAt));
+    add("Vek dát zo zberača", ageText, collectorAge !== null && collectorAge <= MAX_DATA_AGE_MS ? "#39e6a5" : "#fbbf24");
+    liveDataHealthEl.appendChild(grid);
+    if (pageLastError) {
+      const error = document.createElement("div");
+      error.textContent = "Posledná chyba: " + pageLastError;
+      error.style.cssText = "margin-top:7px;color:#fca5a5;font-size:10px;line-height:1.4;overflow-wrap:anywhere;";
+      liveDataHealthEl.appendChild(error);
+    }
+  }
+  renderLiveDataHealth();
 
   try {
     signalHistory = JSON.parse(
@@ -5176,6 +5229,9 @@
   async function scan() {
     if (scanning) return;
     scanning = true;
+    pageLastAttemptAt = Date.now();
+    pageLoadState = "LOADING";
+    renderLiveDataHealth();
 
     try {
       const [current, historyData, signalArchive, bttsArchive, matchArchive] = await Promise.all([
@@ -5195,6 +5251,12 @@
         }),
       ]);
 
+
+      pageLastSuccessAt = Date.now();
+      pageLastError = "";
+      pageLoadState = "SUCCESS";
+      latestCollectorAt = current.collected_at || null;
+      renderLiveDataHealth();
 
       const collectedTime = Date.parse(current.collected_at || "");
       const age = Date.now() - collectedTime;
@@ -5420,6 +5482,9 @@
         `Aktualizované: ${new Date().toLocaleTimeString("sk-SK")} | LIVE: ${matches.length}`;
 
     } catch (error) {
+      pageLoadState = "ERROR";
+      pageLastError = String(error?.message || "Neznáma chyba").slice(0, 220);
+      renderLiveDataHealth();
       console.error("Scanner chyba:", error);
 
       matchesEl.innerHTML = "";
@@ -5444,6 +5509,7 @@
 
   scan();
   setInterval(scan, SCAN_INTERVAL_MS);
+  setInterval(renderLiveDataHealth, 15000);
 
   // Mobilné prehliadače môžu pozastaviť časovače na karte na pozadí.
   // Po návrate do aplikácie alebo obnovení stránky obnov LIVE dáta ihneď.
