@@ -518,6 +518,48 @@ details>summary{outline-offset:4px}
   *,*::before,*::after{scroll-behavior:auto!important;transition:none!important}
 }
 
+
+/* Mobile-first match statistics: preserve clear home/away comparison on narrow screens. */
+#matches .live-stat-heading,
+#matches .live-stat-values{
+  grid-template-columns:minmax(0,1fr) minmax(72px,1.25fr) minmax(0,1fr)!important;
+}
+#matches .live-stat-heading{gap:5px!important}
+#matches .live-stat-values{gap:5px!important}
+#matches .live-stat-row{min-width:0}
+@media(max-width:560px){
+  #matches .live-stat-heading{
+    font-size:8px!important;
+    letter-spacing:.2px!important;
+    padding:4px 2px 7px!important;
+  }
+  #matches .live-stat-heading span{min-width:0}
+  #matches .live-stat-values{
+    grid-template-columns:minmax(0,.9fr) minmax(88px,1.3fr) minmax(0,.9fr)!important;
+    gap:4px!important;
+    font-size:11px!important;
+  }
+  #matches .live-stat-values strong{
+    padding:7px 4px!important;
+    font-size:12px!important;
+    overflow-wrap:anywhere;
+  }
+  #matches .live-stat-values span{
+    font-size:9px!important;
+    line-height:1.2!important;
+    padding:0 1px;
+  }
+  #matches .live-stat-row{padding:7px!important;margin:5px 0!important}
+}
+@media(max-width:360px){
+  #matches .live-stat-heading,
+  #matches .live-stat-values{
+    grid-template-columns:minmax(0,.85fr) minmax(78px,1.3fr) minmax(0,.85fr)!important;
+  }
+  #matches .live-stat-values strong{font-size:11px!important;padding:6px 3px!important}
+  #matches .live-stat-values span{font-size:8px!important}
+}
+
 </style>
 </head>
 
@@ -689,7 +731,7 @@ OBNOVIŤ SKENER
 })();
 </script>
 <script src="./momentum-engine.js?v=2"></script>
-<script src="./scanner.js?v=113"></script>
+<script src="./scanner.js?v=114"></script>
 <script src="./basketball.js?v=12"></script>
 <script src="./hockey.js?v=1"></script>
 
