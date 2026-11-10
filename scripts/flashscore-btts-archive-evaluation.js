@@ -87,7 +87,7 @@ function buildCapturedSignalAfter70Analysis({ signals, outcomes, timelineRecords
     const prior = firstByMatch.get(id);
     if (!prior || candidate.minute < prior.minute) {
       firstByMatch.set(id, {
-        matchId:id, home:record.home || "", away:record.away || "",
+        matchId:id, homeTeam:record.home || "", awayTeam:record.away || "",
         competition:record.competition || "", ...candidate,
         collectedAt:record.snapshot?.collected_at || null
       });
