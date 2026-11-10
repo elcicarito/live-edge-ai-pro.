@@ -937,7 +937,7 @@
     };
   }
 
-  function renderCurrentStats(card, stats) {
+  function renderCurrentStats(card, stats, match = null, historyData = null, collectedAt = null) {
     const available = Array.isArray(stats)
       ? stats.filter(item =>
           item &&
@@ -987,6 +987,32 @@
       }
     }
 
+    // Porovnanie iba s najbližšou predchádzajúcou snímkou toho istého zápasu.
+    // Pri medzere nad 15 minút alebo pri poklese kumulatívnych počítadiel zmenu nezobrazujeme.
+    let previousStats = null;
+    let comparisonMinutes = null;
+    const currentTime = Date.parse(collectedAt || "");
+    const id = matchId(match);
+    if (id && Number.isFinite(currentTime)) {
+      const previous = historyRecords(historyData, id)
+        .filter(record => record.time < currentTime - 1000)
+        .slice(-1)[0];
+      if (previous) {
+        const gap = (currentTime - previous.time) / 60000;
+        const oldStats = previous.match?.stats || previous.match?.flashscore_stats || [];
+        if (gap > 0 && gap <= 15 && Array.isArray(oldStats) && oldStats.length) {
+          previousStats = oldStats;
+          comparisonMinutes = gap;
+        }
+      }
+    }
+    const normalizeLabel = value => String(value || "").trim().toLowerCase().replace(/\\s+/g, " ");
+    const parseStatNumber = value => {
+      if (value === null || value === undefined || String(value).trim() === "") return null;
+      const parsed = Number(String(value).replace("%", "").replace(",", ".").replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
     const heading = document.createElement("div");
     heading.style.cssText = "display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:8px;padding:4px 10px 8px;color:#94a3b8;font-size:10px;font-weight:900;letter-spacing:.5px;text-align:center;";
     heading.innerHTML = "<span style='text-align:left'>DOMÁCI</span><span>ŠTATISTIKA</span><span style='text-align:right'>HOSTIA</span>";
@@ -1010,6 +1036,37 @@
       label.style.cssText = "color:" + (isKeyShotStat ? "#d7e8f5" : "#a8b8cc") + ";text-align:center;font-size:11px;font-weight:" + (isKeyShotStat ? "800" : "600") + ";line-height:1.3;";
       values.append(home, label, away);
       row.appendChild(values);
+
+      if (previousStats && !item.derived) {
+        const oldItem = previousStats.find(candidate =>
+          normalizeLabel(candidate?.label || candidate?.name) === normalizeLabel(item.label)
+        );
+        if (oldItem) {
+          const oldHome = parseStatNumber(oldItem.home_numeric ?? oldItem.home);
+          const oldAway = parseStatNumber(oldItem.away_numeric ?? oldItem.away);
+          const currentHome = parseStatNumber(item.home_numeric ?? item.home);
+          const currentAway = parseStatNumber(item.away_numeric ?? item.away);
+          const isPossession = /possession|dr[zž]anie lopty/i.test(String(item.label || ""));
+          const validHome = oldHome !== null && currentHome !== null && (isPossession || currentHome >= oldHome);
+          const validAway = oldAway !== null && currentAway !== null && (isPossession || currentAway >= oldAway);
+          if (validHome || validAway) {
+            const formatDelta = (current, old, valid) => {
+              if (!valid) return "—";
+              const delta = Number((current - old).toFixed(1));
+              if (delta === 0) return "0";
+              return (delta > 0 ? "+" : "") + delta;
+            };
+            const deltaLine = document.createElement("div");
+            const suffix = isPossession ? " p. b." : "";
+            deltaLine.textContent =
+              "Zmena za " + comparisonMinutes.toFixed(1) + " min: " +
+              "domáci " + formatDelta(currentHome, oldHome, validHome) + suffix +
+              " · hostia " + formatDelta(currentAway, oldAway, validAway) + suffix;
+            deltaLine.style.cssText = "margin-top:6px;padding-top:5px;border-top:1px solid #26384f;font-size:10px;color:#8fb6d9;font-variant-numeric:tabular-nums;";
+            row.appendChild(deltaLine);
+          }
+        }
+      }
 
       const homeText = String(item.home).trim();
       const awayText = String(item.away).trim();
@@ -4076,7 +4133,7 @@
       "Ukazovateľ vychádza z uložených kompletných zberov (približne posledných 24 hodín); je iba informačný."
     );
 
-    renderCurrentStats(statsSection, displayStats);
+    renderCurrentStats(statsSection, displayStats, match, historyData, collectedAt);
 
     // Starý BTTS archív je vypnutý; nové BTTS záznamy budú vedené oddelene z Flashscore.
 
