@@ -6,8 +6,6 @@
   const DATA_BASE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/";
   const CURRENT_URL = DATA_BASE_URL + "live-current.json";
   const HISTORY_URL = DATA_BASE_URL + "live-history.json";
-  const SIGNAL_ARCHIVE_URL = DATA_BASE_URL + "signal-archive.json";
-  const BTTS_ARCHIVE_URL = DATA_BASE_URL + "btts-signal-archive.json";
   const MATCH_ARCHIVE_URL = DATA_BASE_URL + "live-archive.json";
   const MATCH_HISTORY_URL = DATA_BASE_URL + "live-match-history.jsonl.gz";
   const LEGACY_MATCH_HISTORY_URL = DATA_BASE_URL + "live-match-history.jsonl";
@@ -4269,6 +4267,7 @@
     };
 
     const signalSection = makeSection("⚡ SIGNÁLY A ICH HISTÓRIA", true);
+    signalSection.hidden = true;
     const statsSection = makeSection("📊 ŠTATISTIKY ZÁPASU");
     const momentumSection = makeSection("🔥 MOMENTUM A VÝVOJ TLAKU");
     const diagnosticsSection = makeSection("🛠 KVALITA DÁT A DIAGNOSTIKA");
@@ -4359,42 +4358,7 @@
 
     renderCurrentStats(statsSection, displayStats);
 
-    // BTTS je samostatný modrý model; jeho história sa nemieša so zeleným gólovým modelom.
-    const bttsSignals = Array.isArray(bttsArchive?.signals)
-      ? bttsArchive.signals.filter(item => String(item.matchId) === matchId(match))
-      : [];
-    const bttsOpenSignals = bttsSignals.filter(item => item.status === "OPEN");
-    const bttsLatest = bttsSignals.slice().sort((a, b) =>
-      Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)
-    )[0];
-    if (bttsOpenSignals.length) {
-      bttsOpenSignals.forEach((signal, index) => addSignalPanel(signalSection, {
-        heading: "🔵 BTTS " + (signal.source || "ESPN") + " – " + (signal.tier || "PODMIENKA"),
-        title: signal.predictedTeam || (signal.predictedSide === "home" ? match.home : match.away),
-        detail: `Podmienky: ${signal.tier} | ${signal.combinedSot} SOT spolu | ${signal.combinedShots} striel spolu | vstup ${signal.startMinute}'. Skóre pri signále: ${signal.startScore}. Cieľ: predikovaný tím skóruje do konca zápasu.`,
-        background: "#102d4a",
-        border: "#38bdf8",
-        titleColor: "#7dd3fc"
-      }));
-    } else if (bttsLatest) {
-      addSignalPanel(signalSection, {
-        heading: "🔵 BTTS – HISTÓRIA",
-        title: bttsLatest.status === "WIN" ? "WIN" : bttsLatest.status === "LOSS" ? "LOSS" : "NEVYRIEŠENÉ",
-        detail: `${bttsLatest.tier} | vstup ${bttsLatest.startMinute}' pri skóre ${bttsLatest.startScore} | konečné skóre ${bttsLatest.settledScore || "—"}`,
-        background: "#102d4a",
-        border: "#38bdf8",
-        titleColor: "#7dd3fc"
-      });
-    } else {
-      addSignalPanel(signalSection, {
-        heading: "🔵 BTTS",
-        title: "Bez potvrdeného signálu",
-        detail: "Sledujú sa samostatne všetky tri prahy pri 1:0 a samostatná podmienka pri 0:1.",
-        background: "#102d4a",
-        border: "#2563eb",
-        titleColor: "#93c5fd"
-      });
-    }
+    // Starý BTTS archív je vypnutý; nové BTTS záznamy budú vedené oddelene z Flashscore.
 
     // Legacy green signal remains isolated during validation; its logic is not used for the new momentum panel.
     const pressure = calculatePressure(match.stats || []);
@@ -4648,8 +4612,6 @@
       ? new Date(collectedAt).toLocaleString("sk-SK")
       : "nedostupná";
     set("dashboard-live-count", fresh ? liveCount : 0);
-    set("dashboard-green-count", greenOpen);
-    set("dashboard-btts-count", bttsOpen);
     set("dashboard-data-status", status);
     set("dashboard-updated", "Posledný zber dát: " + updated + " · " + status);
     const statusElement = document.getElementById("dashboard-data-status");
@@ -4667,14 +4629,8 @@
           console.warn("História zberu nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
           return [];
         }),
-        getCachedJSON(SIGNAL_ARCHIVE_URL, 4 * 60 * 1000).catch(error => {
-          console.warn("Trvalý archív signálov nie je dostupný:", error);
-          return null;
-        }),
-        getCachedJSON(BTTS_ARCHIVE_URL, 4 * 60 * 1000).catch(error => {
-          console.warn("BTTS archív zatiaľ nie je dostupný:", error);
-          return null;
-        }),
+        Promise.resolve(null),
+        Promise.resolve(null),
         getCachedJSON(MATCH_ARCHIVE_URL, 10 * 60 * 1000).catch(error => {
           console.warn("Archív zápasov nie je dostupný:", error);
           return null;
@@ -4769,9 +4725,7 @@
         return;
       }
 
-      const allowSignals =
-        current.collection_complete === true &&
-        current.data_status === "complete";
+      const allowSignals = false; // Legacy green signals are disabled; focus is Flashscore data collection.
 
       const records = Array.isArray(current.records)
         ? current.records
@@ -4796,9 +4750,7 @@
       const actualMatches = matches.map(item => item.match);
       updateDashboard(current, matches.length, signalArchive, bttsArchive, true, allowSignals);
 
-      if (allowSignals) {
-        settleSignals(actualMatches);
-      }
+      // Legacy green-signal settlement is disabled during the Flashscore-only transition.
 
       const flashscoreLiveCount = Number(providerStatus.Flashscore?.live_count || 0);
       const feedStateLabel = current.feed_state === "NO_LIVE"
