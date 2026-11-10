@@ -6,7 +6,7 @@
   const DATA_BASE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/";
   // Main LIVE display now reads the Flashscore-only canonical candidate. The legacy combined feed remains available for rollback during the migration.
   const CURRENT_URL = DATA_BASE_URL + "flashscore-primary-current.json";
-  const MATCH_ARCHIVE_URL = DATA_BASE_URL + "flashscore-confirmed-outcomes.json";
+  const OUTCOMES_URL = DATA_BASE_URL + "flashscore-confirmed-outcomes.json";
   const BTTS_ARCHIVE_URL = DATA_BASE_URL + "flashscore-btts-signal-archive.json";
   const SIGNAL_KEY = "live_edge_signals_v6";
 
@@ -4207,7 +4207,7 @@
           console.warn("Nový Flashscore BTTS archív zatiaľ nie je dostupný:", error);
           return null;
         }),
-        getCachedJSON(MATCH_ARCHIVE_URL, 10 * 60 * 1000).catch(error => {
+        getCachedJSON(OUTCOMES_URL, 10 * 60 * 1000).catch(error => {
           console.warn("Flashscore výsledkový archív nie je dostupný:", error);
           return null;
         }),
