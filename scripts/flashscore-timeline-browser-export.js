@@ -50,12 +50,16 @@ function buildRecentTimeline(dataDir = DATA, nowMs = Date.now(), retentionMs = D
       const key = id + "|" + time;
       if (seen.has(key)) continue;
       seen.add(key);
-      const stats = (Array.isArray(snap.stats) ? snap.stats : []).map(x => ({
-        ...x,
-        label: x.label || x.name || "",
-        home: x.home_numeric ?? x.home,
-        away: x.away_numeric ?? x.away
-      }));
+      const stats = (Array.isArray(snap.stats) ? snap.stats : [])
+        .filter(x => /total shots|shots total|celkové strely|celkove strely|shots on target|strely na bránu|strely na branu|shots off target|strely mimo bránu|strely mimo branu|possession|držanie lopty|drzanie lopty|corner kicks|corners|rohov/i.test(String(x.label || x.name || "")))
+        .map(x => ({
+          label: x.label || x.name || "",
+          period: x.period || null,
+          home: x.home_numeric ?? x.home,
+          away: x.away_numeric ?? x.away,
+          home_numeric: x.home_numeric ?? null,
+          away_numeric: x.away_numeric ?? null
+        }));
       rows.push({
         time,
         match: {
