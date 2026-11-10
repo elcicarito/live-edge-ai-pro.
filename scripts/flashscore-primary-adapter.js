@@ -39,7 +39,7 @@ function buildRecentHistory(currentRecords) {
   const rows = [];
   const weeks = index.weeks
     .filter(item => item && typeof item.file === "string" &&
-      /^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(item.file))
+      /^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(item.file))
     .sort((a, b) => String(b.week || "").localeCompare(String(a.week || "")))
     .slice(0, 2);
 
@@ -47,7 +47,7 @@ function buildRecentHistory(currentRecords) {
     const filePath = path.join(DATA, week.file);
     if (!fs.existsSync(filePath)) continue;
     const decoded = require("node:zlib").gunzipSync(fs.readFileSync(filePath), { maxOutputLength: 64 * 1024 * 1024 }).toString("utf8");
-    for (const line of decoded.split(/\\r?\\n/)) {
+    for (const line of decoded.split(/\r?\n/)) {
       if (!line.trim()) continue;
       let entry;
       try { entry = JSON.parse(line); } catch { continue; }
