@@ -315,7 +315,7 @@
 
         if (candidate === apiUrl && payload && payload.encoding === "base64" &&
             typeof payload.content === "string" && payload.content.trim()) {
-          const binary = atob(payload.content.replace(/\\s/g, ""));
+          const binary = atob(payload.content.replace(/\s/g, ""));
           const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
           return JSON.parse(new TextDecoder().decode(bytes));
         }
@@ -333,7 +333,7 @@
         if (blob.encoding !== "base64" || typeof blob.content !== "string") {
           throw new Error("GitHub Blob nevrátil base64 obsah");
         }
-        const binary = atob(blob.content.replace(/\\s/g, ""));
+        const binary = atob(blob.content.replace(/\s/g, ""));
         const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
         return JSON.parse(new TextDecoder().decode(bytes));
       } catch (error) {
@@ -1183,7 +1183,7 @@
         }
       }
     }
-    const normalizeLabel = value => String(value || "").trim().toLowerCase().replace(/\\s+/g, " ");
+    const normalizeLabel = value => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
     const parseStatNumber = value => {
       if (value === null || value === undefined || String(value).trim() === "") return null;
       const parsed = Number(String(value).replace("%", "").replace(",", ".").replace(/[^0-9.-]/g, ""));
@@ -4709,7 +4709,7 @@
       if (!item) return null;
       const toNumber = value => {
         if (value === null || value === undefined || value === "") return null;
-        const parsed = Number(String(value).replace(/[%\\s]/g, "").replace(",", "."));
+        const parsed = Number(String(value).replace(/[%\s]/g, "").replace(",", "."));
         return Number.isFinite(parsed) ? parsed : null;
       };
       const home = toNumber(item.home_numeric ?? item.home);
