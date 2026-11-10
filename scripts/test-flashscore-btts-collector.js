@@ -1,6 +1,6 @@
 "use strict";
 const assert = require("node:assert/strict");
-const { getBttsCandidates, run, isFinished } = require("./flashscore-btts-collector");
+const { getBttsCandidates, getBttsAfter70Candidate, run, isFinished } = require("./flashscore-btts-collector");
 
 const base = {
   id: "abc123", source: "Flashscore", home: "Home FC", away: "Away FC",
@@ -15,10 +15,10 @@ const candidates = getBttsCandidates(base);
 assert.deepEqual(candidates.map(x => x.tierKey), ["10_sot5_shots8", "10_sot5_shots10"]);
 assert.equal(candidates[0].predictedSide, "away");
 assert.equal(getBttsCandidates({ ...base, live_minute: 51 }).length, 0);
-assert.equal(getBttsCandidates({ ...base, stage: "1st Half" }).length, 0);
+assert.equal(getBttsCandidates({ ...base, stage: "1st Half" }).length, 0);\nassert.equal(getBttsAfter70Candidate({ ...base, live_minute: 71 })?.tierKey, "70plus_10_sot5_shots8");\nassert.equal(getBttsAfter70Candidate({ ...base, live_minute: 70 }), null);\nassert.equal(getBttsAfter70Candidate({ ...base, live_minute: 73, stats: [{ name: "Shots on target", home: 3, away: 2 }, { name: "Total shots", home: 6, away: 6 }] })?.tierKey, "70plus_10_sot5_shots12");\nassert.equal(getBttsAfter70Candidate({ ...base, live_minute: 75, home_score: 0, away_score: 1, stats: [{ name: "Shots on target", home: 3, away: 3 }, { name: "Total shots", home: 4, away: 4 }] })?.tierKey, "70plus_01_sot6_shots8");
 assert.equal(getBttsCandidates({ ...base, source: "ESPN" }).length, 0);
 // Period-aware Flashscore payload: first-half values must not be mistaken for full-match totals.
-const periodStats = [
+const noTotalShots = [{ name: "Shots on target", home: 3, away: 2 }, { name: "Shots off target", home: 4, away: 3 }];\nassert.equal(getBttsCandidates({ ...base, stats: noTotalShots }).length, 0, "Total Shots must not be estimated from SOT + off-target");\nassert.equal(getBttsAfter70Candidate({ ...base, live_minute: 75, stats: noTotalShots }), null);\nconst periodStats = [
   { name: "Shots on target", period: "1st Half", home: 8, away: 0 },
   { name: "Total shots", period: "1st Half", home: 12, away: 0 },
   { name: "Shots on target", period: "Match", home: 3, away: 1 },
