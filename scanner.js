@@ -17,6 +17,25 @@
   const SCAN_INTERVAL_MS = 60 * 1000;
 
   const matchesEl = document.getElementById("matches");
+  const matchSearchEl = document.getElementById("live-match-search");
+  let matchSearchTerm = "";
+  function applyLiveMatchSearch() {
+    if (!matchesEl) return;
+    const cards = matchesEl.querySelectorAll(".priority-match-card,.compact-match-card,.no-signal-match-card");
+    cards.forEach(card => {
+      const matches = !matchSearchTerm || String(card.textContent || "").toLocaleLowerCase("sk").includes(matchSearchTerm);
+      card.hidden = !matches;
+    });
+    matchesEl.querySelectorAll(".match-league-other,.match-league-confirmed").forEach(group => {
+      group.hidden = !group.querySelector(".priority-match-card:not([hidden]),.compact-match-card:not([hidden]),.no-signal-match-card:not([hidden])");
+    });
+  }
+  if (matchSearchEl) {
+    matchSearchEl.addEventListener("input", () => {
+      matchSearchTerm = String(matchSearchEl.value || "").trim().toLocaleLowerCase("sk");
+      applyLiveMatchSearch();
+    });
+  }
   const signalEl = document.getElementById("signal");
   const systemStatsEl = document.getElementById("system-stats");
   const matchArchiveEl = document.getElementById("match-archive");
@@ -4229,6 +4248,7 @@
     renderCategory(confirmedItems, "⚡ POTVRDENÉ SIGNÁLY", false);
     renderCategory(pressureItems, "⚠ ZVÝŠENÝ TLAK – BEZ POTVRDENÉHO SIGNÁLU", true);
     renderCategory(noSignalItems, "○ ZÁPASY BEZ AKTUÁLNEHO SIGNÁLU", true, true);
+    applyLiveMatchSearch();
   }
 
   function updateDashboard(current, liveCount, signalArchive, bttsArchive, fresh, complete) {
