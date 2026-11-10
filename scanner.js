@@ -1868,7 +1868,7 @@
     }
     const q=result.reliability;
     addText(panel, "Pokrytie archívnych meraní: základné strelecké dáta " + q.coreCoverage + "% | SOT aj strely mimo " + q.shotCoverage + "% | držanie lopty " + q.possessionCoverage + "% | platné intervaly " + q.intervalCount + ".", "10px");
-    addText(panel, "Index momenta opisuje relatívnu aktivitu, nie pravdepodobnosť gólu. Rohy sú iba doplnkový údaj, ak ich ESPN poskytne. Dangerous Attacks sa nepoužívajú.", "10px");
+    addText(panel, "Index momenta opisuje relatívnu aktivitu, nie pravdepodobnosť gólu. Rohy sú iba doplnkový údaj, ak ich Flashscore poskytne. Dangerous Attacks sa nepoužívajú.", "10px");
     target.appendChild(panel);
   }
 
@@ -4703,6 +4703,7 @@
 
       // Legacy green-signal settlement is disabled during the Flashscore-only transition.
 
+      const providerStatus = current.source_status || {};
       const flashscoreLiveCount = Number(providerStatus.Flashscore?.live_count || 0);
       const feedStateLabel = current.feed_state === "NO_LIVE"
         ? (flashscoreLiveCount > 0
@@ -4717,9 +4718,9 @@
               : allowSignals ? "KOMPLETNÝ" : "NEÚPLNÝ";
       addText(engine, `Stav zberu: ${feedStateLabel}`);
       if (current.feed_state === "NO_LIVE" && flashscoreLiveCount > 0) {
-        addText(engine, `ESPN momentálne nevracia LIVE zápasy, ale Flashscore poskytuje ${flashscoreLiveCount} LIVE zápasov. Sú zobrazené v zozname; dôveryhodnosť štatistík a pravidlá signálov zostávajú oddelené podľa zdroja.`);
+        addText(engine, `Flashscore poskytuje ${flashscoreLiveCount} LIVE zápasov. Sú zobrazené v zozname; dôveryhodnosť štatistík a pravidlá signálov zostávajú počas validácie oddelené.`);
       } else if (current.feed_state === "NO_LIVE") {
-        addText(engine, "ESPN aj Flashscore momentálne nevracajú prebiehajúce zápasy. Zber je kompletný.");
+        addText(engine, "Flashscore momentálne nevracia prebiehajúce zápasy. Zber je kompletný.");
       }
       addText(engine, `Bezpečná archivácia: ${current.archive_safe ? "ÁNO" : "POZASTAVENÁ"}`);
       if (current.feed_guard_warning === true && current.feed_state === "SUSPECTED_DROP") {
@@ -4730,7 +4731,7 @@
       } else if (current.feed_guard_warning === true && current.feed_state === "BASELINE_PENDING") {
         addText(
           engine,
-          "UPOZORNENIE: Historická základňa ESPN sa ešte overuje; nové signály a archivácia sú zatiaľ zablokované."
+          "UPOZORNENIE: Historická základňa Flashscore sa ešte overuje; nové signály a archivácia sú zatiaľ zablokované."
         );
       }
       addText(engine, `Vek dát: ${Math.max(0, Math.round(age / 1000))} sekúnd`);
