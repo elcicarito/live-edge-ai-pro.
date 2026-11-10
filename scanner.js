@@ -2662,7 +2662,11 @@
       ["10_sot5_shots8", "1:0 · SOT ≥5 · strely ≥8"],
       ["10_sot5_shots10", "1:0 · SOT ≥5 · strely ≥10"],
       ["10_sot5_shots12", "1:0 · SOT ≥5 · strely ≥12"],
-      ["01_sot6_shots8", "0:1 · SOT ≥6 · strely ≥8"],\n      ["70plus_10_sot5_shots8", "70+ · 1:0 · SOT ≥5 · strely ≥8"],\n      ["70plus_10_sot5_shots10", "70+ · 1:0 · SOT ≥5 · strely ≥10"],\n      ["70plus_10_sot5_shots12", "70+ · 1:0 · SOT ≥5 · strely ≥12"],\n      ["70plus_01_sot6_shots8", "70+ · 0:1 · SOT ≥6 · strely ≥8"]
+      ["01_sot6_shots8", "0:1 · SOT ≥6 · strely ≥8"],
+      ["70plus_10_sot5_shots8", "70+ · 1:0 · SOT ≥5 · strely ≥8"],
+      ["70plus_10_sot5_shots10", "70+ · 1:0 · SOT ≥5 · strely ≥10"],
+      ["70plus_10_sot5_shots12", "70+ · 1:0 · SOT ≥5 · strely ≥12"],
+      ["70plus_01_sot6_shots8", "70+ · 0:1 · SOT ≥6 · strely ≥8"]
     ];
     const totalWins = signals.filter(x => x.status === "WIN").length;
     const totalLosses = signals.filter(x => x.status === "LOSS").length;
