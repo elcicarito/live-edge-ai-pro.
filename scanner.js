@@ -3814,7 +3814,14 @@
     addQuickStat("STRELY MIMO", quickFind(/shots off target/));
     addQuickStat("ŽK", quickFind(/yellow cards|[zž]lt[eé] karty/));
     addQuickStat("ČK", quickFind(/red cards|[cč]erven[eé] karty/));
-    if (quickStats.childElementCount) card.appendChild(quickStats);
+    if (quickStats.childElementCount) {
+      card.appendChild(quickStats);
+    } else {
+      const unavailable = document.createElement("div");
+      unavailable.textContent = "ŠTATISTIKY ZATIAĽ NIE SÚ DOSTUPNÉ";
+      unavailable.style.cssText = "font-size:9px;font-weight:700;letter-spacing:.25px;color:#8293a8;margin:2px 0 7px;padding:3px 0;";
+      card.appendChild(unavailable);
+    }
 
     const leagueLine = document.createElement("div");
     leagueLine.textContent = `${getCompetitionFlag(match)} ${match.competition || "Neznáma súťaž"}`;
