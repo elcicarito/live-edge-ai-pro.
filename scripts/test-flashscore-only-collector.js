@@ -46,7 +46,7 @@ const server = http.createServer((req, res) => {
           away_score: 1,
           status: "live",
           stage: "2nd Half",
-          available_tabs: ["commentary"],
+          available_tabs: ["commentary", "statistics"],
           has_statistics: false
         }]
       }]
@@ -93,7 +93,8 @@ const server = http.createServer((req, res) => {
   }
   if (req.url.startsWith("/matches/commentary")) {
     res.end(JSON.stringify({
-      comments: [{ minute: "57'", text: "Test commentary" }]
+      comments: [{ minute: "57'", text: "Test commentary" }],
+      available_tabs: req.url.includes("test-match-special") ? ["commentary", "statistics"] : ["commentary"]
     }));
     return;
   }
@@ -158,9 +159,10 @@ function runCollector() {
     assert.equal(current.live_count, 2);
     assert.equal(current.stats_flagged_count, 1);
     assert.equal(current.stats_not_flagged_count, 1);
-    assert.equal(current.stats_requested_count, 1);
+    assert.equal(current.stats_tab_available_count, 2);
+    assert.equal(current.stats_requested_count, 2);
     assert.equal(current.stats_flagged_but_empty_count, 0);
-    assert.equal(current.stats_match_count, 1);
+    assert.equal(current.stats_match_count, 2);
     const standardMatch = current.records.find(record => record.match.id === "test-match-1").match;
     const specialMatch = current.records.find(record => record.match.id === "test-match-special").match;
     assert.equal(standardMatch.live_minute, 55, "standard second-half clock must include the 45-minute first half");
@@ -174,7 +176,8 @@ function runCollector() {
     assert.equal(standardMatch.has_statistics, true);
     assert.equal(standardMatch.stats_available, true);
     assert.equal(specialMatch.has_statistics, false);
-    assert.equal(specialMatch.stats_available, false);
+    assert.equal(specialMatch.stats_available, true, "statistics tab must trigger a fetch even when has_statistics is false");
+    assert.equal(specialMatch.available_tabs.includes("statistics"), true);
     assert.equal(specialMatch.live_minute, 31, "2x20 special-rules match must use its 20-minute half");
     assert.equal(specialMatch.live_clock, "31'", "minute-only special-rules clock must use Flashscore's direct minute");
     assert.equal(specialMatch.minute_source, "Flashscore core DI (minute-only clock)");
@@ -209,7 +212,7 @@ function runCollector() {
     assert.equal(standardTimeline[0].snapshot.has_statistics, true);
     assert.equal(standardTimeline[0].snapshot.stats_available, true);
     assert.equal(specialTimeline[0].snapshot.has_statistics, false);
-    assert.equal(specialTimeline[0].snapshot.stats_available, false);
+    assert.equal(specialTimeline[0].snapshot.stats_available, true);
 
     process.stdout.write("Flashscore collector integration test passed: standard and 2x20 clocks, seconds, separate event/live minute fields, stats, score/stat changes, gzip timeline, permanent retention and index.\n");
   } finally {
