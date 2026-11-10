@@ -343,54 +343,121 @@
       if (snapshotDate !== selectedDate) return false;
       const haystack = [
         entry.home, entry.away, entry.competition, snapshot.live_minute,
-        snapshot.stage, snapshot.home_score, snapshot.away_score
+        snapshot.live_clock, snapshot.stage, snapshot.home_score, snapshot.away_score
       ].join(" ").toLocaleLowerCase("sk");
       return !query || haystack.includes(query);
-    }).sort((a, b) => String(b.snapshot?.collected_at || "").localeCompare(String(a.snapshot?.collected_at || "")));
+    });
+
+    const groups = new Map();
+    for (const entry of rows) {
+      const key = String(entry.match_id || [
+        entry.home || "", entry.away || "", entry.competition || ""
+      ].join("|"));
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(entry);
+    }
+    const matches = [...groups.values()].map(items => items.sort((a, b) =>
+      Date.parse(a.snapshot?.collected_at || 0) - Date.parse(b.snapshot?.collected_at || 0)
+    )).sort((a, b) =>
+      Date.parse(b[b.length - 1]?.snapshot?.collected_at || 0) -
+      Date.parse(a[a.length - 1]?.snapshot?.collected_at || 0)
+    );
 
     flashscoreArchiveResultsEl.innerHTML = "";
-    if (flashscoreArchiveCountEl) flashscoreArchiveCountEl.textContent = String(rows.length);
-    if (!rows.length) {
-      addText(flashscoreArchiveResultsEl, "Pre tento dátum a vyhľadávanie zatiaľ nie sú uložené žiadne snímky.");
+    if (flashscoreArchiveCountEl) flashscoreArchiveCountEl.textContent = String(matches.length);
+    if (!matches.length) {
+      addText(flashscoreArchiveResultsEl, "Pre tento dátum a vyhľadávanie zatiaľ nie sú uložené žiadne zápasy.");
       return;
     }
 
-    const shown = rows.slice(0, 60);
-    for (const entry of shown) {
-      const snapshot = entry.snapshot || {};
-      const card = document.createElement("div");
-      card.style.cssText = "margin:9px 0;padding:11px;border:1px solid #31445c;border-radius:10px;background:#101d2d;color:#fff;";
-      const heading = document.createElement("strong");
-      const minute = snapshot.live_clock ||
-        (snapshot.live_minute === null || snapshot.live_minute === undefined || snapshot.live_minute === ""
-          ? (snapshot.stage || "LIVE")
-          : String(snapshot.live_minute).replace(/'$/, "") + "'");
-      heading.textContent = (entry.home || "Domáci") + " " + (snapshot.home_score ?? "–") +
-        " : " + (snapshot.away_score ?? "–") + " " + (entry.away || "Hostia") + " · " + minute;
-      card.appendChild(heading);
-      const meta = document.createElement("p");
-      meta.style.cssText = "margin:5px 0;color:#9baabe;font-size:12px;";
-      meta.textContent = (entry.competition || "Neznáma súťaž") + " · " +
-        new Date(snapshot.collected_at || "").toLocaleTimeString("sk-SK");
-      card.appendChild(meta);
+    const overview = document.createElement("div");
+    overview.style.cssText = "margin:8px 0 12px;padding:10px 12px;border:1px solid #31445c;border-radius:9px;background:#13243a;color:#d6e1ee;font-size:13px;";
+    overview.textContent = matches.length + (matches.length === 1 ? " zápas" : " zápasov") +
+      " · " + rows.length + (rows.length === 1 ? " uložená snímka" : " uložených snímok") +
+      " · zoradené podľa poslednej zaznamenanej snímky";
+    flashscoreArchiveResultsEl.appendChild(overview);
 
-      const details = document.createElement("details");
+    for (const items of matches) {
+      const first = items[0];
+      const latest = items[items.length - 1];
+      const latestSnapshot = latest.snapshot || {};
+      const card = document.createElement("details");
+      card.style.cssText = "margin:9px 0;padding:0;border:1px solid #31445c;border-radius:11px;background:#101d2d;color:#fff;overflow:hidden;";
       const summary = document.createElement("summary");
-      summary.textContent = "Štatistiky (" + (Array.isArray(snapshot.stats) ? snapshot.stats.length : 0) + ")";
-      details.appendChild(summary);
-      for (const stat of Array.isArray(snapshot.stats) ? snapshot.stats : []) {
-        const line = document.createElement("p");
-        line.style.cssText = "margin:4px 0;font-size:12px;color:#d6e1ee;";
-        line.textContent = (stat.name || "Štatistika") + ": " +
-          (stat.home ?? "–") + " : " + (stat.away ?? "–") +
-          (stat.period ? " · " + stat.period : "");
-        details.appendChild(line);
+      summary.style.cssText = "padding:12px;cursor:pointer;list-style-position:inside;";
+      const heading = document.createElement("div");
+      heading.style.cssText = "display:inline-block;vertical-align:middle;max-width:92%;";
+      const teams = document.createElement("strong");
+      teams.style.cssText = "display:block;font-size:14px;line-height:1.5;";
+      const minute = latestSnapshot.live_clock ||
+        (latestSnapshot.live_minute === null || latestSnapshot.live_minute === undefined || latestSnapshot.live_minute === ""
+          ? (latestSnapshot.stage || "Čas nezistený")
+          : String(latestSnapshot.live_minute).replace(/'$/, "") + "'");
+      teams.textContent = (first.home || "Domáci") + "  " +
+        (latestSnapshot.home_score ?? "–") + " : " + (latestSnapshot.away_score ?? "–") +
+        "  " + (first.away || "Hostia") + "   ·   " + minute;
+      heading.appendChild(teams);
+      const meta = document.createElement("span");
+      meta.style.cssText = "display:block;margin-top:3px;color:#9baabe;font-size:11px;";
+      meta.textContent = (first.competition || "Neznáma súťaž") + " · " +
+        items.length + (items.length === 1 ? " snímka" : " snímok") +
+        " · naposledy " + new Date(latestSnapshot.collected_at || "").toLocaleTimeString("sk-SK");
+      heading.appendChild(meta);
+      summary.appendChild(heading);
+      card.appendChild(summary);
+
+      const history = document.createElement("div");
+      history.style.cssText = "padding:0 10px 10px;";
+      const historyTitle = document.createElement("p");
+      historyTitle.style.cssText = "margin:4px 2px 9px;color:#b9c9dc;font-size:12px;font-weight:600;";
+      historyTitle.textContent = "ČASOVÁ HISTÓRIA · od najstaršej po najnovšiu";
+      history.appendChild(historyTitle);
+
+      for (const entry of items) {
+        const snapshot = entry.snapshot || {};
+        const row = document.createElement("div");
+        row.style.cssText = "margin:6px 0;padding:9px;border:1px solid #263b53;border-radius:8px;background:#0c1827;";
+        const line = document.createElement("div");
+        line.style.cssText = "display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px;font-size:12px;";
+        const time = document.createElement("strong");
+        time.textContent = new Date(snapshot.collected_at || "").toLocaleTimeString("sk-SK");
+        const score = document.createElement("strong");
+        const clock = snapshot.live_clock ||
+          (snapshot.live_minute === null || snapshot.live_minute === undefined || snapshot.live_minute === ""
+            ? (snapshot.stage || "—")
+            : String(snapshot.live_minute).replace(/'$/, "") + "'");
+        score.textContent = (snapshot.home_score ?? "–") + " : " + (snapshot.away_score ?? "–") + "  ·  " + clock;
+        line.appendChild(time);
+        line.appendChild(score);
+        row.appendChild(line);
+
+        const stats = Array.isArray(snapshot.stats) ? snapshot.stats : [];
+        const statDetails = document.createElement("details");
+        statDetails.style.cssText = "margin-top:6px;color:#cbd8e6;";
+        const statSummary = document.createElement("summary");
+        statSummary.style.cssText = "font-size:11px;cursor:pointer;color:#9fb3ca;";
+        statSummary.textContent = "Štatistiky (" + stats.length + ")";
+        statDetails.appendChild(statSummary);
+        if (stats.length) {
+          for (const stat of stats) {
+            const statLine = document.createElement("div");
+            statLine.style.cssText = "padding:4px 0;border-top:1px solid #203248;font-size:11px;";
+            statLine.textContent = (stat.name || "Štatistika") + ": " +
+              (stat.home ?? "–") + " : " + (stat.away ?? "–") +
+              (stat.period ? " · " + stat.period : "");
+            statDetails.appendChild(statLine);
+          }
+        } else {
+          const noStats = document.createElement("p");
+          noStats.style.cssText = "font-size:11px;color:#8295aa;";
+          noStats.textContent = "Pre túto snímku neboli dostupné štatistiky.";
+          statDetails.appendChild(noStats);
+        }
+        row.appendChild(statDetails);
+        history.appendChild(row);
       }
-      card.appendChild(details);
+      card.appendChild(history);
       flashscoreArchiveResultsEl.appendChild(card);
-    }
-    if (rows.length > shown.length) {
-      addText(flashscoreArchiveResultsEl, "Zobrazených " + shown.length + " z " + rows.length + " snímok. Spresni vyhľadávanie.");
     }
   }
 
