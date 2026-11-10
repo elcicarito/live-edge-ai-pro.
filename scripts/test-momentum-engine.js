@@ -104,4 +104,15 @@ r=engine.analyse({stats:stats(4,1,5,2)},[
  make(t0+300000,stats(2,1,3,2))
 ],"2026-11-08T12:10:00Z");
 assert.ok(r.acceleration,"two adjacent valid intervals should enable acceleration");
+// A valid interval with complete counters but no new events is still a real zero-activity measurement.
+r=engine.analyse({stats:stats(1,1,2,2,1,1)},[
+ make(t0,stats(1,1,2,2,1,1))
+],"2026-11-08T12:05:00Z");
+assert.ok(r.recent,"zero-activity interval must be reported, not treated as missing");
+assert.equal(r.recent.minutes,5);
+assert.equal(r.recent.homeRate,0);
+assert.equal(r.recent.awayRate,0);
+assert.equal(r.recent.activityHome,undefined);
+assert.equal(r.recent.activityAway,undefined);
+assert.equal(r.recent.used.length,3);
 console.log("Momentum engine tests passed.");
