@@ -65,6 +65,7 @@ function buildCapturedSignalAfter70Analysis({ signals, outcomes, timelineRecords
     if (!signalMatches.has(id)) signalMatches.set(id, []);
     signalMatches.get(id).push(signal);
   }
+
   const records = [];
   if (Array.isArray(timelineRecords)) records.push(...timelineRecords);
   else {
@@ -78,101 +79,136 @@ function buildCapturedSignalAfter70Analysis({ signals, outcomes, timelineRecords
       }
     }
   }
-  const firstByMatch = new Map();
+
+  const post70ByMatch = new Map();
   for (const record of records) {
     const id = String(record?.match_id || "");
     if (!signalMatches.has(id)) continue;
-    const candidate = classify(record.snapshot);
-    if (!candidate || candidate.minute <= 70) continue;
-    const prior = firstByMatch.get(id);
-    if (!prior || candidate.minute < prior.minute) {
-      firstByMatch.set(id, {
-        matchId:id, homeTeam:record.home || "", awayTeam:record.away || "",
-        competition:record.competition || "", ...candidate,
-        collectedAt:record.snapshot?.collected_at || null
-      });
+    const snapshot = record?.snapshot;
+    const minute = num(snapshot?.live_minute);
+    if (!Number.isInteger(minute) || minute <= 70 ||
+        !/2nd\s*half|second\s*half/i.test(String(snapshot?.stage || ""))) continue;
+
+    const state = post70ByMatch.get(id) || {
+      post70SnapshotCount: 0,
+      evaluablePost70SnapshotCount: 0,
+      firstQualified: null
+    };
+    state.post70SnapshotCount += 1;
+
+    const home = num(snapshot?.home_score), away = num(snapshot?.away_score);
+    const sot = pair(snapshot?.stats, ["shots on target"]);
+    const shots = pair(snapshot?.stats, ["total shots"]);
+    if (home !== null && away !== null && sot && shots) {
+      state.evaluablePost70SnapshotCount += 1;
     }
+
+    const candidate = classify(snapshot);
+    if (candidate && (!state.firstQualified ||
+        candidate.minute < state.firstQualified.minute ||
+        (candidate.minute === state.firstQualified.minute &&
+         String(snapshot?.collected_at || "") < String(state.firstQualified.collectedAt || "")))) {
+      state.firstQualified = {
+        ...candidate,
+        collectedAt: snapshot?.collected_at || null
+      };
+    }
+    post70ByMatch.set(id, state);
   }
-  const entries = [...firstByMatch.values()].map(entry => {
-    const final = outcomes?.matches?.[entry.matchId];
-    const home = num(final?.home_score), away = num(final?.away_score);
-    let status = "PENDING";
-    if (final?.status === "CONFIRMED" && home !== null && away !== null) {
-      status = home > 0 && away > 0 ? "WIN" : "LOSS";
-    }
-    return { ...entry, status, finalScore:home === null || away === null ? null : home + ":" + away };
-  }).sort((a,b) => String(b.collectedAt || "").localeCompare(String(a.collectedAt || "")));
+
+  const entries = [...signalMatches.entries()].map(([id, matchSignals]) => {
+    const signal = matchSignals.slice().sort((a,b) =>
+      Date.parse(a.createdAt || 0) - Date.parse(b.createdAt || 0)
+    )[0];
+    const observed = post70ByMatch.get(id) || {
+      post70SnapshotCount: 0,
+      evaluablePost70SnapshotCount: 0,
+      firstQualified: null
+    };
+    const qualified = observed.firstQualified;
+    const after70Status = qualified ? "QUALIFIED" :
+      observed.evaluablePost70SnapshotCount > 0 ? "NOT_QUALIFIED" :
+      observed.post70SnapshotCount > 0 ? "INSUFFICIENT_DATA" : "NO_POST70_DATA";
+
+    const final = outcomes?.matches?.[id];
+    const finalHome = num(final?.home_score);
+    const finalAway = num(final?.away_score);
+    const finalConfirmed = final?.status === "CONFIRMED" && finalHome !== null && finalAway !== null;
+    const fallbackScore = String(signal?.settledScore || "").match(/^\s*(\d+)\s*[:\-]\s*(\d+)\s*$/);
+    const settledHome = finalConfirmed ? finalHome : fallbackScore ? Number(fallbackScore[1]) : null;
+    const settledAway = finalConfirmed ? finalAway : fallbackScore ? Number(fallbackScore[2]) : null;
+    const status = settledHome !== null && settledAway !== null
+      ? (settledHome > 0 && settledAway > 0 ? "WIN" : "LOSS")
+      : (["WIN","LOSS"].includes(signal?.status) ? signal.status : "PENDING");
+
+    return {
+      matchId: id,
+      homeTeam: signal.home || "",
+      awayTeam: signal.away || "",
+      competition: signal.competition || "",
+      signalStartMinute: Number(signal.startMinute),
+      signalStartScore: signal.startScore || "",
+      signalTier: signal.tier || signal.tierKey || "BTTS",
+      signalSot: num(signal.combinedSot),
+      signalShots: num(signal.combinedShots),
+      signalCreatedAt: signal.createdAt || null,
+      capturedSignalCountForMatch: matchSignals.length,
+      after70Status,
+      post70SnapshotCount: observed.post70SnapshotCount,
+      evaluablePost70SnapshotCount: observed.evaluablePost70SnapshotCount,
+      post70Minute: qualified?.minute ?? null,
+      post70Score: qualified ? qualified.home + ":" + qualified.away : null,
+      post70Tier: qualified?.tier || null,
+      post70Sot: qualified?.combinedSot ?? null,
+      post70Shots: qualified?.combinedShots ?? null,
+      post70CollectedAt: qualified?.collectedAt || null,
+      status,
+      finalScore: settledHome !== null && settledAway !== null ? settledHome + ":" + settledAway : null
+    };
+  }).sort((a,b) => String(b.signalCreatedAt || "").localeCompare(String(a.signalCreatedAt || "")));
+
   const wins = entries.filter(x => x.status === "WIN").length;
   const losses = entries.filter(x => x.status === "LOSS").length;
   const pending = entries.filter(x => x.status === "PENDING").length;
+  const qualified = entries.filter(x => x.after70Status === "QUALIFIED");
+  const qualifiedWins = qualified.filter(x => x.status === "WIN").length;
+  const qualifiedLosses = qualified.filter(x => x.status === "LOSS").length;
+  const qualifiedPending = qualified.filter(x => x.status === "PENDING").length;
   return {
-    method:"Iba skutočne zachytené Flashscore BTTS LIVE signály z 46.–50. minúty. Z ich zápasov sa vyberie prvá uložená snímka po 70. minúte, ktorá splní existujúce BTTS skóre a strelecké prahy. Jeden záznam na zápas; nejde o nový LIVE signál.",
+    method:"Iba skutočne zachytené Flashscore BTTS signály z 46.–50. minúty. Každý zachytený zápas zostáva vo vzorke; samostatne sa označí, či po 70. minúte splnil existujúce BTTS skóre a strelecké prahy, a následne sa vyhodnotí konečné BTTS.",
     source:"Flashscore BTTS signal archive + permanent Flashscore timeline + confirmed outcomes",
     generated_at:now,
     captured_signal_count:signalMatches.size,
-    qualifying_match_count:entries.length,
+    qualifying_match_count:qualified.length,
+    not_qualifying_match_count:entries.filter(x => x.after70Status === "NOT_QUALIFIED").length,
+    insufficient_data_match_count:entries.filter(x => x.after70Status === "INSUFFICIENT_DATA").length,
+    no_post70_data_match_count:entries.filter(x => x.after70Status === "NO_POST70_DATA").length,
     sample:entries.length, wins, losses, pending, settled:wins+losses,
     win_rate:wins+losses ? wins/(wins+losses) : null,
+    qualified_sample:qualified.length,
+    qualified_wins:qualifiedWins,
+    qualified_losses:qualifiedLosses,
+    qualified_pending:qualifiedPending,
+    qualified_settled:qualifiedWins+qualifiedLosses,
+    qualified_win_rate:qualifiedWins+qualifiedLosses ? qualifiedWins/(qualifiedWins+qualifiedLosses) : null,
     odds_available:false, roi_available:false,
-    note:"Úspech znamená, že do konečného výsledku skórovali oba tímy. Zápasy bez splnenej podmienky po 70. minúte sa nezapočítavajú do tejto vzorky.",
+    note:"WIN/LOSS sa určuje podľa konečného BTTS (oba tímy skórovali). Zápasy bez splnených podmienok po 70. minúte zostávajú v celkovej vzorke ako NOT_QUALIFIED; chýbajúce alebo neúplné snímky sa označujú osobitne.",
     entries
   };
 }
-
 function buildEvaluation({ index, outcomes, bttsArchive, timelineRecords = null, now = new Date().toISOString() }) {
   if (index?.source !== "Flashscore" || !Array.isArray(index.weeks)) throw new Error("Invalid Flashscore timeline index.");
-  const firstByMatch = new Map();
-  for (const week of index.weeks) {
-    const file = path.join(DATA, path.basename(week.file || ""));
-    if (!fs.existsSync(file)) continue;
-    const content = zlib.gunzipSync(fs.readFileSync(file), { finishFlush: zlib.constants.Z_SYNC_FLUSH }).toString("utf8");
-    for (const line of content.split("\n")) {
-      if (!line.trim()) continue;
-      let record;
-      try { record = JSON.parse(line); } catch { continue; }
-      const id = String(record.match_id || "");
-      if (!id || firstByMatch.has(id)) continue;
-      const candidate = classify(record.snapshot);
-      if (!candidate) continue;
-      const final = outcomes?.matches?.[id];
-      const finalHome = num(final?.home_score);
-      const finalAway = num(final?.away_score);
-      let status = "PENDING";
-      if (final?.status === "CONFIRMED" && finalHome !== null && finalAway !== null) {
-        const finalPredicted = candidate.predictedSide === "home" ? finalHome : finalAway;
-        const startPredicted = candidate.predictedSide === "home" ? candidate.home : candidate.away;
-        status = finalPredicted > startPredicted ? "WIN" : "LOSS";
-      }
-      firstByMatch.set(id, {
-        matchId:id, homeTeam:record.home || "", awayTeam:record.away || "",
-        competition:record.competition || "", createdAt:record.snapshot.collected_at || null,
-        ...candidate, status, finalScore: finalHome === null || finalAway === null ? null : finalHome + ":" + finalAway
-      });
-    }
-  }
-  const entries = [...firstByMatch.values()].sort((a,b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-  const keys = ["10_sot5_shots8","10_sot5_shots10","10_sot5_shots12","01_sot6_shots8"];
-  const groups = {};
-  for (const key of keys) {
-    const rows = entries.filter(row => row.tierKey === key);
-    const wins = rows.filter(row => row.status === "WIN").length;
-    const losses = rows.filter(row => row.status === "LOSS").length;
-    groups[key] = { sample:rows.length, wins, losses, pending:rows.filter(row => row.status === "PENDING").length, settled:wins+losses, win_rate:wins+losses ? wins/(wins+losses) : null };
-  }
-  const wins = entries.filter(row => row.status === "WIN").length;
-  const losses = entries.filter(row => row.status === "LOSS").length;
-  const pending = entries.filter(row => row.status === "PENDING").length;
-  const output = bttsArchive && bttsArchive.source === "Flashscore" ? bttsArchive : { schema_version:1, source:"Flashscore", signals:[] };
-  output.after70_analysis = {
-    method:"Retrospective analysis of the first archived Flashscore snapshot after minute 70 that meets the existing BTTS score and shot thresholds. One observation per match; no additional live signal is created.",
-    source:"Flashscore permanent timeline + confirmed Flashscore final outcomes",
-    generated_at:now,
-    sample:entries.length, wins, losses, pending, settled:wins+losses,
-    win_rate:wins+losses ? wins/(wins+losses) : null,
-    odds_available:false, roi_available:false,
-    groups, entries
-  };
-  output.captured_signals_after70_analysis = buildCapturedSignalAfter70Analysis({ signals:output.signals, outcomes, timelineRecords, index, now });
+  const output = bttsArchive && bttsArchive.source === "Flashscore"
+    ? bttsArchive
+    : { schema_version:1, source:"Flashscore", signals:[] };
+
+  // Odstráni starú retrospektívu, ktorá nezávisle vyhľadávala všetky zápasy po 70. minúte.
+  delete output.after70_analysis;
+
+  // Jediná retrospektíva: iba reálne zachytené BTTS signály z 46.–50. minúty.
+  output.captured_signals_after70_analysis = buildCapturedSignalAfter70Analysis({
+    signals:output.signals, outcomes, timelineRecords, index, now
+  });
   return output;
 }
 function main() {
@@ -182,10 +218,14 @@ function main() {
     bttsArchive:readJson(BTTS_PATH)
   });
   writeJson(BTTS_PATH, result);
-  console.log("BTTS AFTER-70 ARCHIVE EVALUATION:", JSON.stringify({
-    sample:result.after70_analysis.sample, wins:result.after70_analysis.wins,
-    losses:result.after70_analysis.losses, pending:result.after70_analysis.pending,
-    generated_at:result.after70_analysis.generated_at
+  console.log("BTTS CAPTURED-SIGNAL RETROSPECTIVE:", JSON.stringify({
+    captured:result.captured_signals_after70_analysis.captured_signal_count,
+    qualifiedAfter70:result.captured_signals_after70_analysis.qualifying_match_count,
+    wins:result.captured_signals_after70_analysis.wins,
+    losses:result.captured_signals_after70_analysis.losses,
+    pending:result.captured_signals_after70_analysis.pending,
+    generated_at:result.captured_signals_after70_analysis.generated_at
+  }));
   }));
 }
 if (require.main === module) main();
