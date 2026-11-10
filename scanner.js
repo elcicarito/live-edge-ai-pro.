@@ -447,7 +447,7 @@
     }
     const weeks = index.weeks
       .filter(item => item && typeof item.file === "string" &&
-        /^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(item.file))
+        /^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(item.file))
       .sort((a, b) => String(b.week || "").localeCompare(String(a.week || "")))
       .slice(0, 2);
     const cutoff = now - 86400000;
@@ -455,7 +455,7 @@
     const rows = [];
     for (const week of weeks) {
       const decoded = await fetchFlashscoreTimeline(week.file);
-      for (const line of decoded.split(/\\r?\\n/)) {
+      for (const line of decoded.split(/\r?\n/)) {
         if (!line.trim()) continue;
         let entry;
         try { entry = JSON.parse(line); } catch { continue; }
