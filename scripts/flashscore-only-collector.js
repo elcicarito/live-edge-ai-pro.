@@ -163,7 +163,11 @@ function makeMatch(raw, competition, stats, statsError, commentary, commentaryEr
     last_event_minute: commentary.lastEventMinute,
     last_event_minute_source: commentary.lastEventMinute ? "Flashscore commentary MB" : null,
     commentary_count: commentary.count,
-    available_tabs: commentary.availableTabs,
+    available_tabs: [...new Set([
+      ...(Array.isArray(raw.available_tabs) ? raw.available_tabs : []),
+      ...(Array.isArray(detail?.available_tabs) ? detail.available_tabs : []),
+      ...(Array.isArray(commentary.availableTabs) ? commentary.availableTabs : [])
+    ].map(value => String(value).toLowerCase()))],
     commentary_error: commentaryError || null,
     start_time: raw.start_time || null,
     collected_at: now,
