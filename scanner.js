@@ -3384,20 +3384,48 @@
       capturedGenerated.style.cssText = "font-size:10px;color:#94a3b8;margin:0 0 8px;";
       target.appendChild(capturedGenerated);
     }
-    if (capturedLate?.entries?.length) {
-      capturedLate.entries.slice(0,30).forEach(item => {
+    const capturedEntries = Array.isArray(capturedLate?.entries) ? capturedLate.entries : [];
+    const capturedDetails = document.createElement("details");
+    capturedDetails.style.cssText = "margin:8px 0 14px;border:1px solid #24516a;border-radius:10px;background:#0d1b2a;overflow:hidden;";
+    const capturedDetailsSummary = document.createElement("summary");
+    capturedDetailsSummary.textContent = "ZOBRAZIŤ ZÁPASY, KTORÉ SPLNILI PODMIENKY PO 70. MINÚTE (" + capturedEntries.length + ")";
+    capturedDetailsSummary.style.cssText = "cursor:pointer;list-style:none;padding:12px;font-size:11px;font-weight:900;color:#a5f3fc;";
+    capturedDetails.appendChild(capturedDetailsSummary);
+    if (!capturedEntries.length) {
+      const empty = document.createElement("div");
+      empty.textContent = "Zatiaľ nie je uložený žiadny zápas, ktorý by po 70. minúte splnil tieto podmienky.";
+      empty.style.cssText = "padding:0 12px 12px;font-size:11px;color:#94a3b8;";
+      capturedDetails.appendChild(empty);
+    } else {
+      capturedEntries.forEach(item => {
         const row = document.createElement("div");
-        row.style.cssText = "margin:6px 0;padding:8px 10px;border:1px solid #24516a;border-radius:8px;background:#101b2b;";
-        const status = item.status === "WIN" ? "WIN" : item.status === "LOSS" ? "LOSS" : "ČAKÁ";
+        row.style.cssText = "margin:0 8px 8px;padding:10px;border:1px solid #24516a;border-radius:8px;background:#101b2b;";
+        const status = item.status === "WIN" ? "WIN" : item.status === "LOSS" ? "LOSS" : "ČAKÁ NA VÝSLEDOK";
+        const statusColor = item.status === "WIN" ? "#4ade80" : item.status === "LOSS" ? "#f87171" : "#fbbf24";
         const title = document.createElement("div");
         title.textContent = (item.homeTeam || "?") + " – " + (item.awayTeam || "?") + " · " + item.minute + ". min · skóre " + item.home + ":" + item.away;
-        title.style.cssText = "font-weight:800;color:#dbeafe;font-size:11px;";
+        title.style.cssText = "font-weight:800;color:#dbeafe;font-size:12px;line-height:1.45;";
+        const league = document.createElement("div");
+        league.textContent = item.competition || "Súťaž neuvedená";
+        league.style.cssText = "font-size:10px;color:#94a3b8;margin-top:3px;";
+        const stats = document.createElement("div");
+        stats.textContent = "SOT spolu: " + (item.combinedSot ?? "—") + " · strely spolu: " + (item.combinedShots ?? "—");
+        stats.style.cssText = "font-size:10px;color:#cbd5e1;margin-top:5px;";
         const detail = document.createElement("div");
-        detail.textContent = item.tier + " · " + status + (item.finalScore ? " · konečný stav " + item.finalScore : "");
-        detail.style.cssText = "font-size:10px;color:#a5f3fc;margin-top:3px;";
-        row.append(title,detail); target.appendChild(row);
+        detail.textContent = item.tier + " · ";
+        detail.style.cssText = "font-size:10px;color:#a5f3fc;margin-top:4px;";
+        const result = document.createElement("span");
+        result.textContent = status + (item.finalScore ? " · konečný stav " + item.finalScore : "");
+        result.style.cssText = "font-weight:900;color:" + statusColor + ";";
+        detail.appendChild(result);
+        const stamp = document.createElement("div");
+        stamp.textContent = item.collectedAt ? "Snímka uložená: " + new Date(item.collectedAt).toLocaleString("sk-SK") : "Čas snímky nie je dostupný";
+        stamp.style.cssText = "font-size:9px;color:#8293a8;margin-top:4px;";
+        row.append(title, league, stats, detail, stamp);
+        capturedDetails.appendChild(row);
       });
     }
+    target.appendChild(capturedDetails);
     const recent = signals.sort((a,b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)).slice(0,150);
     addText(target, "JEDNOTLIVÉ BTTS SIGNÁLY", "15px");
     if (!recent.length) {
