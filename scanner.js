@@ -3563,7 +3563,7 @@
     });
     const capturedLate = data?.captured_signals_after70_analysis;
     const capturedTitle = document.createElement("div");
-    capturedTitle.textContent = "RETROSPEKTÍVA BTTS · IBA ZACHYTENÉ SIGNÁLY 46.–50. MINÚTA";
+    capturedTitle.textContent = "VYHODNOTENIE ZACHYTENÝCH BTTS SIGNÁLOV PO 70. MINÚTE";
     capturedTitle.style.cssText = "font-size:14px;font-weight:900;color:#67e8f9;margin:18px 0 7px;";
     target.appendChild(capturedTitle);
     const capturedSummary = document.createElement("div");
