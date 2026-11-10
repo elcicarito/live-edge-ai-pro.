@@ -2745,6 +2745,16 @@ jobs:
         run: |
           node scripts/flashscore-only-collector.js
 
+      - name: Normalize Flashscore into canonical primary-source candidate
+        continue-on-error: true
+        run: |
+          if [ -s data/flashscore-live-current.json ]; then
+            node scripts/flashscore-primary-adapter.js
+          else
+            echo "Flashscore current snapshot missing; primary candidate not generated."
+            exit 1
+          fi
+
       - name: Build LIVE prediction training dataset
         run: |
           node scripts/build-live-prediction-dataset.js
