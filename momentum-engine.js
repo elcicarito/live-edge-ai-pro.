@@ -1,5 +1,5 @@
 // Independent descriptive LIVE momentum engine.
-// Uses ESPN counters only; dangerous attacks are deliberately not used.
+// Uses Flashscore match statistics only; dangerous attacks are deliberately not used.
 // It does not create betting signals or probabilities.
 (function(root){
   "use strict";

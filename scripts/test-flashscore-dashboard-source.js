@@ -6,20 +6,13 @@ const path = require("node:path");
 
 const scanner = fs.readFileSync(path.join(__dirname, "..", "scanner.js"), "utf8");
 
-assert.match(
-  scanner,
-  /const CURRENT_URL = DATA_BASE_URL \+ "flashscore-primary-current\.json";/,
-  "Main LIVE dashboard must read the Flashscore-only primary candidate."
-);
-assert.match(
-  scanner,
-  /contents\/data\/flashscore-primary-current\.json\?ref=live-data-v2/,
-  "GitHub API fallback must point to the same Flashscore primary file."
-);
-assert.match(
-  scanner,
-  /const HISTORY_URL = DATA_BASE_URL \+ "live-history\.json";/,
-  "Historical history remains on the legacy store during the staged migration."
-);
+assert.match(scanner, /const CURRENT_URL = DATA_BASE_URL \+ "flashscore-primary-current\.json";/);
+assert.match(scanner, /contents\/data\/flashscore-primary-current\.json\?ref=live-data-v2/);
+assert.match(scanner, /async function loadFlashscoreRecentHistory/);
+assert.match(scanner, /flashscore-timeline-index\.json/);
+assert.ok(scanner.includes("function historyRecords(historyData, id)"));
+assert.ok(scanner.includes("matchId(row.match) === id"));
+assert.match(scanner, /loadFlashscoreRecentHistory\(\)\.catch/);
+assert.doesNotMatch(scanner, /const HISTORY_URL = DATA_BASE_URL \+ "live-history\.json"|LIVE MOMENTUM · ESPN|providerStatus\.ESPN/);
 
-console.log("Flashscore dashboard primary-source contract tests passed.");
+console.log("Flashscore dashboard primary-source and archive-history contract tests passed.");

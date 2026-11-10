@@ -6,7 +6,6 @@
   const DATA_BASE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/";
   // Main LIVE display now reads the Flashscore-only canonical candidate. The legacy combined feed remains available for rollback during the migration.
   const CURRENT_URL = DATA_BASE_URL + "flashscore-primary-current.json";
-  const HISTORY_URL = DATA_BASE_URL + "live-history.json";
   const MATCH_ARCHIVE_URL = DATA_BASE_URL + "live-archive.json";
   const BTTS_ARCHIVE_URL = DATA_BASE_URL + "flashscore-btts-signal-archive.json";
   const MATCH_HISTORY_URL = DATA_BASE_URL + "live-match-history.jsonl.gz";
@@ -261,6 +260,7 @@
   let flashscoreArchiveRows = [];
   let flashscoreArchiveIndex = null;
   let flashscoreArchiveLoadedWeek = "";
+  let flashscoreRecentHistoryCache = { loadedAt: 0, rows: [] };
 
   async function loadFlashscoreLiveShadow() {
     if (!flashscoreLiveShadowStatusEl || !flashscoreLiveShadowListEl) return;
@@ -332,6 +332,34 @@
     const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
     return new TextDecoder().decode(await new Response(stream).arrayBuffer());
   }
+ 
+  async function loadFlashscoreRecentHistory() {
+    const now = Date.now();
+    if (flashscoreRecentHistoryCache.rows.length && now - flashscoreRecentHistoryCache.loadedAt < 90000) return flashscoreRecentHistoryCache.rows;
+    const index = await getCachedJSON(DATA_BASE_URL + "flashscore-timeline-index.json", 60000);
+    if (!index || index.source !== "Flashscore" || !Array.isArray(index.weeks)) throw new Error("Neplatný Flashscore timeline index.");
+    const weeks = index.weeks.filter(x => x && typeof x.file === "string" && /^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(x.file)).sort((a,b) => String(b.week || "").localeCompare(String(a.week || ""))).slice(0,2);
+    const cutoff = now - 86400000, seen = new Set(), rows = [];
+    for (const week of weeks) {
+      const decoded = await fetchFlashscoreTimeline(week.file);
+      for (const line of decoded.split(/\r?\n/)) {
+        if (!line.trim()) continue;
+        let entry;
+        try { entry = JSON.parse(line); } catch { continue; }
+        const snap = entry.snapshot || {}, time = Date.parse(snap.collected_at || ""), id = String(entry.match_id || "");
+        if (!id || !Number.isFinite(time) || time < cutoff || time > now + 60000) continue;
+        const key = id + "|" + time;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const stats = (Array.isArray(snap.stats) ? snap.stats : []).map(x => ({...x, label:x.label || x.name || "", home:x.home_numeric ?? x.home, away:x.away_numeric ?? x.away}));
+        rows.push({time, match:{id, source:"Flashscore", status:"live", status_text:String(snap.stage || "LIVE"), stage:snap.stage || null, live_minute:snap.live_minute ?? null, live_clock:snap.live_clock || null, home_score:snap.home_score ?? null, away_score:snap.away_score ?? null, stats}});
+      }
+    }
+    rows.sort((a,b)=>a.time-b.time);
+    flashscoreRecentHistoryCache = {loadedAt:now, rows};
+    return rows;
+  }
+
 
   function renderFlashscoreArchive() {
     if (!flashscoreArchiveResultsEl) return;
@@ -861,7 +889,7 @@
     }
 
     if (!raw) return "?";
-    // ESPN's minute is advanced from the collection timestamp; Flashscore supplies its own stage clock.
+    // Flashscore supplies its own stage clock; its minute is never advanced a second time.
     if (raw.startsWith("~")) return raw;
 
     const base = parseInt(raw, 10);
@@ -911,7 +939,7 @@
     const measures = [
       { key: "possession", weight: 0.10 },
       { key: "shots on target", weight: 0.40 },
-      { key: "dangerous attacks", weight: 0.50 }
+      { key: "shots off target", weight: 0.50 }
     ];
 
     let home = 0;
@@ -1094,81 +1122,19 @@
 
   function getCollectorHealth(historyData, now = Date.now()) {
     if (!Array.isArray(historyData)) return null;
-
-    const windowStart = now - 24 * 60 * 60 * 1000;
-    const batches = historyData
-      .map(batch => ({
-        batch,
-        time: Date.parse(batch.collected_at || "")
-      }))
-      .filter(item =>
-        Number.isFinite(item.time) &&
-        item.time >= windowStart &&
-        item.time <= now
-      )
-      .sort((a, b) => a.time - b.time);
-
-    if (!batches.length) return null;
-
-    const complete = batches.filter(item =>
-      item.batch.collection_complete === true &&
-      item.batch.data_status === "complete"
-    ).length;
-
-    const errors = batches.reduce((sum, item) =>
-      sum + (Array.isArray(item.batch.errors) ? item.batch.errors.length : 0), 0
-    );
-
-    const gaps = [];
-    for (let i = 1; i < batches.length; i++) {
-      const gap = (batches[i].time - batches[i - 1].time) / 60000;
-      if (Number.isFinite(gap) && gap > 0) gaps.push(gap);
-    }
-
-    return {
-      total: batches.length,
-      complete,
-      partial: batches.length - complete,
-      successRate: Math.round(complete / batches.length * 100),
-      errors,
-      averageGap: gaps.length
-        ? gaps.reduce((sum, value) => sum + value, 0) / gaps.length
-        : null,
-      maxGap: gaps.length ? Math.max(...gaps) : null
-    };
+    const cutoff = now - 86400000;
+    const recent = historyData.filter(row => Number.isFinite(Number(row.time)) && Number(row.time) >= cutoff && Number(row.time) <= now);
+    const times = [...new Set(recent.map(row => Number(row.time)))].sort((x, y) => x - y);
+    if (!times.length) return null;
+    const gaps = times.slice(1).map((time, i) => (time - times[i]) / 60000).filter(gap => gap > 0);
+    const withStats = recent.filter(row => Array.isArray(row.match?.stats) && row.match.stats.length > 0).length;
+    return { total: times.length, complete: withStats, partial: Math.max(0, recent.length - withStats), successRate: Math.round(withStats / Math.max(1, recent.length) * 100), errors: 0, averageGap: gaps.length ? gaps.reduce((x, y) => x + y, 0) / gaps.length : null, maxGap: gaps.length ? Math.max(...gaps) : null };
   }
 
   // Súhrnná diagnostika pravidelnosti zberača; nemení signály.
-    function historyRecords(historyData, id) {
-    const snapshots = [];
-
-    if (!Array.isArray(historyData) || !id) return snapshots;
-
-    historyData.forEach(batch => {
-      const validCollection =
-        batch.collection_complete === true ||
-        batch.data_status === "complete";
-
-      if (!validCollection) return;
-      if (!Array.isArray(batch.records)) return;
-
-      batch.records.forEach(record => {
-        const match = record.match;
-
-        if (!match || matchId(match) !== id) return;
-        if (!isLive(match)) return;
-
-        const time = Date.parse(
-          record.collected_at || batch.collected_at || ""
-        );
-
-        if (!Number.isFinite(time)) return;
-
-        snapshots.push({ time, match });
-      });
-    });
-
-    return snapshots.sort((a, b) => a.time - b.time);
+  function historyRecords(historyData, id) {
+    if (!Array.isArray(historyData) || !id) return [];
+    return historyData.filter(row => row?.match && matchId(row.match) === id && Number.isFinite(Number(row.time)) && isLive(row.match)).map(row => ({ time: Number(row.time), match: row.match })).sort((x, y) => x.time - y.time);
   }
 
   // Historická kontinuita dát pre konkrétny zápas.
@@ -1201,7 +1167,7 @@
     unique.forEach(item => {
       const stats = item.match?.stats || [];
       const hasShots = !!statValue(stats, "shots on target");
-      const hasAttacks = !!statValue(stats, "dangerous attacks");
+      const hasAttacks = !!statValue(stats, "shots off target");
       const hasPossession = !!statValue(stats, "possession");
 
       if (hasShots && hasAttacks) momentumReady++;
@@ -1260,7 +1226,7 @@
     const currentStats = match.stats || [];
 
     const currentShots = statValue(currentStats, "shots on target");
-    const currentAttacks = statValue(currentStats, "dangerous attacks");
+    const currentAttacks = statValue(currentStats, "shots off target");
 
     if (!currentShots || !currentAttacks) {
       return {
@@ -1331,7 +1297,7 @@
 
     const oldStats = old.match.stats || [];
     const oldShots = statValue(oldStats, "shots on target");
-    const oldAttacks = statValue(oldStats, "dangerous attacks");
+    const oldAttacks = statValue(oldStats, "shots off target");
 
     if (!oldShots || !oldAttacks) {
       return {
@@ -1424,8 +1390,8 @@
 
       const oldShots = statValue(previous.match.stats || [], "shots on target");
       const shots = statValue(current.match.stats || [], "shots on target");
-      const oldAttacks = statValue(previous.match.stats || [], "dangerous attacks");
-      const attacks = statValue(current.match.stats || [], "dangerous attacks");
+      const oldAttacks = statValue(previous.match.stats || [], "shots off target");
+      const attacks = statValue(current.match.stats || [], "shots off target");
       if (!oldShots || !shots || !oldAttacks || !attacks) continue;
 
       if (shots.home < oldShots.home || shots.away < oldShots.away ||
@@ -1498,8 +1464,8 @@
       const stats = current.match.stats || [];
       const oldShots = statValue(oldStats, "shots on target");
       const shots = statValue(stats, "shots on target");
-      const oldAttacks = statValue(oldStats, "dangerous attacks");
-      const attacks = statValue(stats, "dangerous attacks");
+      const oldAttacks = statValue(oldStats, "shots off target");
+      const attacks = statValue(stats, "shots off target");
       if (!oldShots || !shots || !oldAttacks || !attacks) continue;
 
       if (shots.home < oldShots.home || shots.away < oldShots.away ||
@@ -1831,7 +1797,7 @@
     const panel = document.createElement("div");
     panel.style.cssText = "margin:12px 0;padding:12px;background:#0c1929;border:1px solid #344b65;border-radius:10px;";
     const heading = document.createElement("div");
-    heading.textContent = "LIVE MOMENTUM · ESPN";
+    heading.textContent = "LIVE MOMENTUM · FLASHSCORE";
     heading.style.cssText = "font-size:12px;font-weight:900;letter-spacing:.5px;color:#e2e8f0;margin-bottom:8px;";
     panel.appendChild(heading);
     const engine = window.LiveMomentumEngine;
@@ -1902,7 +1868,7 @@
     }
     const q=result.reliability;
     addText(panel, "Pokrytie archívnych meraní: základné strelecké dáta " + q.coreCoverage + "% | SOT aj strely mimo " + q.shotCoverage + "% | držanie lopty " + q.possessionCoverage + "% | platné intervaly " + q.intervalCount + ".", "10px");
-    addText(panel, "Index momenta opisuje relatívnu aktivitu, nie pravdepodobnosť gólu. Rohy sú iba doplnkový údaj, ak ich ESPN poskytne. Dangerous Attacks sa nepoužívajú.", "10px");
+    addText(panel, "Index momenta opisuje relatívnu aktivitu, nie pravdepodobnosť gólu. Rohy sú iba doplnkový údaj, ak ich Flashscore poskytne. Dangerous Attacks sa nepoužívajú.", "10px");
     target.appendChild(panel);
   }
 
@@ -2565,7 +2531,7 @@
     });
     renderBreakdown("PODĽA POČIATOČNÉHO SKÓRE", item => {
       const score = String(item.startScore || "").trim();
-      return /^\\d+[:\\-]\\d+$/.test(score) ? score.replace("-", ":") : null;
+      return /^\d+[:\\-]\d+$/.test(score) ? score.replace("-", ":") : null;
     });
     renderBreakdown("PODĽA STRANY", item =>
       item.side === "home" ? "Domáci" : item.side === "away" ? "Hostia" : null
@@ -2762,7 +2728,7 @@
       title.textContent = `${item.home || "?"} ${item.startScore ? "(" + item.startScore + ")" : ""} – ${item.away || "?"}`;
       title.style.cssText = "font-weight:800;margin-bottom:5px;";
       const detail = document.createElement("div");
-      detail.textContent = `${item.source || "ESPN"} | ${item.tier || item.tierKey || "BTTS"} | ${style[3]} | ${item.startMinute ?? "?"}. min | SOT ${item.combinedSot ?? "?"} | strely ${item.combinedShots ?? "?"}${item.settledScore ? " | konečný stav " + item.settledScore : ""}`;
+      detail.textContent = `${item.source || "Flashscore"} | ${item.tier || item.tierKey || "BTTS"} | ${style[3]} | ${item.startMinute ?? "?"}. min | SOT ${item.combinedSot ?? "?"} | strely ${item.combinedShots ?? "?"}${item.settledScore ? " | konečný stav " + item.settledScore : ""}`;
       detail.style.cssText = `font-size:12px;line-height:1.5;color:${style[2]};font-weight:700;`;
       row.append(title, detail);
       target.appendChild(row);
@@ -2778,8 +2744,7 @@
     const btts = Array.isArray(bttsArchive?.signals) ? bttsArchive.signals : [];
     const stats = rows => { const w=rows.filter(x=>x.status==="WIN").length; const l=rows.filter(x=>x.status==="LOSS").length; const open=rows.filter(x=>x.status==="OPEN").length; const u=rows.filter(x=>x.status==="UNRESOLVED").length; const n=w+l; return {w,l,open,u,n,p:n?Math.round(w/n*100)+"%":"—"}; };
     const g=stats(green), b=stats(btts);
-    const sourceOf = item => item.source || item.sourceSnapshot?.source || "ESPN";
-    const bttsEspn = stats(btts.filter(item => sourceOf(item) === "ESPN"));
+    const sourceOf = item => item.source || item.sourceSnapshot?.source || "Flashscore";
     const bttsFlashscore = stats(btts.filter(item => sourceOf(item) === "Flashscore"));
     const times=green.filter(x=>x.status==="WIN"&&Number.isFinite(Number(x.settledMinute))&&Number.isFinite(Number(x.startMinute))).map(x=>Number(x.settledMinute)-Number(x.startMinute)).filter(x=>x>=0&&x<=30);
     const avg=times.length?(times.reduce((a,v)=>a+v,0)/times.length).toFixed(1)+" min":"—";
@@ -2789,7 +2754,6 @@
     add("ZELENÝ · ÚSPEŠNOSŤ",g.p,g.w+" WIN / "+g.l+" LOSS · N="+g.n);
     add("ZELENÝ · PRIEM. ČAS DO GÓLU",avg,"Podľa prvého zachytenia gólu");
     add("BTTS · SPOLU",b.p,b.w+" WIN / "+b.l+" LOSS · N="+b.n);
-    add("BTTS · ESPN",bttsEspn.p,bttsEspn.w+" WIN / "+bttsEspn.l+" LOSS · N="+bttsEspn.n);
     add("BTTS · FLASHSCORE",bttsFlashscore.p,bttsFlashscore.w+" WIN / "+bttsFlashscore.l+" LOSS · N="+bttsFlashscore.n);
     add("CELKOM ULOŽENÉ SIGNÁLY",String(green.length+btts.length),"Zelené "+green.length+" · BTTS "+btts.length);
     const note=document.createElement("p");note.textContent="Otvorené: zelené "+g.open+", BTTS "+b.open+" · Neoverené: zelené "+g.u+", BTTS "+b.u+". WIN rate počíta iba potvrdené WIN a LOSS. Čas do gólu je orientačný podľa prvého zachytenia v LIVE dátach.";note.style.cssText="font-size:10px;line-height:1.5;color:#aebed0;margin:9px 0;";el.appendChild(note);
@@ -3707,7 +3671,7 @@
             homeScore: snapshot.home_score !== null && snapshot.home_score !== undefined && snapshot.home_score !== "" && Number.isFinite(Number(snapshot.home_score)) ? Number(snapshot.home_score) : null,
             awayScore: snapshot.away_score !== null && snapshot.away_score !== undefined && snapshot.away_score !== "" && Number.isFinite(Number(snapshot.away_score)) ? Number(snapshot.away_score) : null,
             sot: readPair(stats, ["shots on target", "shots on goal"]),
-            dangerous: readPair(stats, ["dangerous attacks", "dangerous attack"]),
+            dangerous: readPair(stats, ["shots off target", "dangerous attack"]),
             attacks: readPair(stats, ["attacks", "total attacks"]),
             possession: readPair(stats, ["possession", "ball possession"])
           };
@@ -3890,7 +3854,7 @@
         const finalSot = readPair(rawFinalStats, ["shots on target", "shots on goal"]);
         const finalOff = readPair(rawFinalStats, ["shots off target"]);
         const finalTotal = readPair(rawFinalStats, ["total shots", "shots"]);
-        const finalDangerous = readPair(rawFinalStats, ["dangerous attacks", "dangerous attack"]);
+        const finalDangerous = readPair(rawFinalStats, ["shots off target", "dangerous attack"]);
         const finalAttacks = readPair(rawFinalStats, ["attacks", "total attacks"]);
         if (finalPossession) summaryLine("Držanie lopty (finálne)", finalPossession.home + "% – " + finalPossession.away + "%");
         if (finalTotal) summaryLine("Strely celkom (finálne)", finalTotal.home + " – " + finalTotal.away);
@@ -4138,9 +4102,9 @@
     leagueLine.style.cssText = "font-size:12px;color:#a8b8cc;margin:2px 0 9px;";
     card.appendChild(leagueLine);
     if (match.source === "Flashscore") {
-      addText(card, "ZDROJ: FLASHSCORE · ZELENÝ MODEL LEN ESPN · BTTS MONITORING AKTÍVNY PRI SPLNENÍ PODMIENOK", "10px");
+      addText(card, "ZDROJ: FLASHSCORE · ZELENÝ MODEL VYPNUTÝ · BTTS MONITORING PRI SPLNENÍ PODMIENOK", "10px");
     } else if (match.stats_source === "Flashscore") {
-      addText(card, "ŠTATISTIKY DOPLNENÉ Z FLASHSCORE · MODEL POUŽÍVA PÔVODNÉ ESPN DÁTA", "10px");
+      addText(card, "ŠTATISTIKY Z FLASHSCORE", "10px");
     }
 
     if (noSignal && !staleMode) {
@@ -4190,7 +4154,7 @@
     addQuickStat("STRELY", quickTotal);
     addQuickStat("ROHY", quickFind(/corners|rohy/));
     addQuickStat("DRŽANIE", quickFind(/possession|dr[zž]anie lopty/), "%");
-    addQuickStat("NEB. ÚTOKY", quickFind(/dangerous attacks|nebezpe[cč]n[eé] [uú]toky/));
+    addQuickStat("STRELY MIMO", quickFind(/shots off target/));
     addQuickStat("ŽK", quickFind(/yellow cards|[zž]lt[eé] karty/));
     addQuickStat("ČK", quickFind(/red cards|[cč]erven[eé] karty/));
     if (quickStats.childElementCount) card.appendChild(quickStats);
@@ -4332,7 +4296,7 @@
       );
       addText(
         diagnosticsSection,
-        `Vzorka: ${reliability.count} meraní | Pôvodný model s nebezpečnými útokmi dostupný: ${reliability.momentumCoverage}% | Úplné pôvodné dáta: ${reliability.fullCoverage}%`
+        `Vzorka: ${reliability.count} meraní | SOT + strely mimo dostupné: ${reliability.momentumCoverage}% | Úplné pôvodné dáta: ${reliability.fullCoverage}%`
       );
       addText(
         diagnosticsSection,
@@ -4365,7 +4329,7 @@
           ? "ZELENÝ MODEL Z FLASHSCORE VYPNUTÝ"
           : staleMode ? "SIGNÁLY VYPNUTÉ – ZASTARANÉ DÁTA" : "ZBER DÁT NIE JE KOMPLETNÝ",
         detail: match.source === "Flashscore"
-          ? "Zápas aj štatistiky sa zobrazujú. Samostatný BTTS model je povolený aj pre Flashscore; zelený model zostáva iba na ESPN."
+          ? "Zápas aj štatistiky sa zobrazujú z Flashscore. Zelený model zostáva vypnutý počas validácie; BTTS monitoring je samostatný."
           : staleMode ? "Z tohto záznamu sa nevytvára ani nevyhodnocuje žiadny LIVE signál." : "Nové signály sú momentálne zablokované.",
         background: "#292524",
         border: "#78716c",
@@ -4615,8 +4579,8 @@
     try {
       const [current, historyData, signalArchive, bttsArchive, matchArchive, permanentMatchHistory] = await Promise.all([
         getJSON(CURRENT_URL),
-        getCachedJSON(HISTORY_URL, 5 * 60 * 1000).catch(error => {
-          console.warn("História zberu nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
+        loadFlashscoreRecentHistory().catch(error => {
+          console.warn("Flashscore timeline história nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
           return [];
         }),
         Promise.resolve(null),
@@ -4641,15 +4605,7 @@
       engine.innerHTML = "";
 
       addText(engine, "SMART SIGNAL ENGINE v14", "18px");
-      addText(engine, `Zdroj: ${(current.source_providers || [current.source || "neznámy"]).join(" + ")}`);
-      const providerStatus = current.source_status || {};
-      if (providerStatus.ESPN) {
-        addText(engine, `ESPN: ${providerStatus.ESPN.live_count ?? 0} LIVE | ${providerStatus.ESPN.complete ? "kompletný feed" : "neúplný feed"}`);
-      }
-      if (providerStatus.Flashscore) {
-        const fsStatus = providerStatus.Flashscore;
-        addText(engine, `Flashscore: ${fsStatus.live_count ?? 0} LIVE | navyše ${fsStatus.flashscore_only_count ?? 0} | štatistiky ${fsStatus.stats_available_count ?? 0} | ${fsStatus.complete ? "kompletný" : "čiastočný"}`);
-      }
+      addText(engine, "Zdroj LIVE dát a historických meraní: Flashscore");
       addText(engine, `Dáta: ${current.collected_at || "neznámy čas"}`);
       addText(engine, `Posledná kontrola: ${new Date().toLocaleTimeString("sk-SK")}`);
 
@@ -4745,6 +4701,7 @@
 
       // Legacy green-signal settlement is disabled during the Flashscore-only transition.
 
+      const providerStatus = current.source_status || {};
       const flashscoreLiveCount = Number(providerStatus.Flashscore?.live_count || 0);
       const feedStateLabel = current.feed_state === "NO_LIVE"
         ? (flashscoreLiveCount > 0
@@ -4759,9 +4716,9 @@
               : allowSignals ? "KOMPLETNÝ" : "NEÚPLNÝ";
       addText(engine, `Stav zberu: ${feedStateLabel}`);
       if (current.feed_state === "NO_LIVE" && flashscoreLiveCount > 0) {
-        addText(engine, `ESPN momentálne nevracia LIVE zápasy, ale Flashscore poskytuje ${flashscoreLiveCount} LIVE zápasov. Sú zobrazené v zozname; dôveryhodnosť štatistík a pravidlá signálov zostávajú oddelené podľa zdroja.`);
+        addText(engine, `Flashscore poskytuje ${flashscoreLiveCount} LIVE zápasov. Sú zobrazené v zozname; dôveryhodnosť štatistík a pravidlá signálov zostávajú počas validácie oddelené.`);
       } else if (current.feed_state === "NO_LIVE") {
-        addText(engine, "ESPN aj Flashscore momentálne nevracajú prebiehajúce zápasy. Zber je kompletný.");
+        addText(engine, "Flashscore momentálne nevracia prebiehajúce zápasy. Zber je kompletný.");
       }
       addText(engine, `Bezpečná archivácia: ${current.archive_safe ? "ÁNO" : "POZASTAVENÁ"}`);
       if (current.feed_guard_warning === true && current.feed_state === "SUSPECTED_DROP") {
@@ -4772,7 +4729,7 @@
       } else if (current.feed_guard_warning === true && current.feed_state === "BASELINE_PENDING") {
         addText(
           engine,
-          "UPOZORNENIE: Historická základňa ESPN sa ešte overuje; nové signály a archivácia sú zatiaľ zablokované."
+          "UPOZORNENIE: Historická základňa Flashscore sa ešte overuje; nové signály a archivácia sú zatiaľ zablokované."
         );
       }
       addText(engine, `Vek dát: ${Math.max(0, Math.round(age / 1000))} sekúnd`);
@@ -4789,18 +4746,18 @@
       );
 
       const collectorHealth = getCollectorHealth(historyData);
-      addText(engine, "ZDRAVIE ZBERAČA – POSLEDNÝCH 24 HODÍN", "15px");
+      addText(engine, "ZDRAVIE FLASHSCORE ARCHÍVU – POSLEDNÝCH 24 HODÍN", "15px");
       if (collectorHealth) {
         addText(
           engine,
-          `Zbery: ${collectorHealth.total} | Kompletné: ${collectorHealth.complete} | Neúplné: ${collectorHealth.partial} | Úspešnosť: ${collectorHealth.successRate}%`
+          `Časové zbery: ${collectorHealth.total} | Snímky so štatistikami: ${collectorHealth.complete} | Bez štatistík: ${collectorHealth.partial}`
         );
         addText(
           engine,
-          `Priemerný interval: ${collectorHealth.averageGap === null ? "bez porovnania" : collectorHealth.averageGap.toFixed(1) + " min"} | Najdlhšia medzera: ${collectorHealth.maxGap === null ? "—" : collectorHealth.maxGap.toFixed(1) + " min"} | Chyby API: ${collectorHealth.errors}`
+          `Priemerný interval: ${collectorHealth.averageGap === null ? "bez porovnania" : collectorHealth.averageGap.toFixed(1) + " min"} | Najdlhšia medzera: ${collectorHealth.maxGap === null ? "—" : collectorHealth.maxGap.toFixed(1) + " min"}`
         );
       } else {
-        addText(engine, "Za posledných 24 hodín zatiaľ nie je dostupná história zberov.");
+        addText(engine, "Za posledných 24 hodín zatiaľ nie sú dostupné Flashscore časové snímky.");
       }
 
       addText(engine, `Obnovovanie: každých ${SCAN_INTERVAL_MS / 1000} sekúnd`);
@@ -4821,7 +4778,7 @@
       } else if (current.feed_state === "BASELINE_PENDING") {
         addText(
           engine,
-          "ESPN: Historická základňa sa ešte overuje. Nové signály a archivácia sú zatiaľ pozastavené."
+          "Flashscore: Historická základňa sa ešte overuje. Nové signály a archivácia sú zatiaľ pozastavené."
         );
       }
 
