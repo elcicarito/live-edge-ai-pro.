@@ -2531,6 +2531,11 @@ jobs:
         run: |
           node scripts/flashscore-archive-quality.js
 
+      - name: Export Flashscore-only LIVE training observations
+        continue-on-error: true
+        run: |
+          node scripts/flashscore-live-observations.js
+
       - name: Save collected data
         run: |
           git config user.name "github-actions[bot]"
