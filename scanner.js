@@ -4104,9 +4104,9 @@
     leagueLine.style.cssText = "font-size:12px;color:#a8b8cc;margin:2px 0 9px;";
     card.appendChild(leagueLine);
     if (match.source === "Flashscore") {
-      addText(card, "ZDROJ: FLASHSCORE · ZELENÝ MODEL LEN ESPN · BTTS MONITORING AKTÍVNY PRI SPLNENÍ PODMIENOK", "10px");
+      addText(card, "ZDROJ: FLASHSCORE · ZELENÝ MODEL VYPNUTÝ · BTTS MONITORING PRI SPLNENÍ PODMIENOK", "10px");
     } else if (match.stats_source === "Flashscore") {
-      addText(card, "ŠTATISTIKY DOPLNENÉ Z FLASHSCORE · MODEL POUŽÍVA PÔVODNÉ ESPN DÁTA", "10px");
+      addText(card, "ŠTATISTIKY Z FLASHSCORE", "10px");
     }
 
     if (noSignal && !staleMode) {
@@ -4156,7 +4156,7 @@
     addQuickStat("STRELY", quickTotal);
     addQuickStat("ROHY", quickFind(/corners|rohy/));
     addQuickStat("DRŽANIE", quickFind(/possession|dr[zž]anie lopty/), "%");
-    addQuickStat("NEB. ÚTOKY", quickFind(/shots off target|nebezpe[cč]n[eé] [uú]toky/));
+    addQuickStat("STRELY MIMO", quickFind(/shots off target/));
     addQuickStat("ŽK", quickFind(/yellow cards|[zž]lt[eé] karty/));
     addQuickStat("ČK", quickFind(/red cards|[cč]erven[eé] karty/));
     if (quickStats.childElementCount) card.appendChild(quickStats);
@@ -4298,7 +4298,7 @@
       );
       addText(
         diagnosticsSection,
-        `Vzorka: ${reliability.count} meraní | Pôvodný model s nebezpečnými útokmi dostupný: ${reliability.momentumCoverage}% | Úplné pôvodné dáta: ${reliability.fullCoverage}%`
+        `Vzorka: ${reliability.count} meraní | SOT + strely mimo dostupné: ${reliability.momentumCoverage}% | Úplné pôvodné dáta: ${reliability.fullCoverage}%`
       );
       addText(
         diagnosticsSection,
@@ -4331,7 +4331,7 @@
           ? "ZELENÝ MODEL Z FLASHSCORE VYPNUTÝ"
           : staleMode ? "SIGNÁLY VYPNUTÉ – ZASTARANÉ DÁTA" : "ZBER DÁT NIE JE KOMPLETNÝ",
         detail: match.source === "Flashscore"
-          ? "Zápas aj štatistiky sa zobrazujú. Samostatný BTTS model je povolený aj pre Flashscore; zelený model zostáva iba na ESPN."
+          ? "Zápas aj štatistiky sa zobrazujú z Flashscore. Zelený model zostáva vypnutý počas validácie; BTTS monitoring je samostatný."
           : staleMode ? "Z tohto záznamu sa nevytvára ani nevyhodnocuje žiadny LIVE signál." : "Nové signály sú momentálne zablokované.",
         background: "#292524",
         border: "#78716c",
@@ -4747,7 +4747,7 @@
       );
 
       const collectorHealth = getCollectorHealth(historyData);
-      addText(engine, "ZDRAVIE ZBERAČA – POSLEDNÝCH 24 HODÍN", "15px");
+      addText(engine, "ZDRAVIE FLASHSCORE ARCHÍVU – POSLEDNÝCH 24 HODÍN", "15px");
       if (collectorHealth) {
         addText(
           engine,
