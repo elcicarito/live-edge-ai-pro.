@@ -1003,6 +1003,7 @@
       ? stats.filter(item =>
           item &&
           String(item.label || "").trim() &&
+          (!item.period || String(item.period).trim().toLowerCase() === "match") &&
           item.home !== null &&
           item.home !== undefined &&
           item.away !== null &&
