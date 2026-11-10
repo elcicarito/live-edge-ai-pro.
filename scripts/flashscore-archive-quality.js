@@ -131,8 +131,8 @@ function buildQualityReport(dataDir = DATA) {
   }
 
   const matchesWithStats = matches.filter(match => Array.isArray(match?.last_snapshot?.stats) && match.last_snapshot.stats.length > 0).length;
-  const matchCoverageRows = matches.map(match => {
-    const id = String(match?.id || match?.match_id || match?.event_id || "");
+  const matchCoverageRows = Object.entries(archive.matches).map(([archiveId, match]) => {
+    const id = String(match?.id || match?.match_id || match?.event_id || archiveId);
     const item = perMatchCoverage.get(id) || { snapshots: 0, snapshots_with_stats: 0, timestamps: [], snapshots_with_clock: 0 };
     const times = [...new Set(item.timestamps)].sort((a, b) => a - b);
     const gaps = times.slice(1).map((time, i) => (time - times[i]) / 60000).filter(gap => gap > 0);
