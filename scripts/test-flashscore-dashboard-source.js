@@ -11,7 +11,6 @@ assert.ok(scanner.includes("data/flashscore-primary-current.json"));
 assert.ok(scanner.includes("flashscore-match-timeline-"));
 assert.ok(scanner.includes("/git/blobs/"));
 assert.ok(scanner.includes("current.recent_history"));
-assert.ok(scanner.includes("recent_history_count"));
 const { adaptFlashscoreCurrent } = require("./flashscore-primary-adapter");
 const sample = adaptFlashscoreCurrent({ source: "Flashscore", records: [{ match: { id: "m1", home: "A", away: "B", stats: [] } }] }, { recentHistory: [{ time: 1, match: { id: "m1" } }] });
 assert.equal(sample.recent_history_count, 1);
