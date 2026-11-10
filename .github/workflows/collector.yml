@@ -95,6 +95,10 @@ jobs:
             exit 1
           fi
 
+      - name: Test retrospective BTTS 70+ archive evaluation
+        run: node scripts/test-flashscore-btts-archive-evaluation.js
+      - name: Build retrospective BTTS 70+ archive evaluation
+        run: node scripts/flashscore-btts-archive-evaluation.js
       - name: Normalize Flashscore primary feed
         run: node scripts/flashscore-primary-adapter.js
 
