@@ -2521,7 +2521,7 @@
       }).join(" · ");
       addText(panel, "Nové udalosti: " + used, "10px");
     } else {
-      addText(panel, "Čakám na platné porovnanie dvoch meraní v intervale 3–15 minút. Bez nových striel/rohov sa tlak nevymýšľa.", "11px");
+      addText(panel, "Čakám na platné porovnanie dvoch meraní v intervale 1,5–15 minút. Bez nových striel/rohov sa tlak nevymýšľa.", "11px");
     }
     if (result.acceleration) {
       addText(panel, "Zrýchlenie: domáci " + result.acceleration.homeState + " (" + result.acceleration.homePreviousRate + " → " + result.acceleration.homeLatestRate + "), hostia " + result.acceleration.awayState + " (" + result.acceleration.awayPreviousRate + " → " + result.acceleration.awayLatestRate + ")", "11px");
