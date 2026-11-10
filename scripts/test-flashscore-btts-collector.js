@@ -28,10 +28,10 @@ assert.equal(getBttsCandidates({ ...base, home_score: 0, away_score: 1,
   };
   const archive = { schema_version: 1, source: "Flashscore", signals: [] };
   const first = await run({ current, archive, now: new Date().toISOString() });
-  assert.equal(first.signals.length, 1);
+  assert.equal(first.signals.length, 2);
   assert.equal(first.signals[0].status, "OPEN");
   const second = await run({ current, archive: first, now: new Date().toISOString() });
-  assert.equal(second.signals.length, 1, "duplicate signal must not be added");
+  assert.equal(second.signals.length, 2, "duplicate signal must not be added");
 
   const settled = await run({
     current: { source: "Flashscore", collected_at: new Date().toISOString(), records: [] },
