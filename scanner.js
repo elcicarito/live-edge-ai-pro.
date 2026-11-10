@@ -4755,12 +4755,6 @@
       dataStamp.textContent = `ZBER DÁT · ${collectedDate.toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
       card.appendChild(dataStamp);
     }
-    if (match.source === "Flashscore") {
-      addText(card, "ZDROJ: FLASHSCORE · ZELENÝ MODEL VYPNUTÝ · BTTS MONITORING PRI SPLNENÍ PODMIENOK", "10px");
-    } else if (match.stats_source === "Flashscore") {
-      addText(card, "ŠTATISTIKY Z FLASHSCORE", "10px");
-    }
-
 
     const priority = getMatchPriority(match, historyData, collectedAt, matchAllowsSignals, staleMode, signalArchive, bttsArchive);
 
