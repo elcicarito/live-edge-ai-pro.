@@ -45,6 +45,7 @@ function buildQualityReport(dataDir = DATA) {
   let snapshotsWithScore = 0;
   let snapshotsWithTimestamp = 0;
   let snapshotsWithStage = 0;
+  const matchesWithStatsAnySnapshot = new Set();
   const intervals = [];
   const files = [];
   let malformedRows = 0;
@@ -81,8 +82,10 @@ function buildQualityReport(dataDir = DATA) {
       else missing.clock++;
       if (hasStage) snapshotsWithStage++;
       else missing.stage++;
-      if (hasStats) snapshotsWithStats++;
-      else missing.stats++;
+      if (hasStats) {
+        snapshotsWithStats++;
+        if (id) matchesWithStatsAnySnapshot.add(id);
+      } else missing.stats++;
       if (!id) missing.match_id++;
 
       if (id && hasTimestamp) {
@@ -117,6 +120,7 @@ function buildQualityReport(dataDir = DATA) {
     summary: {
       archived_matches: matches.length,
       matches_with_stats_latest_snapshot: matchesWithStats,
+      matches_with_stats_any_snapshot: matchesWithStatsAnySnapshot.size,
       matches_with_clock_latest_snapshot: matchesWithClock,
       matches_with_score_latest_snapshot: matchesWithScore,
       matches_with_complete_match_metadata: matchesWithMetadata,
@@ -126,6 +130,7 @@ function buildQualityReport(dataDir = DATA) {
     },
     coverage: {
       match_stats_latest_snapshot: ratio(matchesWithStats, matches.length),
+      match_stats_any_snapshot: ratio(matchesWithStatsAnySnapshot.size, matches.length),
       match_clock_latest_snapshot: ratio(matchesWithClock, matches.length),
       match_score_latest_snapshot: ratio(matchesWithScore, matches.length),
       match_metadata: ratio(matchesWithMetadata, matches.length),
