@@ -89,7 +89,27 @@ function labelObservations(observations, outcomes) {
     labels.confirmed++;
     return copy;
   });
-  return { observations: labeled, counts: labels };
+  const confirmedRows = labeled.filter(row => row.label_status === "CONFIRMED_FLASHSCORE_OUTCOME");
+  const byMatch = new Map();
+  for (const row of confirmedRows) {
+    const key = row.match_id || row.observation_id;
+    if (!byMatch.has(key)) byMatch.set(key, { observations: 0, with_stats: 0, final_result: row.labels.final_result });
+    const item = byMatch.get(key);
+    item.observations++;
+    if (row.stats_available && row.stats_count > 0 && Object.keys(row.features || {}).length > 0) item.with_stats++;
+  }
+  const matchQuality = {
+    confirmed_matches: byMatch.size,
+    confirmed_matches_with_stats: [...byMatch.values()].filter(item => item.with_stats > 0).length,
+    confirmed_matches_without_stats: [...byMatch.values()].filter(item => item.with_stats === 0).length,
+    confirmed_matches_with_stats_coverage: byMatch.size ? Number(([...byMatch.values()].filter(item => item.with_stats > 0).length / byMatch.size).toFixed(4)) : 0,
+    final_result_distribution_by_match: [...byMatch.values()].reduce((acc, item) => {
+      acc[item.final_result] = (acc[item.final_result] || 0) + 1;
+      return acc;
+    }, {}),
+    confirmed_observations_with_stats: confirmedRows.filter(row => row.stats_available && row.stats_count > 0 && Object.keys(row.features || {}).length > 0).length
+  };
+  return { observations: labeled, counts: labels, matchQuality };
 }
 function parseJsonlGzip(buffer) {
   const text = zlib.gunzipSync(buffer).toString("utf8").trim();
@@ -109,13 +129,13 @@ function main(dataDir = DATA) {
   const status = readJson(statusPath);
   status.label_updated_at = new Date().toISOString();
   status.label_counts = result.counts;
-  status.training_eligible_observations = result.counts.confirmed;
+  status.training_eligible_observations = result.counts.confirmed;\n  status.label_match_quality = result.matchQuality;
   status.training_ready = false;
   status.training_readiness_note = "Confirmed labels are attached only to explicitly finished Flashscore matches. Dataset quality and minimum sample thresholds must be validated separately before model training.";
   const statusTemporary = statusPath + ".tmp";
   fs.writeFileSync(statusTemporary, JSON.stringify(status, null, 2) + "\n");
   fs.renameSync(statusTemporary, statusPath);
-  console.log("FLASHSCORE CONFIRMED LABELS:", JSON.stringify(result.counts));
+  console.log("FLASHSCORE CONFIRMED LABELS:", JSON.stringify(result.counts));\n  console.log("FLASHSCORE LABEL MATCH QUALITY:", JSON.stringify(result.matchQuality));
 }
 if (require.main === module) {
   try { main(); }
