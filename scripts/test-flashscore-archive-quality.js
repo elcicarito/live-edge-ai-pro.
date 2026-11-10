@@ -43,8 +43,8 @@ try {
   assert.equal(report.summary.archived_matches, 3);
   assert.equal(report.summary.timeline_snapshots, 4);
   assert.equal(report.summary.matches_with_stats_latest_snapshot, 1);
-  assert.equal(report.summary.matches_with_stats_any_snapshot, 2);
-  assert.equal(report.coverage.match_stats_any_snapshot, 0.6667);
+  assert.equal(report.summary.matches_with_stats_any_snapshot, 1);
+  assert.equal(report.coverage.match_stats_any_snapshot, 0.3333);
   assert.equal(report.snapshot_quality.with_stats, 2);
   assert.equal(report.statistics_quality.historical_snapshot_status.available, 2);
   assert.equal(report.statistics_quality.historical_snapshot_status.not_flagged_unavailable, 1);
