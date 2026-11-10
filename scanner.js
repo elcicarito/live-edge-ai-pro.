@@ -4654,6 +4654,29 @@
 
     card.appendChild(header);
 
+    let matchDetailPanel = null;
+    const deepViewButton = document.createElement("button");
+    deepViewButton.type = "button";
+    deepViewButton.className = "match-deep-view-button";
+    deepViewButton.textContent = "＋ DETAILNÉ ŠTATISTIKY · MOMENTUM · ČASOVÁ OS";
+    deepViewButton.setAttribute("aria-expanded", "false");
+    deepViewButton.style.cssText = "display:block;width:100%;margin:2px 0 9px;padding:9px 11px;border:1px solid #3b7180;border-left:3px solid #38bdf8;border-radius:9px;background:linear-gradient(100deg,#123044,#14263a);color:#c8f3ff;text-align:left;font-size:10px;font-weight:900;letter-spacing:.35px;cursor:pointer;";
+    deepViewButton.addEventListener("click", event => {
+      event.stopPropagation();
+      if (noSignal) card.classList.add("no-signal-expanded");
+      if (matchDetailPanel) {
+        matchDetailPanel.open = !matchDetailPanel.open;
+        deepViewButton.setAttribute("aria-expanded", String(matchDetailPanel.open));
+        deepViewButton.textContent = matchDetailPanel.open
+          ? "− SKRYŤ DETAILNÚ ANALÝZU"
+          : "＋ DETAILNÉ ŠTATISTIKY · MOMENTUM · ČASOVÁ OS";
+        if (matchDetailPanel.open) {
+          matchDetailPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }
+    });
+    card.appendChild(deepViewButton);
+
     // Rýchly prehľad LIVE štatistík – iba reálne dostupné hodnoty.
     const quickStats = document.createElement("div");
     quickStats.classList.add("match-quick-stats");
@@ -4728,22 +4751,6 @@
       addText(card, "ŠTATISTIKY Z FLASHSCORE", "10px");
     }
 
-    if (noSignal && !staleMode) {
-      const expandButton = document.createElement("button");
-      expandButton.type = "button";
-      expandButton.textContent = "＋ ZOBRAZIŤ ŠTATISTIKY ZÁPASU";
-      expandButton.setAttribute("aria-expanded", "false");
-      expandButton.style.cssText = "display:block;width:100%;text-align:left;font-size:10px;font-weight:800;color:#8fb6d9;background:#102137;border:1px solid #29435f;border-radius:6px;padding:5px 7px;margin:4px 0;cursor:pointer;";
-      expandButton.addEventListener("click", event => {
-        event.stopPropagation();
-        const expanded = card.classList.toggle("no-signal-expanded");
-        expandButton.textContent = expanded ? "− SKRYŤ ŠTATISTIKY ZÁPASU" : "＋ ZOBRAZIŤ ŠTATISTIKY ZÁPASU";
-        expandButton.setAttribute("aria-expanded", String(expanded));
-      });
-      card.appendChild(expandButton);
-    }
-
-
 
     const priority = getMatchPriority(match, historyData, collectedAt, matchAllowsSignals, staleMode, signalArchive, bttsArchive);
 
@@ -4787,6 +4794,7 @@
     card.appendChild(signalSummary);
 
     const detail = document.createElement("details");
+    matchDetailPanel = detail;
     if (noSignal) detail.classList.add("no-signal-expand-detail");
     detail.style.cssText = "border-top:1px solid #293b52;padding-top:8px;";
     const detailSummary = document.createElement("summary");
