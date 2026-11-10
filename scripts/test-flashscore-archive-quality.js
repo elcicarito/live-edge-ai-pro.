@@ -49,7 +49,7 @@ try {
   assert.equal(report.statistics_quality.historical_snapshot_status.available, 2);
   assert.equal(report.statistics_quality.historical_snapshot_status.not_flagged_unavailable, 1);
   assert.equal(report.statistics_quality.historical_snapshot_status.error, 1);
-  assert.equal(report.statistics_quality.by_stat_name.find(item => item.name === "Shots").snapshots, 1);
+  assert.equal(report.statistics_quality.by_stat_name.find(item => item.name === "Shots").snapshots, 2);
   assert.equal(report.current_live_quality.live_matches, 2);
   assert.equal(report.current_live_quality.statistics.not_flagged_count, 1);
   assert.equal(report.current_live_quality.clock.available, 1);
