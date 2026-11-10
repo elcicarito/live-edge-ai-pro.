@@ -6,10 +6,8 @@
   const DATA_BASE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/";
   // Main LIVE display now reads the Flashscore-only canonical candidate. The legacy combined feed remains available for rollback during the migration.
   const CURRENT_URL = DATA_BASE_URL + "flashscore-primary-current.json";
-  const MATCH_ARCHIVE_URL = DATA_BASE_URL + "live-archive.json";
+  const OUTCOMES_URL = DATA_BASE_URL + "flashscore-confirmed-outcomes.json";
   const BTTS_ARCHIVE_URL = DATA_BASE_URL + "flashscore-btts-signal-archive.json";
-  const MATCH_HISTORY_URL = DATA_BASE_URL + "live-match-history.jsonl.gz";
-  const LEGACY_MATCH_HISTORY_URL = DATA_BASE_URL + "live-match-history.jsonl";
   const SIGNAL_KEY = "live_edge_signals_v6";
 
   const MIN_GAP_MINUTES = 3;
@@ -32,8 +30,6 @@
   const bttsSignalArchiveEl = document.getElementById("btts-signal-archive");
   const bttsSignalArchiveCountEl = document.getElementById("btts-signal-archive-count");
   let matchArchiveData = null;
-  let matchHistoryData = [];
-  let matchHistoryPromise = null;
   let archiveLeagueFilter = "";
   let archiveDateFilter = "";
   let archiveDateDraft = "";
@@ -614,77 +610,6 @@
   let lastRenderedMatchArchive = null;
   let lastRenderedPerformanceGreen = null;
   let lastRenderedPerformanceBtts = null;
-
-  async function loadPermanentMatchHistory() {
-    if (!matchHistoryPromise) {
-      const parseLines = content => {
-        const byMatchId = new Map();
-        const unkeyed = [];
-        for (const line of content.split("\n").filter(Boolean)) {
-          let entry;
-          try { entry = JSON.parse(line); } catch { continue; }
-          const id = entry?.match_id === null || entry?.match_id === undefined
-            ? ""
-            : String(entry.match_id);
-          if (!id) {
-            unkeyed.push(entry);
-            continue;
-          }
-          const previous = byMatchId.get(id);
-          if (!previous) {
-            byMatchId.set(id, entry);
-            continue;
-          }
-          const snapshots = new Map();
-          for (const snapshot of [
-            ...(Array.isArray(previous.snapshots) ? previous.snapshots : []),
-            ...(Array.isArray(entry.snapshots) ? entry.snapshots : [])
-          ]) {
-            const stamp = String(snapshot?.collected_at || "");
-            if (!stamp) continue;
-            const old = snapshots.get(stamp);
-            if (!old || (
-              (!Array.isArray(old.stats) || old.stats.length === 0) &&
-              Array.isArray(snapshot.stats) && snapshot.stats.length > 0
-            )) snapshots.set(stamp, snapshot);
-          }
-          byMatchId.set(id, {
-            ...previous,
-            ...entry,
-            final_match: entry.final_match || previous.final_match,
-            snapshots: [...snapshots.values()].sort((a, b) =>
-              Date.parse(a.collected_at || 0) - Date.parse(b.collected_at || 0)
-            )
-          });
-        }
-        return [...byMatchId.values(), ...unkeyed];
-      };
-
-      matchHistoryPromise = (async () => {
-        try {
-          const response = await fetch(MATCH_HISTORY_URL + "?t=" + Date.now(), {
-            cache: "no-store"
-          });
-          if (!response.ok) throw new Error("HTTP " + response.status + " – gzip archív");
-          if (typeof DecompressionStream !== "function") throw new Error("Prehliadač nepodporuje gzip dekompresiu.");
-          const compressed = await response.arrayBuffer();
-          const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
-          return parseLines(await new Response(stream).text());
-        } catch (gzipError) {
-          // Kompatibilita počas migrácie a pre starší archívny súbor.
-          const legacy = await fetch(LEGACY_MATCH_HISTORY_URL + "?t=" + Date.now(), {
-            cache: "no-store", headers: { "Cache-Control": "no-cache" }
-          });
-          if (!legacy.ok) throw gzipError;
-          return parseLines(await legacy.text());
-        }
-      })().catch(error => {
-        console.warn("Trvalá história zápasov nie je dostupná:", error);
-        return [];
-      });
-    }
-    return matchHistoryPromise;
-  }
 
   function getStatus(match) {
     const value = match?.status;
@@ -3475,36 +3400,32 @@
     matchArchiveData = data;
     matchArchiveEl.innerHTML = "";
 
-    if (!data || typeof data !== "object") {
+    if (!data || data.source !== "Flashscore") {
       if (matchArchiveCountEl) matchArchiveCountEl.textContent = "Nedostupné";
-      addText(matchArchiveEl, "Archív zápasov sa nepodarilo načítať.");
+      addText(matchArchiveEl, "Flashscore archív konečných výsledkov sa zatiaľ nenačítal.");
       return;
     }
 
     const pending = Array.isArray(data.pending_matches) ? data.pending_matches : [];
     const archived = Array.isArray(data.archived_matches) ? data.archived_matches : [];
-    const confirmed = archived
-      .filter(item => item?.status_confirmation === "confirmed_finished")
-      .sort((a, b) =>
-        Date.parse(b.finished_at || b.archived_at || 0) -
-        Date.parse(a.finished_at || a.archived_at || 0)
-      );
-    const olderUnconfirmed = archived.length - confirmed.length;
+    const confirmed = archived.filter(item =>
+      item?.source === "Flashscore" &&
+      item?.status_confirmation === "confirmed_finished" &&
+      item?.final_status === "FINISHED" &&
+      Number.isInteger(Number(item.home_score)) &&
+      Number.isInteger(Number(item.away_score))
+    ).sort((a, b) =>
+      Date.parse(b.final_match?.time || b.archived_at || 0) -
+      Date.parse(a.final_match?.time || a.archived_at || 0)
+    );
 
-    if (matchArchiveCountEl) {
-      matchArchiveCountEl.textContent = String(confirmed.length);
-    }
+    if (matchArchiveCountEl) matchArchiveCountEl.textContent = String(confirmed.length);
+    addText(matchArchiveEl, "Zdroj: Flashscore · Potvrdené výsledky: " + confirmed.length +
+      " · Ešte sa overuje: " + pending.length);
 
-    addText(matchArchiveEl, `Potvrdené výsledky: ${confirmed.length} | Ešte sa overuje: ${pending.length}`);
-
-    const leagues = [...new Set(confirmed
-      .map(item => {
-        const match = item?.final_match || item?.last_snapshot?.match || {};
-        return String(match.competition || match.league || "").trim();
-      })
-      .filter(Boolean))]
-      .sort((a, b) => a.localeCompare(b, "sk"));
-
+    const leagues = [...new Set(confirmed.map(item =>
+      String(item.final_match?.competition || "").trim()
+    ).filter(Boolean))].sort((a, b) => a.localeCompare(b, "sk"));
     if (matchArchiveLeagueEl) {
       const existing = [...matchArchiveLeagueEl.options].map(option => option.value);
       const desired = ["", ...leagues];
@@ -3517,14 +3438,12 @@
           matchArchiveLeagueEl.appendChild(option);
         });
       }
-      if (leagues.includes(archiveLeagueFilter)) {
-        matchArchiveLeagueEl.value = archiveLeagueFilter;
-      } else {
+      if (leagues.includes(archiveLeagueFilter)) matchArchiveLeagueEl.value = archiveLeagueFilter;
+      else {
         archiveLeagueFilter = "";
         matchArchiveLeagueEl.value = "";
       }
     }
-
     if (matchArchiveDateEl && matchArchiveDateEl.value !== archiveDateDraft) {
       matchArchiveDateEl.value = archiveDateDraft;
     }
@@ -3536,9 +3455,7 @@
       try {
         const parts = new Intl.DateTimeFormat("en-GB", {
           timeZone: "Europe/Bratislava",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit"
+          year: "numeric", month: "2-digit", day: "2-digit"
         }).formatToParts(date);
         const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
         return values.year && values.month && values.day
@@ -3550,17 +3467,13 @@
     };
 
     const filtered = confirmed.filter(item => {
-      const match = item?.final_match || item?.last_snapshot?.match || {};
-      const league = String(match.competition || match.league || "").trim();
-      // Filter by the match's scheduled kickoff day, not by the later
-      // moment when the collector happened to archive/confirm the result.
-      const stamp = match.time || item.finished_at || item.archived_at;
-      const matchDate = archiveDateKey(stamp);
+      const match = item.final_match || {};
+      const league = String(match.competition || "").trim();
+      const matchDate = archiveDateKey(match.time || item.archived_at);
       return (!archiveLeagueFilter || league === archiveLeagueFilter) &&
         (!archiveDateFilter || matchDate === archiveDateFilter);
     });
-
-    addText(matchArchiveEl, `Zobrazené výsledky: ${filtered.length} z ${confirmed.length}`);
+    addText(matchArchiveEl, "Zobrazené výsledky: " + filtered.length + " z " + confirmed.length);
 
     function addMatchRow(parent, title, detail, color, competition = "") {
       const row = document.createElement("div");
@@ -3570,7 +3483,7 @@
       heading.style.cssText = "font-size:14px;font-weight:800;line-height:1.45;color:#ffffff;";
       const score = document.createElement("div");
       score.textContent = detail;
-      score.style.cssText = `font-size:17px;font-weight:900;color:${color};margin-top:5px;`;
+      score.style.cssText = "font-size:17px;font-weight:900;color:" + color + ";margin-top:5px;";
       row.append(heading, score);
       if (competition) {
         const league = document.createElement("div");
@@ -3582,363 +3495,69 @@
     }
 
     if (pending.length) {
-      addText(matchArchiveEl, "ZÁPASY, KTORÉ SA EŠTE SLEDUJÚ", "14px");
-      [...pending]
-        .sort((a, b) =>
-          Date.parse(b.last_final_check_at || b.last_missing_at || 0) -
-          Date.parse(a.last_final_check_at || a.last_missing_at || 0)
-        )
-        .forEach(item => {
-          const match = item?.last_snapshot?.match || {};
-          const score = `${match.home_score ?? "?"} : ${match.away_score ?? "?"}`;
-          const status = item.last_checked_status || "čaká na prvé overenie";
-          addMatchRow(
-            matchArchiveEl,
-            `${match.home || "?"} – ${match.away || "?"}`,
-            `${score} | ${status} | kontrol: ${Number(item.final_check_attempts || 0)}`,
-            "#70b7ff",
-            match.competition || match.league || ""
-          );
-        });
+      addText(matchArchiveEl, "ZÁPASY, KTORÉ EŠTE ČAKAJÚ NA POTVRDENIE", "14px");
+      pending.slice().sort((a, b) =>
+        Date.parse(b.last_missing_at || 0) - Date.parse(a.last_missing_at || 0)
+      ).slice(0, 20).forEach(item => {
+        const match = item.last_snapshot?.match || {};
+        addMatchRow(
+          matchArchiveEl,
+          (match.home || "?") + " – " + (match.away || "?"),
+          (match.home_score ?? "?") + " : " + (match.away_score ?? "?") +
+            " · " + (item.last_checked_status || "čaká na konečný výsledok") +
+            " · kontrol: " + Number(item.final_check_attempts || 0),
+          "#70b7ff",
+          match.competition || ""
+        );
+      });
     }
 
     if (filtered.length) {
-      addText(matchArchiveEl, "POTVRDENÉ KONEČNÉ VÝSLEDKY", "14px");
+      addText(matchArchiveEl, "POTVRDENÉ KONEČNÉ VÝSLEDKY Z FLASHSCORE", "14px");
       filtered.forEach(item => {
-        const match = item?.final_match || item?.last_snapshot?.match || {};
+        const match = item.final_match || {};
         addMatchRow(
           matchArchiveEl,
-          `${match.home || "?"} – ${match.away || "?"}`,
-          `${item.final_score || "skóre nepotvrdené"}  ·  ${item.final_status || "FINISHED"}`,
+          (match.home || "?") + " – " + (match.away || "?"),
+          item.final_score + " · " + item.final_status,
           "#39e6a5",
-          match.competition || match.league || "KONEČNÝ VÝSLEDOK POTVRDENÝ"
+          match.competition || "KONEČNÝ VÝSLEDOK POTVRDENÝ"
         );
-
-        const archivedDetail = matchHistoryData.find(entry =>
-          String(entry.match_id || "") === String(item.id || "") ||
-          (entry.final_match && matchId(entry.final_match) === matchId(match))
-        );
-        const snapshots = Array.isArray(archivedDetail?.snapshots)
-          ? archivedDetail.snapshots
-          : [];
-        const rawFinalStats = Array.isArray(archivedDetail?.final_match?.stats)
-          ? archivedDetail.final_match.stats
-          : Array.isArray(match.stats) ? match.stats : [];
-
-        // Súhrn celého zápasu: len uložené LIVE snímky a potvrdené finálne štatistiky.
-        // Bez odhadovania chýbajúcich hodnôt a bez spätného vytvárania neexistujúcich meraní.
-        const matchSummary = document.createElement("details");
-        matchSummary.style.cssText = "margin:0 0 9px 0;padding:10px 12px;background:#101f30;border:1px solid #36506b;border-radius:10px;";
-        const matchSummaryTitle = document.createElement("summary");
-        matchSummaryTitle.textContent = "📈 CELKOVÉ ZHRNUTIE ZÁPASU";
-        matchSummaryTitle.style.cssText = "cursor:pointer;color:#a5d8ff;font-size:12px;font-weight:900;";
-        matchSummary.appendChild(matchSummaryTitle);
-        const summaryBody = document.createElement("div");
-        summaryBody.style.cssText = "font-size:11px;color:#d1dbea;line-height:1.65;margin-top:8px;";
-        const summaryLine = (label, value) => {
-          const line = document.createElement("div");
-          line.textContent = label + ": " + value;
-          summaryBody.appendChild(line);
-        };
-        const normalizeStatLabel = value => String(value || "")
-          .toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]+/g, " ").trim();
-        const readPair = (stats, aliases) => {
-          if (!Array.isArray(stats)) return null;
-          const wanted = aliases.map(normalizeStatLabel);
-          const stat = stats.find(entry => wanted.includes(normalizeStatLabel(entry?.label || entry?.name)));
-          if (!stat || stat.home == null || stat.away == null) return null;
-          const parse = value => {
-            const parsed = Number(String(value).replace(/[%\s]/g, "").replace(",", "."));
-            return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-          };
-          const home = parse(stat.home), away = parse(stat.away);
-          return home === null || away === null ? null : {home, away};
-        };
-        const orderedSnapshots = snapshots.slice()
-          .filter(snapshot => snapshot && typeof snapshot === "object")
-          .sort((a,b) => {
-            const ta = Date.parse(a.collected_at || "");
-            const tb = Date.parse(b.collected_at || "");
-            return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
-          });
-        const usableSnapshots = orderedSnapshots.map(snapshot => {
-          const stats = Array.isArray(snapshot.raw_stats) ? snapshot.raw_stats
-            : Array.isArray(snapshot.raw_match?.stats) ? snapshot.raw_match.stats
-            : Array.isArray(snapshot.stats) ? snapshot.stats : [];
-          return {
-            minute: snapshot.minute !== null && snapshot.minute !== undefined && snapshot.minute !== "" && Number.isFinite(Number(snapshot.minute)) ? Number(snapshot.minute) : null,
-            homeScore: snapshot.home_score !== null && snapshot.home_score !== undefined && snapshot.home_score !== "" && Number.isFinite(Number(snapshot.home_score)) ? Number(snapshot.home_score) : null,
-            awayScore: snapshot.away_score !== null && snapshot.away_score !== undefined && snapshot.away_score !== "" && Number.isFinite(Number(snapshot.away_score)) ? Number(snapshot.away_score) : null,
-            sot: readPair(stats, ["shots on target", "shots on goal"]),
-            dangerous: readPair(stats, ["shots off target", "dangerous attack"]),
-            attacks: readPair(stats, ["attacks", "total attacks"]),
-            possession: readPair(stats, ["possession", "ball possession"])
-          };
-        });
-        const timedSnapshots = usableSnapshots.filter(snapshot => snapshot.minute !== null);
-        // Celý zápasový graf používa rovnaký princíp ako LIVE graf:
-        // 45 % relatívny tlak + 55 % tempo nových SOT/nebezpečných útokov v intervale.
-        summaryLine("Konečný výsledok", item.final_score || "nepotvrdený");
-        const graphTitle = document.createElement("div");
-        graphTitle.textContent = "VÝVOJ MOMENTA · CELÝ ZÁPAS";
-        graphTitle.style.cssText = "font-size:12px;font-weight:900;color:#a5d8ff;margin:12px 0 3px;";
-        summaryBody.appendChild(graphTitle);
-        const graphPoints = [];
-        for (let index = 1; index < usableSnapshots.length; index++) {
-          const previous = usableSnapshots[index - 1];
-          const current = usableSnapshots[index];
-          if (previous.minute === null || current.minute === null || current.minute <= previous.minute) continue;
-          const statsAtCurrent = orderedSnapshots[index]?.raw_stats ||
-            orderedSnapshots[index]?.raw_match?.stats || orderedSnapshots[index]?.stats || [];
-          const pressureParts = [
-            {value:current.possession,weight:0.10},
-            {value:current.sot,weight:0.40},
-            {value:current.dangerous,weight:0.50}
-          ].filter(part => part.value);
-          if (!pressureParts.length) continue;
-          const pressureWeight = pressureParts.reduce((sum,part)=>sum+part.weight,0);
-          const homePressure = pressureParts.reduce((sum,part) =>
-            sum + (part.value.home + part.value.away > 0
-              ? part.value.home / (part.value.home + part.value.away) : 0.5) * part.weight, 0
-          ) / pressureWeight * 100;
-          const deltas = ["sot","dangerous"].map(key => {
-            const before = previous[key], after = current[key];
-            if (!before || !after) return null;
-            const home = after.home - before.home, away = after.away - before.away;
-            return home >= 0 && away >= 0 ? {home,away} : null;
-          }).filter(Boolean);
-          if (!deltas.length) continue;
-          const minutes = current.minute - previous.minute;
-          const homeRate = deltas.reduce((sum,pair)=>sum+pair.home,0) / minutes * 10;
-          const awayRate = deltas.reduce((sum,pair)=>sum+pair.away,0) / minutes * 10;
-          graphPoints.push({
-            minute:current.minute,
-            home:Math.min(100,Math.round(homePressure*0.45+Math.min(homeRate*3,40)*0.55)),
-            away:Math.min(100,Math.round((100-homePressure)*0.45+Math.min(awayRate*3,40)*0.55))
-          });
-        }
-        if (graphPoints.length >= 2) {
-          const svgNS = "http://www.w3.org/2000/svg";
-          const svg = document.createElementNS(svgNS,"svg");
-          svg.setAttribute("viewBox","0 0 340 166");
-          svg.setAttribute("width","100%");
-          svg.setAttribute("role","img");
-          svg.setAttribute("aria-label","Vývoj momenta domácich a hostí počas celého zápasu");
-          svg.style.cssText = "display:block;width:100%;max-width:100%;margin:4px 0;";
-          const maxMinute = Math.max(90, ...graphPoints.map(point=>point.minute));
-          const x = minute => 38 + Math.max(0,Math.min(maxMinute,minute))/maxMinute*286;
-          const y = value => 126 - Math.max(0,Math.min(100,value))*1.02;
-          [0,50,100].forEach(value => {
-            const yy=y(value);
-            const line=document.createElementNS(svgNS,"line");
-            line.setAttribute("x1","38");line.setAttribute("x2","324");
-            line.setAttribute("y1",String(yy));line.setAttribute("y2",String(yy));
-            line.setAttribute("stroke","#64748b");line.setAttribute("opacity",".3");
-            line.setAttribute("stroke-dasharray","3 4");svg.appendChild(line);
-            const label=document.createElementNS(svgNS,"text");
-            label.setAttribute("x","30");label.setAttribute("y",String(yy+3));
-            label.setAttribute("text-anchor","end");label.setAttribute("fill","#94a3b8");
-            label.setAttribute("font-size","9");label.textContent=String(value);
-            svg.appendChild(label);
-          });
-          const ticks=[0,45,90].filter(value=>value<=maxMinute);
-          if(maxMinute>90)ticks.push(Math.round(maxMinute));
-          [...new Set(ticks)].forEach(value=>{
-            const xx=x(value);
-            const tick=document.createElementNS(svgNS,"line");
-            tick.setAttribute("x1",String(xx));tick.setAttribute("x2",String(xx));
-            tick.setAttribute("y1","128");tick.setAttribute("y2","132");
-            tick.setAttribute("stroke","#94a3b8");svg.appendChild(tick);
-            const label=document.createElementNS(svgNS,"text");
-            label.setAttribute("x",String(xx));label.setAttribute("y","146");
-            label.setAttribute("text-anchor","middle");label.setAttribute("fill","#94a3b8");
-            label.setAttribute("font-size","9");label.textContent=value+"'";svg.appendChild(label);
-          });
-          const drawArchiveLine=(key,color)=>{
-            const line=document.createElementNS(svgNS,"polyline");
-            line.setAttribute("points",graphPoints.map(point=>x(point.minute).toFixed(1)+","+y(point[key]).toFixed(1)).join(" "));
-            line.setAttribute("fill","none");line.setAttribute("stroke",color);
-            line.setAttribute("stroke-width","3");line.setAttribute("stroke-linecap","round");
-            line.setAttribute("stroke-linejoin","round");svg.appendChild(line);
-            graphPoints.forEach(point=>{
-              const dot=document.createElementNS(svgNS,"circle");
-              dot.setAttribute("cx",x(point.minute).toFixed(1));
-              dot.setAttribute("cy",y(point[key]).toFixed(1));
-              dot.setAttribute("r","2.7");dot.setAttribute("fill",color);svg.appendChild(dot);
-            });
-          };
-          drawArchiveLine("home","#22c55e");
-          drawArchiveLine("away","#94a3b8");
-          summaryBody.appendChild(svg);
-          const legend=document.createElement("div");
-          legend.style.cssText="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#cbd5e1;margin:0 0 8px;";
-          legend.textContent="🟢 "+(match.home||"Domáci")+"   ·   ⚪ "+(match.away||"Hostia");
-          summaryBody.appendChild(legend);
-          const averageHome=graphPoints.reduce((sum,p)=>sum+p.home,0)/graphPoints.length;
-          const averageAway=graphPoints.reduce((sum,p)=>sum+p.away,0)/graphPoints.length;
-          const graphCaption=document.createElement("div");
-          graphCaption.style.cssText="font-size:10px;color:#aebed0;margin-bottom:8px;";
-          graphCaption.textContent="Priemerné skóre momenta v zachytených intervaloch: "+
-            (match.home||"Domáci")+" "+Math.round(averageHome)+"/100 · "+
-            (match.away||"Hostia")+" "+Math.round(averageAway)+"/100. Osa X = minúty zápasu, os Y = index momenta 0–100.";
-          summaryBody.appendChild(graphCaption);
-        } else {
-          summaryLine("Graf momenta","Na vykreslenie sú potrebné aspoň dve po sebe idúce platné LIVE merania so štatistikami.");
-        }
-        summaryLine("Časová os", usableSnapshots.length
-          ? usableSnapshots.length + " uložených LIVE snímok" +
-            (timedSnapshots.length ? " · " + timedSnapshots[0].minute + ". až " + timedSnapshots[timedSnapshots.length-1].minute + ". min" : "")
-          : "pre tento zápas sa nezachovali LIVE snímky");
-        if (timedSnapshots.length >= 2) {
-          const firstScore = timedSnapshots[0], lastScore = timedSnapshots[timedSnapshots.length-1];
-          const scoreChanges = [];
-          let previous = null;
-          for (const snap of timedSnapshots) {
-            if (snap.homeScore === null || snap.awayScore === null) continue;
-            if (previous && (snap.homeScore !== previous.homeScore || snap.awayScore !== previous.awayScore)) {
-              scoreChanges.push(snap.minute === null ? "čas nezachytený" : snap.minute + ". min (" + snap.homeScore + ":" + snap.awayScore + ")");
-            }
-            previous = snap;
-          }
-          summaryLine("Skóre v prvom/poslednom LIVE zázname",
-            (firstScore.homeScore ?? "?") + ":" + (firstScore.awayScore ?? "?") + " → " +
-            (lastScore.homeScore ?? "?") + ":" + (lastScore.awayScore ?? "?"));
-          summaryLine("Zachytené zmeny skóre", scoreChanges.length ? scoreChanges.join(" · ") :
-            "v uložených snímkach sa nezachytila zmena");
-        }
-        const validActivity = timedSnapshots.filter(snapshot => snapshot.sot || snapshot.dangerous || snapshot.attacks);
-        if (validActivity.length >= 2) {
-          const intervals = [];
-          for (let index = 1; index < validActivity.length; index++) {
-            const previous = validActivity[index-1], current = validActivity[index];
-            const minutes = current.minute - previous.minute;
-            if (!(minutes > 0)) continue;
-            const deltaFor = key => {
-              const before = previous[key], after = current[key];
-              if (!before || !after) return null;
-              const home = after.home - before.home, away = after.away - before.away;
-              if (home < 0 || away < 0) return null;
-              return {home, away};
-            };
-            const sotDelta = deltaFor("sot");
-            const dangerousDelta = deltaFor("dangerous");
-            const attacksDelta = deltaFor("attacks");
-            const available = [sotDelta, dangerousDelta, attacksDelta].filter(Boolean);
-            if (!available.length) continue;
-            const homeActivity = available.reduce((sum, pair) => sum + pair.home, 0);
-            const awayActivity = available.reduce((sum, pair) => sum + pair.away, 0);
-            intervals.push({from:previous.minute,to:current.minute,home:homeActivity,away:awayActivity,total:homeActivity+awayActivity});
-          }
-          if (intervals.length) {
-            const strongest = intervals.reduce((best, current) => current.total > best.total ? current : best);
-            const totalHome = intervals.reduce((sum, interval) => sum + interval.home, 0);
-            const totalAway = intervals.reduce((sum, interval) => sum + interval.away, 0);
-            summaryLine("Aktivita v zachytených intervaloch",
-              (match.home || "Domáci") + " " + totalHome + " · " + (match.away || "Hostia") + " " + totalAway +
-              " (súčet zmien SOT, nebezpečných útokov a útokov tam, kde boli dostupné)");
-            summaryLine("Najaktívnejší zachytený interval",
-              strongest.from + ".–" + strongest.to + ". min · " +
-              (match.home || "Domáci") + " " + strongest.home + " / " +
-              (match.away || "Hostia") + " " + strongest.away);
-            summaryLine("Interpretácia LIVE vývoja",
-              totalHome === totalAway ? "vyrovnaná aktivita v dostupných meraniach" :
-              totalHome > totalAway ? "viac zaznamenanej aktivity domácich" : "viac zaznamenanej aktivity hostí");
-          } else {
-            summaryLine("Vývoj aktivity", "Nedá sa bezpečne porovnať – chýbajúce alebo resetované kumulatívne štatistiky.");
-          }
-        } else {
-          summaryLine("Vývoj aktivity", "Málo platných časových meraní na porovnanie priebehu.");
-        }
-        const finalPossession = readPair(rawFinalStats, ["possession", "ball possession"]);
-        const finalSot = readPair(rawFinalStats, ["shots on target", "shots on goal"]);
-        const finalOff = readPair(rawFinalStats, ["shots off target"]);
-        const finalTotal = readPair(rawFinalStats, ["total shots", "shots"]);
-        const finalDangerous = readPair(rawFinalStats, ["shots off target", "dangerous attack"]);
-        const finalAttacks = readPair(rawFinalStats, ["attacks", "total attacks"]);
-        if (finalPossession) summaryLine("Držanie lopty (finálne)", finalPossession.home + "% – " + finalPossession.away + "%");
-        if (finalTotal) summaryLine("Strely celkom (finálne)", finalTotal.home + " – " + finalTotal.away);
-        if (finalSot) summaryLine("Strely na bránu (finálne)", finalSot.home + " – " + finalSot.away);
-        if (finalOff) summaryLine("Strely mimo bránu (finálne)", finalOff.home + " – " + finalOff.away);
-        if (finalDangerous) summaryLine("Nebezpečné útoky (finálne)", finalDangerous.home + " – " + finalDangerous.away);
-        if (finalAttacks) summaryLine("Útoky (finálne)", finalAttacks.home + " – " + finalAttacks.away);
-        if (!finalPossession && !finalTotal && !finalSot && !finalOff && !finalDangerous && !finalAttacks) {
-          summaryLine("Finálne štatistiky", "API neposkytlo rozpoznané súhrnné položky; úplné surové štatistiky sú nižšie.");
-        }
-        const summaryNote = document.createElement("div");
-        summaryNote.textContent = "Celkové zhrnutie kombinuje zachované LIVE snímky a konečné štatistiky API. Zmeny skóre sú len časom prvého zachytenia po zmene, nie presným časom gólu. Chýbajúce úseky sa nedopočítavajú. Ide o opis zápasu, nie predikciu ani dôkaz ziskovosti.";
-        summaryNote.style.cssText = "font-size:9px;color:#94a3b8;margin-top:7px;";
-        summaryBody.appendChild(summaryNote);
-        matchSummary.appendChild(summaryBody);
-        matchArchiveEl.appendChild(matchSummary);
 
         const details = document.createElement("details");
-        details.style.cssText = "margin:0 0 12px 0;padding:10px 12px;background:#0c1726;border:1px solid #2b3c52;border-radius:10px;";
+        details.style.cssText = "margin:0 0 12px;padding:9px 11px;background:#0c1726;border:1px solid #2b3c52;border-radius:9px;";
         const summary = document.createElement("summary");
-        summary.textContent = `📊 KOMPLETNÉ API ŠTATISTIKY · ${snapshots.length} LIVE snímok`;
-        summary.style.cssText = "cursor:pointer;color:#8fd8ff;font-size:12px;font-weight:800;";
+        summary.textContent = "📈 ZÁZNAM POTVRDENIA A OPRÁV";
+        summary.style.cssText = "cursor:pointer;color:#a5d8ff;font-size:11px;font-weight:900;";
         details.appendChild(summary);
-
-        const intro = document.createElement("p");
-        intro.textContent = snapshots.length
-          ? "Časová os zachytáva dostupné údaje približne každých 5 minút. Chýbajúce údaje zostávajú prázdne – nie sú nahradené nulou."
-          : "Pre tento starší zápas nie sú v trvalom archíve dostupné LIVE snímky.";
-        intro.style.cssText = "font-size:11px;color:#9baabe;line-height:1.45;";
-        details.appendChild(intro);
-
-        function appendRawStats(container, stats, heading) {
-          const title = document.createElement("div");
-          title.textContent = heading;
-          title.style.cssText = "margin:10px 0 6px;color:#dce8f5;font-size:12px;font-weight:800;";
-          container.appendChild(title);
-          if (!Array.isArray(stats) || !stats.length) {
-            const empty = document.createElement("p");
-            empty.textContent = "API v tomto meraní neposkytlo štatistiky.";
-            empty.style.cssText = "font-size:11px;color:#9baabe;";
-            container.appendChild(empty);
-            return;
-          }
-          stats.forEach(stat => {
-            const line = document.createElement("div");
-            const label = stat?.label || stat?.name || "Štatistika";
-            const suffix = stat?.suffix === null || stat?.suffix === undefined ? "" : String(stat.suffix).trim();
-            const unit = suffix ? " " + suffix : "";
-            const home = stat?.home ?? "—";
-            const away = stat?.away ?? "—";
-            const extras = Object.entries(stat || {})
-              .filter(([key]) => !["label", "name", "home", "away", "suffix", "home_pct", "away_pct"].includes(key))
-              .map(([key, value]) => key + ": " + (typeof value === "object" ? JSON.stringify(value) : String(value)));
-            line.textContent = `${label}: ${home}${unit} – ${away}${unit}${extras.length ? " | " + extras.join(" | ") : ""}`;
-            line.style.cssText = "padding:5px 0;border-bottom:1px solid #1d2b3d;font-size:11px;color:#d1dbea;overflow-wrap:anywhere;";
-            container.appendChild(line);
-          });
-        }
-
-        snapshots.forEach((snapshot, index) => {
-          const block = document.createElement("details");
-          block.style.cssText = "margin:7px 0;padding:8px;background:#111f31;border-radius:8px;";
-          const snapSummary = document.createElement("summary");
-          const stamp = snapshot.collected_at ? new Date(snapshot.collected_at).toLocaleString("sk-SK") : "čas neznámy";
-          snapSummary.textContent = `${stamp} · ${snapshot.minute ?? "?"}' · ${snapshot.home_score ?? "?"}:${snapshot.away_score ?? "?"} · ${(snapshot.raw_stats || snapshot.raw_match?.stats || snapshot.stats || []).length} štatistík`;
-          snapSummary.style.cssText = "cursor:pointer;font-size:11px;color:#c9d8e9;";
-          block.appendChild(snapSummary);
-          appendRawStats(block, snapshot.raw_stats || snapshot.raw_match?.stats || snapshot.stats || [], "ÚDAJE Z API");
-          details.appendChild(block);
+        const body = document.createElement("div");
+        body.style.cssText = "font-size:11px;color:#cbd8e6;line-height:1.6;margin-top:7px;";
+        const line = (label, value) => {
+          const element = document.createElement("div");
+          element.textContent = label + ": " + value;
+          body.appendChild(element);
+        };
+        line("Zdroj", "Flashscore · explicitný stav FINISHED");
+        line("ID zápasu", item.id);
+        line("Konečný výsledok", item.final_score);
+        line("Uložené LIVE snímky", Number(item.snapshots_count || 0));
+        line("Prvé potvrdenie", item.first_confirmed_at || "—");
+        line("Posledné potvrdenie", item.confirmed_at || "—");
+        const revisions = Array.isArray(item.revisions) ? item.revisions : [];
+        line("Počet zaznamenaných opráv", revisions.length);
+        revisions.forEach(revision => {
+          line("Predchádzajúci výsledok · revízia " + revision.revision,
+            (revision.final_score || "?") + " · nahradené " + (revision.superseded_at || "—"));
         });
-
-        appendRawStats(details, rawFinalStats, "KONEČNÉ ŠTATISTIKY Z API");
+        const note = document.createElement("div");
+        note.textContent = "Kompletná časová os, LIVE snímky a štatistiky zostávajú v samostatnom trvalom Flashscore archíve.";
+        note.style.cssText = "font-size:10px;color:#94a3b8;margin-top:6px;";
+        body.appendChild(note);
+        details.appendChild(body);
         matchArchiveEl.appendChild(details);
       });
-    } else if (confirmed.length) {
-      addText(matchArchiveEl, "Pre zvolenú ligu a dátum sa nenašli žiadne zápasy.");
-    }
-
-    if (olderUnconfirmed > 0) {
-      addText(matchArchiveEl, `Staršie archívne záznamy bez potvrdeného konečného výsledku: ${olderUnconfirmed}.`);
-    }
-
-    if (!pending.length && !confirmed.length && !olderUnconfirmed) {
-      addText(matchArchiveEl, "Zatiaľ nie sú zápasy čakajúce na ukončenie ani potvrdené konečné výsledky.");
+    } else if (!pending.length) {
+      addText(matchArchiveEl, "Zatiaľ nie sú uložené žiadne potvrdené konečné výsledky.");
     }
   }
 
@@ -4577,7 +4196,7 @@
     scanning = true;
 
     try {
-      const [current, historyData, signalArchive, bttsArchive, matchArchive, permanentMatchHistory] = await Promise.all([
+      const [current, historyData, signalArchive, bttsArchive, matchArchive] = await Promise.all([
         getJSON(CURRENT_URL),
         loadFlashscoreRecentHistory().catch(error => {
           console.warn("Flashscore timeline história nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
@@ -4588,14 +4207,12 @@
           console.warn("Nový Flashscore BTTS archív zatiaľ nie je dostupný:", error);
           return null;
         }),
-        getCachedJSON(MATCH_ARCHIVE_URL, 10 * 60 * 1000).catch(error => {
-          console.warn("Archív zápasov nie je dostupný:", error);
+        getCachedJSON(OUTCOMES_URL, 10 * 60 * 1000).catch(error => {
+          console.warn("Flashscore výsledkový archív nie je dostupný:", error);
           return null;
         }),
-        loadPermanentMatchHistory()
       ]);
 
-      matchHistoryData = Array.isArray(permanentMatchHistory) ? permanentMatchHistory : [];
       await loadFlashscoreLiveShadow();
 
       const collectedTime = Date.parse(current.collected_at || "");
@@ -4658,7 +4275,7 @@
           lastRenderedMatchArchive = matchArchive;
         }
         renderSystemStats(current, signalArchive, matchArchive);
-        renderApiDataQuality(current, matchArchive, matchHistoryData);
+        renderApiDataQuality(current, matchArchive, []);
         if (
         signalArchive !== lastRenderedPerformanceGreen ||
         bttsArchive !== lastRenderedPerformanceBtts
@@ -4806,7 +4423,7 @@
       if (matchArchiveChanged) {
         renderMatchArchive(matchArchive);
         lastRenderedMatchArchive = matchArchive;
-        renderApiDataQuality(current, matchArchive, matchHistoryData);
+        renderApiDataQuality(current, matchArchive, []);
       }
       renderSystemStats(current, signalArchive, matchArchive);
       if (

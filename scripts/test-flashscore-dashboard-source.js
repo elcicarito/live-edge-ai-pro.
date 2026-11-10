@@ -10,6 +10,10 @@ assert.match(scanner, /const CURRENT_URL = DATA_BASE_URL \+ "flashscore-primary-
 assert.match(scanner, /contents\/data\/flashscore-primary-current\.json\?ref=live-data-v2/);
 assert.match(scanner, /async function loadFlashscoreRecentHistory/);
 assert.match(scanner, /flashscore-timeline-index\.json/);
+assert.ok(scanner.includes("flashscore-confirmed-outcomes.json"));
+assert.ok(scanner.includes('data.source !== "Flashscore"'));
+assert.ok(scanner.includes('item?.status_confirmation === "confirmed_finished"'));
+assert.doesNotMatch(scanner, /live-archive\.json|live-match-history|ESPN/);
 assert.ok(scanner.includes("function historyRecords(historyData, id)"));
 assert.ok(scanner.includes("matchId(row.match) === id"));
 assert.match(scanner, /loadFlashscoreRecentHistory\(\)\.catch/);
