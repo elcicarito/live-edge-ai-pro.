@@ -743,11 +743,14 @@
   }
 
   function matchId(match) {
+    // Flashscore záznamy obsahujú zároveň kanonické id aj URL.
+    // Signálový archív ukladá krátke event id, preto musí mať id prednosť
+    // pred URL/slug, inak sa aktívne signály nespárujú s LIVE kartou.
     return String(
       match?.tracker?.id ||
+      match?.id ||
       match?.slug ||
       match?.url ||
-      match?.id ||
       ""
     );
   }
