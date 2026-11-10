@@ -18,16 +18,26 @@
 
   const matchesEl = document.getElementById("matches");
   const matchSearchEl = document.getElementById("live-match-search");
+  const liveFilterButtons = Array.from(document.querySelectorAll("[data-live-filter]"));
   let matchSearchTerm = "";
+  let liveMatchFilter = "all";
   function applyLiveMatchSearch() {
     if (!matchesEl) return;
     const cards = matchesEl.querySelectorAll(".priority-match-card,.compact-match-card,.no-signal-match-card");
     cards.forEach(card => {
-      const matches = !matchSearchTerm || String(card.textContent || "").toLocaleLowerCase("sk").includes(matchSearchTerm);
-      card.hidden = !matches;
+      const category = card.classList.contains("priority-match-card") ? "confirmed"
+        : card.classList.contains("no-signal-match-card") ? "none" : "pressure";
+      const matchesText = !matchSearchTerm || String(card.textContent || "").toLocaleLowerCase("sk").includes(matchSearchTerm);
+      const matchesCategory = liveMatchFilter === "all" || liveMatchFilter === category;
+      card.hidden = !(matchesText && matchesCategory);
     });
     matchesEl.querySelectorAll(".match-league-other,.match-league-confirmed").forEach(group => {
       group.hidden = !group.querySelector(".priority-match-card:not([hidden]),.compact-match-card:not([hidden]),.no-signal-match-card:not([hidden])");
+    });
+    liveFilterButtons.forEach(button => {
+      const active = button.dataset.liveFilter === liveMatchFilter;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
     });
   }
   if (matchSearchEl) {
@@ -36,6 +46,10 @@
       applyLiveMatchSearch();
     });
   }
+  liveFilterButtons.forEach(button => button.addEventListener("click", () => {
+    liveMatchFilter = button.dataset.liveFilter || "all";
+    applyLiveMatchSearch();
+  }));
   const signalEl = document.getElementById("signal");
   const systemStatsEl = document.getElementById("system-stats");
   const matchArchiveEl = document.getElementById("match-archive");
