@@ -350,6 +350,7 @@
   let flashscoreArchiveIndex = null;
   let flashscoreArchiveLoadedWeek = "";
   let flashscoreRecentHistoryCache = { loadedAt: 0, rows: [] };
+  let flashscoreRecentHistoryStatus = { state: "WAITING", count: 0, error: "" };
 
 
   function localDateKey(date = new Date()) {
@@ -384,6 +385,7 @@
   async function loadFlashscoreRecentHistory() {
     const now = Date.now();
     if (flashscoreRecentHistoryCache.rows.length && now - flashscoreRecentHistoryCache.loadedAt < 90000) return flashscoreRecentHistoryCache.rows;
+    flashscoreRecentHistoryStatus = { state: "LOADING", count: 0, error: "" };
     const index = await getCachedJSON(DATA_BASE_URL + "flashscore-timeline-index.json", 60000);
     if (!index || index.source !== "Flashscore" || !Array.isArray(index.weeks)) throw new Error("Neplatný Flashscore timeline index.");
     const weeks = index.weeks.filter(x => x && typeof x.file === "string" && /^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(x.file)).sort((a,b) => String(b.week || "").localeCompare(String(a.week || ""))).slice(0,2);
@@ -405,6 +407,7 @@
     }
     rows.sort((a,b)=>a.time-b.time);
     flashscoreRecentHistoryCache = {loadedAt:now, rows};
+    flashscoreRecentHistoryStatus = { state: "READY", count: rows.length, error: "" };
     return rows;
   }
 
@@ -1420,6 +1423,11 @@
     });
     target.appendChild(rail);
     addText(target, "Zobrazených " + selected.length + " z " + valid.length + " uložených meraní · posledné meranie je zvýraznené.", "10px");
+    if (flashscoreRecentHistoryStatus.state === "ERROR") {
+      addText(target, "⚠ Archívna časová os sa nenačítala: " + flashscoreRecentHistoryStatus.error, "10px");
+    } else if (flashscoreRecentHistoryStatus.state === "READY") {
+      addText(target, "Archív načítaný: " + flashscoreRecentHistoryStatus.count + " snímok zo všetkých zápasov · spárované snímky tohto zápasu: " + records.length + ".", "10px");
+    }
 
     // Aktivita v intervaloch sa odvodzuje iba z rozdielov dvoch susedných
     // kumulatívnych Flashscore snímok; dlhé medzery a resetované počítadlá vynecháme.
@@ -5317,6 +5325,7 @@
       const [current, historyData, signalArchive, bttsArchive, matchArchive] = await Promise.all([
         getJSON(CURRENT_URL),
         loadFlashscoreRecentHistory().catch(error => {
+          flashscoreRecentHistoryStatus = { state: "ERROR", count: 0, error: String(error?.message || error) };
           console.warn("Flashscore timeline história nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
           return [];
         }),
