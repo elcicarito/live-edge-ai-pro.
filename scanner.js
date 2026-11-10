@@ -1809,7 +1809,7 @@
     if (result.trend.length >= 2) {
       const svgNS = "http://www.w3.org/2000/svg";
       const svg = document.createElementNS(svgNS, "svg");
-      svg.setAttribute("viewBox", "0 0 320 116");
+      svg.setAttribute("viewBox", "0 0 320 130");
       svg.setAttribute("width", "100%");
       svg.setAttribute("role", "img");
       svg.setAttribute("aria-label", "Vývoj relatívneho momenta domácich a hostí");
@@ -1834,8 +1834,45 @@
         line.setAttribute("fill","none");line.setAttribute("stroke",color);
         line.setAttribute("stroke-width","2.5");line.setAttribute("stroke-linecap","round");
         line.setAttribute("stroke-linejoin","round");svg.appendChild(line);
+        const latestPoint=points[points.length-1];
+        const dot=document.createElementNS(svgNS,"circle");
+        dot.setAttribute("cx",px(latestPoint.time).toFixed(1));
+        dot.setAttribute("cy",py(latestPoint[key]).toFixed(1));
+        dot.setAttribute("r","3.5");dot.setAttribute("fill",color);
+        dot.setAttribute("stroke","#0c1929");dot.setAttribute("stroke-width","1.5");
+        svg.appendChild(dot);
       }
+      const timeLabel=(time)=>new Date(time).toLocaleTimeString("sk-SK",{hour:"2-digit",minute:"2-digit"});
+      const firstLabel=document.createElementNS(svgNS,"text");
+      firstLabel.setAttribute("x","24");firstLabel.setAttribute("y","119");
+      firstLabel.setAttribute("fill","#94a3b8");firstLabel.setAttribute("font-size","8");
+      firstLabel.textContent=timeLabel(first);
+      svg.appendChild(firstLabel);
+      const lastLabel=document.createElementNS(svgNS,"text");
+      lastLabel.setAttribute("x","310");lastLabel.setAttribute("y","119");
+      lastLabel.setAttribute("text-anchor","end");lastLabel.setAttribute("fill","#94a3b8");
+      lastLabel.setAttribute("font-size","8");lastLabel.textContent=timeLabel(last);
+      svg.appendChild(lastLabel);
       panel.appendChild(svg);
+      const legend=document.createElement("div");
+      legend.className="momentum-chart-legend";
+      const addLegend=(label,color,value)=>{
+        const item=document.createElement("span");
+        item.className="momentum-legend-item";
+        const swatch=document.createElement("i");
+        swatch.style.background=color;
+        const textNode=document.createElement("b");
+        textNode.textContent=label+" "+Math.round(value)+"/100";
+        item.append(swatch,textNode);legend.appendChild(item);
+      };
+      const latest=points[points.length-1];
+      addLegend("DOMÁCI","#22c55e",latest.home);
+      addLegend("HOSTIA","#94a3b8",latest.away);
+      panel.appendChild(legend);
+      const timeRange=document.createElement("div");
+      timeRange.className="momentum-chart-range";
+      timeRange.textContent="Zobrazené platné intervaly · "+timeLabel(first)+" – "+timeLabel(last);
+      panel.appendChild(timeRange);
     }
     const q=result.reliability;
     addText(panel, "Pokrytie archívnych meraní: základné strelecké dáta " + q.coreCoverage + "% | SOT aj strely mimo " + q.shotCoverage + "% | držanie lopty " + q.possessionCoverage + "% | platné intervaly " + q.intervalCount + ".", "10px");
