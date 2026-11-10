@@ -563,12 +563,15 @@
         country.matchCount + " záp. · " + country.leagues.length + " líg",
         "country"
       );
+      // Pri vyhľadávaní automaticky otvor zodpovedajúce vetvy, aby výsledky neostali skryté.
+      countryNode.details.open = Boolean(query);
       for (const league of country.leagues) {
         const leagueNode = createDisclosure(
           "🏆  " + league.competition,
           String(league.matches.length) + (league.matches.length === 1 ? " zápas" : " zápasov"),
           "league"
         );
+        leagueNode.details.open = Boolean(query);
 
         for (const items of league.matches) {
           const first = items[0];
@@ -582,6 +585,7 @@
               " · " + (latestSnapshot.live_clock || latestSnapshot.stage || "čas nezistený"),
             "match"
           );
+          matchNode.details.open = Boolean(query);
 
           for (const entry of items.slice().reverse()) {
             const snapshot = entry.snapshot || {};
