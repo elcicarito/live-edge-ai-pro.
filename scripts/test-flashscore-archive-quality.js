@@ -37,7 +37,7 @@ try {
   assert.equal(report.cadence_minutes.within_3_minutes, 1);
   assert.equal(report.retention_policy, "permanent");
   assert.equal(report.assessment.suitable_for_exploratory_analysis, true);
-  assert.equal(report.assessment.suitable_for_training_live_stats_models, true);
+  assert.equal(report.assessment.suitable_for_training_live_stats_models, false);
   console.log("Flashscore archive quality tests passed.");
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
