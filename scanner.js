@@ -7,6 +7,7 @@
   const CURRENT_URL = DATA_BASE_URL + "live-current.json";
   const HISTORY_URL = DATA_BASE_URL + "live-history.json";
   const MATCH_ARCHIVE_URL = DATA_BASE_URL + "live-archive.json";
+  const BTTS_ARCHIVE_URL = DATA_BASE_URL + "flashscore-btts-signal-archive.json";
   const MATCH_HISTORY_URL = DATA_BASE_URL + "live-match-history.jsonl.gz";
   const LEGACY_MATCH_HISTORY_URL = DATA_BASE_URL + "live-match-history.jsonl";
   const SIGNAL_KEY = "live_edge_signals_v6";
@@ -2719,20 +2720,8 @@
     const totalLosses = signals.filter(x => x.status === "LOSS").length;
     const totalOpen = signals.filter(x => x.status === "OPEN").length;
     const totalUnresolved = signals.filter(x => x.status === "UNRESOLVED").length;
-    const sourceOf = item => item.source || item.sourceSnapshot?.source || "ESPN";
-    const espnSignals = signals.filter(item => sourceOf(item) === "ESPN");
-    const flashscoreSignals = signals.filter(item => sourceOf(item) === "Flashscore");
-    const sourceSummary = rows => {
-      const wins = rows.filter(x => x.status === "WIN").length;
-      const losses = rows.filter(x => x.status === "LOSS").length;
-      const open = rows.filter(x => x.status === "OPEN").length;
-      const unresolved = rows.filter(x => x.status === "UNRESOLVED").length;
-      const n = wins + losses;
-      return `WIN ${wins} / LOSS ${losses} | úspešnosť ${n ? Math.round(wins / n * 100) + "%" : "—"} | otvorené ${open} | neoverené ${unresolved}`;
-    };
-    addText(target, `Spolu: ${signals.length} | WIN: ${totalWins} | LOSS: ${totalLosses} | otvorené: ${totalOpen} | neoverené: ${totalUnresolved}`);
-    addText(target, `ESPN (${espnSignals.length}): ${sourceSummary(espnSignals)}`);
-    addText(target, `Flashscore (${flashscoreSignals.length}): ${sourceSummary(flashscoreSignals)}`);
+    const evaluated = totalWins + totalLosses;
+    addText(target, `Zdroj: výhradne Flashscore | spolu: ${signals.length} | WIN: ${totalWins} | LOSS: ${totalLosses} | otvorené: ${totalOpen} | úspešnosť: ${evaluated ? Math.round(totalWins / evaluated * 100) + "%" : "zatiaľ bez výsledkov"}`);
     addText(target, "Úspešnosť počíta iba potvrdené WIN/LOSS. Neoverené a otvorené signály sa do percenta nezapočítavajú.");
     tiers.forEach(([key, label]) => {
       const rows = signals.filter(x => x.tierKey === key);
@@ -4630,7 +4619,10 @@
           return [];
         }),
         Promise.resolve(null),
-        Promise.resolve(null),
+        getCachedJSON(BTTS_ARCHIVE_URL, 60 * 1000).catch(error => {
+          console.warn("Nový Flashscore BTTS archív zatiaľ nie je dostupný:", error);
+          return null;
+        }),
         getCachedJSON(MATCH_ARCHIVE_URL, 10 * 60 * 1000).catch(error => {
           console.warn("Archív zápasov nie je dostupný:", error);
           return null;
