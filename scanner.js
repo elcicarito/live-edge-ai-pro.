@@ -224,6 +224,16 @@
     return panel;
   }
 
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
   async function getJSON(url) {
     const fallbackUrl = url.replace(
       "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/",
@@ -237,11 +247,10 @@
 
     for (const candidate of candidates) {
       try {
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           candidate + (candidate.includes("?") ? "&" : "?") + "t=" + Date.now(),
-          {
-            cache: "no-store"
-          }
+          { cache: "no-store" },
+          12000
         );
         if (!response.ok) throw new Error("HTTP " + response.status);
         const payload = await response.json();
@@ -309,7 +318,7 @@
 
   async function fetchFlashscoreTimeline(file) {
     const url = DATA_BASE_URL + file + "?t=" + Date.now();
-    const response = await fetch(url, { cache: "no-store" });
+    const response = await fetchWithTimeout(url, { cache: "no-store" }, 20000);
     if (!response.ok) throw new Error("HTTP " + response.status + " pri načítaní " + file);
     if (typeof DecompressionStream === "undefined") {
       throw new Error("Tento prehliadač nepodporuje čítanie komprimovaného archívu.");
@@ -5435,4 +5444,11 @@
 
   scan();
   setInterval(scan, SCAN_INTERVAL_MS);
+
+  // Mobilné prehliadače môžu pozastaviť časovače na karte na pozadí.
+  // Po návrate do aplikácie obnov LIVE dáta ihneď, nie až pri ďalšom intervale.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) scan();
+  });
+  window.addEventListener("online", () => scan());
 })();
