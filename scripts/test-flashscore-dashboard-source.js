@@ -7,7 +7,10 @@ const path = require("node:path");
 const scanner = fs.readFileSync(path.join(__dirname, "..", "scanner.js"), "utf8");
 
 assert.match(scanner, /const CURRENT_URL = DATA_BASE_URL \+ "flashscore-primary-current\.json";/);
-assert.match(scanner, /contents\/data\/flashscore-primary-current\.json\?ref=live-data-v2/);
+assert.ok(scanner.includes("data/flashscore-primary-current.json"));
+assert.ok(scanner.includes("data/flashscore-live-timeline-recent.json"));
+assert.ok(scanner.includes("/git/blobs/"));
+assert.ok(scanner.includes("GitHub Blob"));
 assert.match(scanner, /async function loadFlashscoreRecentHistory/);
 assert.match(scanner, /flashscore-timeline-index\.json/);
 assert.ok(scanner.includes("flashscore-confirmed-outcomes.json"));
