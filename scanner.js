@@ -3390,7 +3390,7 @@
         row.style.cssText = "margin:6px 0;padding:8px 10px;border:1px solid #24516a;border-radius:8px;background:#101b2b;";
         const status = item.status === "WIN" ? "WIN" : item.status === "LOSS" ? "LOSS" : "ČAKÁ";
         const title = document.createElement("div");
-        title.textContent = (item.home || "?") + " – " + (item.away || "?") + " · " + item.minute + ". min · " + item.home + " " + item.homeScore + ":" + item.awayScore + " " + item.away;
+        title.textContent = (item.homeTeam || "?") + " – " + (item.awayTeam || "?") + " · " + item.minute + ". min · skóre " + item.home + ":" + item.away;
         title.style.cssText = "font-weight:800;color:#dbeafe;font-size:11px;";
         const detail = document.createElement("div");
         detail.textContent = item.tier + " · " + status + (item.finalScore ? " · konečný stav " + item.finalScore : "");
