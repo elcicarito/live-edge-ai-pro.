@@ -3561,140 +3561,107 @@
       card.append(heading, summary);
       target.appendChild(card);
     });
-    const late = data?.after70_analysis;
-    const lateTitle = document.createElement("div");
-    lateTitle.textContent = "RETROSPEKTÍVNA ANALÝZA PO 70. MINÚTE · NIE SÚ TO LIVE SIGNÁLY";
-    lateTitle.style.cssText = "font-size:14px;font-weight:900;color:#67e8f9;margin:18px 0 7px;";
-    target.appendChild(lateTitle);
-    const lateSummary = document.createElement("div");
-    lateSummary.style.cssText = "padding:12px;border:1px solid #0e7490;border-radius:10px;background:#0b2230;margin-bottom:10px;";
-    if (late) {
-      const rate = late.win_rate == null ? "zatiaľ bez vyhodnotených výsledkov" : Math.round(late.win_rate * 100) + "%";
-      lateSummary.textContent = "Toto nie sú zachytené LIVE upozornenia. Ide o spätné vyhľadanie podmienok v uložených Flashscore snímkach. Vzorka: " + late.sample + " zápasov · WIN: " + late.wins + " · LOSS: " + late.losses + " · čaká na výsledok: " + late.pending + " · úspešnosť: " + rate + ". Jeden záznam na zápas; vybraný najsilnejší splnený prah. Kurzy v snímkach nie sú dostupné, preto sa ROI nepočíta.";
-    } else {
-      lateSummary.textContent = "Vyhodnotenie sa vytvorí po najbližšom zbere archívnych snímok.";
-    }
-    target.appendChild(lateSummary);
-    const lateGenerated = late?.generated_at ? document.createElement("div") : null;
-    if (lateGenerated) {
-      lateGenerated.textContent = "Aktualizované: " + new Date(late.generated_at).toLocaleString("sk-SK");
-      lateGenerated.style.cssText = "font-size:10px;color:#94a3b8;margin:0 0 8px;";
-      target.appendChild(lateGenerated);
-    }
-    const lateGroups = late?.groups || {};
-    [
-      ["10_sot5_shots8","1:0 · SOT ≥5 · strely ≥8"],
-      ["10_sot5_shots10","1:0 · SOT ≥5 · strely ≥10"],
-      ["10_sot5_shots12","1:0 · SOT ≥5 · strely ≥12"],
-      ["01_sot6_shots8","0:1 · SOT ≥6 · strely ≥8"]
-    ].forEach(([key,label]) => {
-      const g = lateGroups[key] || {sample:0,wins:0,losses:0,pending:0,settled:0,win_rate:null};
-      const card = document.createElement("div");
-      card.style.cssText = "margin:6px 0;padding:9px 11px;border:1px solid #24516a;border-radius:8px;background:#101b2b;";
-      const h = document.createElement("div");
-      h.textContent = label;
-      h.style.cssText = "font-weight:800;color:#a5f3fc;font-size:12px;";
-      const d = document.createElement("div");
-      d.textContent = "N=" + g.sample + " · WIN " + g.wins + " · LOSS " + g.losses + " · čaká " + g.pending + " · úspešnosť " + (g.win_rate == null ? "—" : Math.round(g.win_rate*100)+"%");
-      d.style.cssText = "font-size:11px;color:#dbeafe;margin-top:4px;";
-      card.append(h,d); target.appendChild(card);
-    });
-    const retrospectiveEntries = Array.isArray(late?.entries) ? late.entries : [];
-    const retrospectiveDetails = document.createElement("details");
-    retrospectiveDetails.style.cssText = "margin:8px 0 14px;border:1px solid #24516a;border-radius:10px;background:#0d1b2a;overflow:hidden;";
-    const retrospectiveSummary = document.createElement("summary");
-    retrospectiveSummary.textContent = "ZOBRAZIŤ RETROSPEKTÍVNE VYHODNOTENÉ ZÁPASY (" + retrospectiveEntries.length + ")";
-    retrospectiveSummary.style.cssText = "cursor:pointer;list-style:none;padding:12px;font-size:11px;font-weight:900;color:#a5f3fc;";
-    retrospectiveDetails.appendChild(retrospectiveSummary);
-    if (!retrospectiveEntries.length) {
-      const empty = document.createElement("div");
-      empty.textContent = "Zatiaľ nie sú dostupné zápasy, ktoré splnili retrospektívne podmienky po 70. minúte.";
-      empty.style.cssText = "padding:0 12px 12px;font-size:11px;color:#94a3b8;";
-      retrospectiveDetails.appendChild(empty);
-    } else {
-      retrospectiveEntries.forEach(item => {
-        const row = document.createElement("div");
-        row.style.cssText = "margin:0 8px 8px;padding:10px;border:1px solid #24516a;border-radius:8px;background:#101b2b;";
-        const status = item.status === "WIN" ? "WIN" : item.status === "LOSS" ? "LOSS" : "ČAKÁ NA VÝSLEDOK";
-        const statusColor = item.status === "WIN" ? "#4ade80" : item.status === "LOSS" ? "#f87171" : "#fbbf24";
-        const title = document.createElement("div");
-        title.textContent = (item.homeTeam || "?") + " – " + (item.awayTeam || "?") + " · " + item.minute + ". min · skóre " + item.home + ":" + item.away;
-        title.style.cssText = "font-weight:800;color:#dbeafe;font-size:12px;line-height:1.45;";
-        const league = document.createElement("div");
-        league.textContent = item.competition || "Súťaž neuvedená";
-        league.style.cssText = "font-size:10px;color:#94a3b8;margin-top:3px;";
-        const stats = document.createElement("div");
-        stats.textContent = item.tier + " · SOT spolu: " + (item.combinedSot ?? "—") + " · strely spolu: " + (item.combinedShots ?? "—");
-        stats.style.cssText = "font-size:10px;color:#cbd5e1;margin-top:5px;";
-        const result = document.createElement("div");
-        result.textContent = status + (item.finalScore ? " · konečný stav " + item.finalScore : "");
-        result.style.cssText = "font-size:10px;font-weight:900;color:" + statusColor + ";margin-top:4px;";
-        const stamp = document.createElement("div");
-        stamp.textContent = item.createdAt ? "Snímka uložená: " + new Date(item.createdAt).toLocaleString("sk-SK") : "Čas snímky nie je dostupný";
-        stamp.style.cssText = "font-size:9px;color:#8293a8;margin-top:4px;";
-        row.append(title, league, stats, result, stamp);
-        retrospectiveDetails.appendChild(row);
-      });
-    }
-    target.appendChild(retrospectiveDetails);
     const capturedLate = data?.captured_signals_after70_analysis;
     const capturedTitle = document.createElement("div");
-    capturedTitle.textContent = "VYHODNOTENIE ZACHYTENÝCH BTTS SIGNÁLOV PO 70. MINÚTE";
+    capturedTitle.textContent = "RETROSPEKTÍVA BTTS · IBA ZACHYTENÉ SIGNÁLY 46.–50. MINÚTA";
     capturedTitle.style.cssText = "font-size:14px;font-weight:900;color:#67e8f9;margin:18px 0 7px;";
     target.appendChild(capturedTitle);
     const capturedSummary = document.createElement("div");
     capturedSummary.style.cssText = "padding:12px;border:1px solid #0e7490;border-radius:10px;background:#0b2230;margin-bottom:10px;";
-    if (capturedLate) {
-      const rate = capturedLate.win_rate == null ? "zatiaľ bez vyhodnotených výsledkov" : Math.round(capturedLate.win_rate * 100) + "%";
-      capturedSummary.textContent = "Iba zápasy so skutočne zachyteným BTTS signálom v 46.–50. minúte. Z nich sa vyberie prvá snímka po 70. minúte, ktorá splnila existujúce podmienky. Zachytené zápasy: " + capturedLate.captured_signal_count + " · splnili podmienky po 70. minúte: " + capturedLate.qualifying_match_count + " · WIN: " + capturedLate.wins + " · LOSS: " + capturedLate.losses + " · čaká: " + capturedLate.pending + " · úspešnosť: " + rate + ". Toto je iba vyhodnotenie, nie nový signál. Kurzy nie sú archivované, ROI sa nepočíta.";
+    const currentRetrospective = capturedLate?.schema_version === 2;
+    if (currentRetrospective) {
+      const overallRate = capturedLate.win_rate == null ? "—" : Math.round(capturedLate.win_rate * 100) + "%";
+      const qualifiedRate = capturedLate.qualified_win_rate == null ? "—" : Math.round(capturedLate.qualified_win_rate * 100) + "%";
+      capturedSummary.textContent =
+        "Zachytené zápasy: " + capturedLate.captured_signal_count +
+        " · podmienky po 70. min: " + capturedLate.qualifying_match_count +
+        " · nesplnili: " + capturedLate.not_qualifying_match_count +
+        " · neúplné dáta: " + capturedLate.insufficient_data_match_count +
+        " · bez snímky po 70.: " + capturedLate.no_post70_data_match_count +
+        " | Konečné BTTS zo všetkých zachytených: WIN " + capturedLate.wins +
+        " / LOSS " + capturedLate.losses + " / čaká " + capturedLate.pending +
+        " · úspešnosť " + overallRate +
+        " | Len tie, ktoré splnili podmienky po 70.: WIN " + capturedLate.qualified_wins +
+        " / LOSS " + capturedLate.qualified_losses +
+        " / čaká " + capturedLate.qualified_pending +
+        " · úspešnosť " + qualifiedRate + ".";
     } else {
-      capturedSummary.textContent = "Vyhodnotenie sa vytvorí po najbližšom zbere.";
+      capturedSummary.textContent = "Staré retrospektívne výsledky boli vyradené. Nové vyhodnotenie sa vytvorí po najbližšom úspešnom zbere Flashscore dát.";
     }
     target.appendChild(capturedSummary);
-    const capturedGenerated = capturedLate?.generated_at ? document.createElement("div") : null;
-    if (capturedGenerated) {
+    if (currentRetrospective && capturedLate.generated_at) {
+      const capturedGenerated = document.createElement("div");
       capturedGenerated.textContent = "Aktualizované: " + new Date(capturedLate.generated_at).toLocaleString("sk-SK");
       capturedGenerated.style.cssText = "font-size:10px;color:#94a3b8;margin:0 0 8px;";
       target.appendChild(capturedGenerated);
     }
-    const capturedEntries = Array.isArray(capturedLate?.entries) ? capturedLate.entries : [];
+    const capturedEntries = currentRetrospective && Array.isArray(capturedLate.entries) ? capturedLate.entries : [];
     const capturedDetails = document.createElement("details");
     capturedDetails.style.cssText = "margin:8px 0 14px;border:1px solid #24516a;border-radius:10px;background:#0d1b2a;overflow:hidden;";
     const capturedDetailsSummary = document.createElement("summary");
-    capturedDetailsSummary.textContent = "ZOBRAZIŤ ZÁPASY, KTORÉ SPLNILI PODMIENKY PO 70. MINÚTE (" + capturedEntries.length + ")";
+    capturedDetailsSummary.textContent = "ZOBRAZIŤ VŠETKY ZACHYTENÉ ZÁPASY (" + capturedEntries.length + ")";
     capturedDetailsSummary.style.cssText = "cursor:pointer;list-style:none;padding:12px;font-size:11px;font-weight:900;color:#a5f3fc;";
     capturedDetails.appendChild(capturedDetailsSummary);
-    if (!capturedEntries.length) {
+    if (!currentRetrospective || !capturedEntries.length) {
       const empty = document.createElement("div");
-      empty.textContent = "Zatiaľ nie je uložený žiadny zápas, ktorý by po 70. minúte splnil tieto podmienky.";
+      empty.textContent = currentRetrospective
+        ? "Zatiaľ nie sú zachytené BTTS signály z 46.–50. minúty."
+        : "Čakám na nové vyhodnotenie podľa zachytených BTTS signálov.";
       empty.style.cssText = "padding:0 12px 12px;font-size:11px;color:#94a3b8;";
       capturedDetails.appendChild(empty);
     } else {
       capturedEntries.forEach(item => {
         const row = document.createElement("div");
         row.style.cssText = "margin:0 8px 8px;padding:10px;border:1px solid #24516a;border-radius:8px;background:#101b2b;";
-        const status = item.status === "WIN" ? "WIN" : item.status === "LOSS" ? "LOSS" : "ČAKÁ NA VÝSLEDOK";
+        const status = item.status === "WIN" ? "BTTS VÝHRA" : item.status === "LOSS" ? "BTTS PREHRA" : "ČAKÁ NA VÝSLEDOK";
         const statusColor = item.status === "WIN" ? "#4ade80" : item.status === "LOSS" ? "#f87171" : "#fbbf24";
+        const after70Labels = {
+          QUALIFIED:"SPLNILO PODMIENKY PO 70. MINÚTE",
+          NOT_QUALIFIED:"NESPLNILO PODMIENKY PO 70. MINÚTE",
+          INSUFFICIENT_DATA:"PO 70. MINÚTE NEÚPLNÉ ŠTATISTIKY",
+          NO_POST70_DATA:"CHÝBAJÚ SNÍMKY PO 70. MINÚTE"
+        };
+        const after70Colors = {
+          QUALIFIED:"#4ade80",
+          NOT_QUALIFIED:"#fbbf24",
+          INSUFFICIENT_DATA:"#fb923c",
+          NO_POST70_DATA:"#94a3b8"
+        };
         const title = document.createElement("div");
-        title.textContent = (item.homeTeam || "?") + " – " + (item.awayTeam || "?") + " · " + item.minute + ". min · skóre " + item.home + ":" + item.away;
+        title.textContent = (item.homeTeam || "?") + " – " + (item.awayTeam || "?") +
+          " · LIVE signál " + (item.signalStartMinute ?? "?") + ". min · skóre " + (item.signalStartScore || "?");
         title.style.cssText = "font-weight:800;color:#dbeafe;font-size:12px;line-height:1.45;";
         const league = document.createElement("div");
         league.textContent = item.competition || "Súťaž neuvedená";
         league.style.cssText = "font-size:10px;color:#94a3b8;margin-top:3px;";
-        const stats = document.createElement("div");
-        stats.textContent = "SOT spolu: " + (item.combinedSot ?? "—") + " · strely spolu: " + (item.combinedShots ?? "—");
-        stats.style.cssText = "font-size:10px;color:#cbd5e1;margin-top:5px;";
-        const detail = document.createElement("div");
-        detail.textContent = item.tier + " · ";
-        detail.style.cssText = "font-size:10px;color:#a5f3fc;margin-top:4px;";
-        const result = document.createElement("span");
+        const signalStats = document.createElement("div");
+        signalStats.textContent = (item.signalTier || "BTTS") +
+          " · pri signále SOT " + (item.signalSot ?? "—") +
+          " · strely " + (item.signalShots ?? "—");
+        signalStats.style.cssText = "font-size:10px;color:#cbd5e1;margin-top:5px;";
+        const after70 = document.createElement("div");
+        let after70Text = after70Labels[item.after70Status] || "STAV PODMIENOK PO 70. MINÚTE NEZNÁMY";
+        if (item.after70Status === "QUALIFIED") {
+          after70Text += " · " + item.post70Minute + ". min · " + item.post70Score +
+            " · SOT " + item.post70Sot + " · strely " + item.post70Shots +
+            " · " + (item.post70Tier || "");
+        } else if (item.after70Status === "NOT_QUALIFIED") {
+          after70Text += " · kontrolovaných snímok " + item.evaluablePost70SnapshotCount;
+        } else if (item.after70Status === "INSUFFICIENT_DATA") {
+          after70Text += " · snímky " + item.post70SnapshotCount;
+        }
+        after70.textContent = after70Text;
+        after70.style.cssText = "font-size:10px;font-weight:900;color:" +
+          (after70Colors[item.after70Status] || "#cbd5e1") + ";margin-top:6px;line-height:1.45;";
+        const result = document.createElement("div");
         result.textContent = status + (item.finalScore ? " · konečný stav " + item.finalScore : "");
-        result.style.cssText = "font-weight:900;color:" + statusColor + ";";
-        detail.appendChild(result);
+        result.style.cssText = "font-size:10px;font-weight:900;color:" + statusColor + ";margin-top:4px;";
         const stamp = document.createElement("div");
-        stamp.textContent = item.collectedAt ? "Snímka uložená: " + new Date(item.collectedAt).toLocaleString("sk-SK") : "Čas snímky nie je dostupný";
+        stamp.textContent = item.signalCreatedAt
+          ? "Signál zachytený: " + new Date(item.signalCreatedAt).toLocaleString("sk-SK")
+          : "Čas signálu nie je dostupný";
         stamp.style.cssText = "font-size:9px;color:#8293a8;margin-top:4px;";
-        row.append(title, league, stats, detail, stamp);
+        row.append(title, league, signalStats, after70, result, stamp);
         capturedDetails.appendChild(row);
       });
     }
