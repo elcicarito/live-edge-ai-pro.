@@ -43,6 +43,20 @@ assert.equal(r.recent.used.find(x=>x.key==="off").home,1);
 assert.equal(r.recent.used.find(x=>x.key==="corners").home,1);
 assert.ok(r.pressure.home>60,"cumulative pressure must use Match rows, not 1st Half rows");
 
+// Raw Flashscore timeline schema uses name plus numeric value fields.
+const rawFlashscoreStats=(sotH,sotA,offH,offA)=>[
+ {name:"Shots on target",period:"Match",home:""+sotH,away:""+sotA,home_numeric:sotH,away_numeric:sotA},
+ {name:"Shots off target",period:"Match",home:""+offH,away:""+offA,home_numeric:offH,away_numeric:offA},
+ {name:"Ball possession",period:"Match",home:"58%",away:"42%",home_numeric:58,away_numeric:42}
+];
+r=engine.analyse({stats:rawFlashscoreStats(4,1,5,2)},[
+ make(t0,{stats:rawFlashscoreStats(2,1,3,2)})
+], "2026-11-08T12:05:00Z");
+assert.equal(r.recent.minutes,5);
+assert.equal(r.recent.used.find(x=>x.key==="sot").home,2);
+assert.equal(r.recent.used.find(x=>x.key==="off").home,2);
+assert.ok(r.pressure,"raw name/home_numeric Flashscore stats must be usable");
+
 // Dangerous attacks alone must never create momentum.
 r=engine.analyse({stats:[{label:"Dangerous Attacks",home:50,away:2}]},[
  make(t0,{stats:[{label:"Dangerous Attacks",home:40,away:1}]})
