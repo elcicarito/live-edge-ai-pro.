@@ -6,7 +6,6 @@
   const DATA_BASE_URL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/";
   // Main LIVE display now reads the Flashscore-only canonical candidate. The legacy combined feed remains available for rollback during the migration.
   const CURRENT_URL = DATA_BASE_URL + "flashscore-primary-current.json";
-  const RECENT_TIMELINE_URL = DATA_BASE_URL + "flashscore-live-timeline-recent.json";
   const OUTCOMES_URL = DATA_BASE_URL + "flashscore-confirmed-outcomes.json";
   const BTTS_ARCHIVE_URL = DATA_BASE_URL + "flashscore-btts-signal-archive.json";
   const SIGNAL_KEY = "live_edge_signals_v6";
@@ -294,11 +293,7 @@
       "https://cdn.jsdelivr.net/gh/elcicarito/live-edge-ai-pro.@live-data-v2/"
     );
     const apiBase = "https://api.github.com/repos/elcicarito/live-edge-ai-pro.";
-    const apiPath = url === CURRENT_URL
-      ? "data/flashscore-primary-current.json"
-      : url === RECENT_TIMELINE_URL
-        ? "data/flashscore-live-timeline-recent.json"
-        : "";
+    const apiPath = url === CURRENT_URL ? "data/flashscore-primary-current.json" : "";
     const apiUrl = apiPath ? apiBase + "/contents/" + apiPath + "?ref=live-data-v2" : "";
     const candidates = [...new Set([url, fallbackUrl, apiUrl].filter(Boolean))];
     const failures = [];
@@ -385,18 +380,114 @@
     return date.getUTCFullYear() + "-W" + String(week).padStart(2, "0");
   }
 
+  async function fetchFlashscoreTimeline(file) {
+    if (typeof DecompressionStream === "undefined") {
+      throw new Error("Tento prehliadač nepodporuje čítanie komprimovaného archívu.");
+    }
+    const rawUrl = DATA_BASE_URL + file;
+    const cdnUrl = rawUrl.replace(
+      "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/",
+      "https://cdn.jsdelivr.net/gh/elcicarito/live-edge-ai-pro.@live-data-v2/"
+    );
+    const apiBase = "https://api.github.com/repos/elcicarito/live-edge-ai-pro.";
+    const failures = [];
+    const decodeGzip = async compressed => {
+      if (!compressed || !compressed.byteLength) throw new Error("Prázdny archívny súbor");
+      const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
+      return new TextDecoder().decode(await new Response(stream).arrayBuffer());
+    };
+
+    for (const baseUrl of [...new Set([rawUrl, cdnUrl])]) {
+      try {
+        const url = baseUrl + (baseUrl.includes("?") ? "&" : "?") + "t=" + Date.now();
+        const response = await fetchWithTimeout(url, { cache: "no-store" }, 10000);
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        return await decodeGzip(await response.arrayBuffer());
+      } catch (error) {
+        failures.push(baseUrl + ": " + (error?.message || String(error)));
+      }
+    }
+
+    try {
+      const metadataUrl = apiBase + "/contents/data/" + encodeURIComponent(file) + "?ref=live-data-v2";
+      const metadataResponse = await fetchWithTimeout(metadataUrl, {
+        cache: "no-store",
+        headers: { Accept: "application/vnd.github+json" }
+      }, 12000);
+      if (!metadataResponse.ok) throw new Error("GitHub Contents HTTP " + metadataResponse.status);
+      const metadata = await metadataResponse.json();
+      if (!metadata.sha) throw new Error("GitHub nevrátil SHA archívneho súboru");
+
+      const blobResponse = await fetchWithTimeout(apiBase + "/git/blobs/" + metadata.sha, {
+        cache: "no-store",
+        headers: { Accept: "application/vnd.github+json" }
+      }, 20000);
+      if (!blobResponse.ok) throw new Error("Git Blobs HTTP " + blobResponse.status);
+      const blob = await blobResponse.json();
+      if (blob.encoding !== "base64" || typeof blob.content !== "string") {
+        throw new Error("GitHub Blob nevrátil base64 obsah");
+      }
+      const binary = atob(blob.content.replace(/\\s/g, ""));
+      const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+      return await decodeGzip(bytes);
+    } catch (error) {
+      failures.push("GitHub API Blob: " + (error?.message || String(error)));
+    }
+
+    throw new Error("Archív sa nepodarilo načítať zo žiadneho zdroja. " + failures.join(" | "));
+  }
+
   async function loadFlashscoreRecentHistory() {
     const now = Date.now();
-    if (flashscoreRecentHistoryCache.rows.length && now - flashscoreRecentHistoryCache.loadedAt < 45000) return flashscoreRecentHistoryCache.rows;
+    if (flashscoreRecentHistoryCache.rows.length && now - flashscoreRecentHistoryCache.loadedAt < 180000) return flashscoreRecentHistoryCache.rows;
     flashscoreRecentHistoryStatus = { state: "LOADING", count: 0, error: "" };
-    const payload = await getCachedJSON(RECENT_TIMELINE_URL, 45000);
-    if (!payload || payload.source !== "Flashscore" || !Array.isArray(payload.rows)) {
-      throw new Error("Neplatný Flashscore browser timeline export.");
+    const index = await getCachedJSON(DATA_BASE_URL + "flashscore-timeline-index.json", 60000);
+    if (!index || index.source !== "Flashscore" || !Array.isArray(index.weeks)) {
+      throw new Error("Neplatný Flashscore timeline index.");
     }
-    const rows = payload.rows.filter(row =>
-      row && Number.isFinite(Number(row.time)) && row.match &&
-      row.match.source === "Flashscore" && row.match.id
-    );
+    const weeks = index.weeks
+      .filter(item => item && typeof item.file === "string" &&
+        /^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(item.file))
+      .sort((a, b) => String(b.week || "").localeCompare(String(a.week || "")))
+      .slice(0, 2);
+    const cutoff = now - 86400000;
+    const seen = new Set();
+    const rows = [];
+    for (const week of weeks) {
+      const decoded = await fetchFlashscoreTimeline(week.file);
+      for (const line of decoded.split(/\\r?\\n/)) {
+        if (!line.trim()) continue;
+        let entry;
+        try { entry = JSON.parse(line); } catch { continue; }
+        const snap = entry.snapshot || {};
+        const time = Date.parse(snap.collected_at || "");
+        const id = String(entry.match_id || "");
+        if (!id || !Number.isFinite(time) || time < cutoff || time > now + 60000) continue;
+        const key = id + "|" + time;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const stats = (Array.isArray(snap.stats) ? snap.stats : []).map(item => ({
+          ...item,
+          label: item.label || item.name || "",
+          home: item.home_numeric ?? item.home,
+          away: item.away_numeric ?? item.away
+        }));
+        rows.push({
+          time,
+          match: {
+            id, source: "Flashscore", status: "live",
+            status_text: String(snap.stage || "LIVE"),
+            stage: snap.stage || null,
+            live_minute: snap.live_minute ?? null,
+            live_clock: snap.live_clock || null,
+            home_score: snap.home_score ?? null,
+            away_score: snap.away_score ?? null,
+            stats
+          }
+        });
+      }
+    }
+    rows.sort((a, b) => a.time - b.time);
     flashscoreRecentHistoryCache = { loadedAt: now, rows };
     flashscoreRecentHistoryStatus = { state: "READY", count: rows.length, error: "" };
     return rows;
