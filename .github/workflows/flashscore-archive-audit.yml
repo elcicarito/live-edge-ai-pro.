@@ -68,8 +68,8 @@ jobs:
             "- Matches with 5+ statistics snapshots and 30+ minutes: " + c.matches_with_5plus_stats_snapshots_and_30min_span,
             "",
             c.note
-          ].join("\\n");
-          require("node:fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines + "\\n");
+          ].join("\n");
+          require("node:fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines + "\n");
           NODE
 
       - name: Verify archive checksums, gzip and JSONL integrity
