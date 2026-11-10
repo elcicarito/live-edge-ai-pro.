@@ -12,6 +12,8 @@ on:
       - scripts/flashscore-primary-adapter.js
       - scripts/test-flashscore-primary-adapter.js
       - scripts/test-flashscore-only-collector.js
+      - scripts/flashscore-btts-collector.js
+      - scripts/test-flashscore-btts-collector.js
       - scanner.js
 
 permissions:
@@ -31,9 +33,12 @@ jobs:
           node --check scripts/flashscore-primary-adapter.js
           node --check scripts/test-flashscore-primary-adapter.js
           node --check scripts/test-flashscore-only-collector.js
+          node --check scripts/flashscore-btts-collector.js
+          node --check scripts/test-flashscore-btts-collector.js
           node --check scanner.js
 
       - name: Run Flashscore live-clock integration tests
         run: |
           node scripts/test-flashscore-only-collector.js
           node scripts/test-flashscore-primary-adapter.js
+          node scripts/test-flashscore-btts-collector.js
