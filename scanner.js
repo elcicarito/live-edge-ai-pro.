@@ -3820,6 +3820,8 @@
 
   function renderMatch(match, historyData, collectedAt, allowSignals, staleMode = false, signalArchive = null, bttsArchive = null, target = matchesEl, compact = false, noSignal = false) {
     const card = document.createElement("div");
+    card.dataset.matchId = matchId(match) || "";
+    card.tabIndex = -1;
     if (noSignal) card.classList.add("no-signal-match-card");
     else if (compact) card.classList.add("compact-match-card");
     else card.classList.add("priority-match-card");
@@ -4299,8 +4301,29 @@
         topPressure.forEach((item, index) => {
           const match = item.match || {};
           const priority = getPriority(item);
-          const row = document.createElement("div");
-          row.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:9px;padding:8px 0;border-top:1px solid #263c55;";
+          const row = document.createElement("button");
+          row.type = "button";
+          row.setAttribute("aria-label", "Prejsť na zápas " + (match.home || "Domáci") + " – " + (match.away || "Hostia"));
+          row.style.cssText = "display:grid;width:100%;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:9px;padding:8px 0;border:0;border-top:1px solid #263c55;background:transparent;text-align:left;cursor:pointer;";
+          row.addEventListener("click", () => {
+            matchSearchTerm = "";
+            if (matchSearchEl) matchSearchEl.value = "";
+            liveMatchFilter = "all";
+            applyLiveMatchSearch();
+            const targetId = matchId(match);
+            const targetCard = Array.from(matchesEl.querySelectorAll("[data-match-id]"))
+              .find(card => card.dataset.matchId === targetId);
+            if (targetCard) {
+              targetCard.scrollIntoView({ behavior: "smooth", block: "center" });
+              targetCard.focus({ preventScroll: true });
+              targetCard.style.outline = "2px solid #38bdf8";
+              targetCard.style.outlineOffset = "3px";
+              window.setTimeout(() => {
+                targetCard.style.outline = "";
+                targetCard.style.outlineOffset = "";
+              }, 1800);
+            }
+          });
           const info = document.createElement("div");
           info.style.cssText = "min-width:0;";
           const teams = document.createElement("div");
