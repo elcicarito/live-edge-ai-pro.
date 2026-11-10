@@ -95,10 +95,27 @@ small{
   color:#9baabe
 }
 .archive-card summary{  display:flex;  align-items:center;  justify-content:space-between;  gap:12px;  cursor:pointer;  list-style:none;  font-weight:800;  font-size:16px;  color:#ffffff;}.archive-card summary::-webkit-details-marker{display:none}.archive-card summary:after{content:"＋";color:#39e6a5;font-size:20px;margin-left:auto}.archive-card[open] summary:after{content:"−"}.archive-count{  display:inline-flex;  align-items:center;  justify-content:center;  min-width:28px;  height:28px;  padding:0 8px;  border-radius:20px;  background:#203d39;  color:#39e6a5;  font-size:13px;}.archive-card #match-archive{margin-top:14px}
-.stats-card summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;font-weight:800;font-size:16px;color:#fff}
+.stats-card{
+  padding:14px 15px;
+  border:1px solid #2b4055;
+  border-left:3px solid #4b91bd;
+  border-radius:13px;
+  background:linear-gradient(135deg,#152438 0%,#111c2b 100%);
+  box-shadow:0 5px 16px #0002;
+}
+#api-data-quality{border-left-color:#4caa9b}
+#system-stats-card{border-left-color:#6589c8}
+.stats-card summary{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  cursor:pointer;list-style:none;font-weight:900;font-size:13px;
+  letter-spacing:.25px;color:#e6f0f7;
+}
 .stats-card summary::-webkit-details-marker{display:none}
-.stats-card summary:after{content:"＋";color:#39e6a5;font-size:20px;margin-left:auto}
+.stats-card summary:after{content:"＋";color:#72cdbb;font-size:18px;margin-left:auto}
 .stats-card[open] summary:after{content:"−"}
+.stats-card[open]{border-color:#38546b}
+.stats-card #api-data-quality-content,.stats-card #system-stats{margin-top:12px}
+@media(max-width:420px){.stats-card{padding:12px}}
 .archive-filters{
   display:grid;
   grid-template-columns:1fr;
@@ -655,7 +672,7 @@ details>summary{outline-offset:4px}
   <summary>🧪 KVALITA API DÁT · POKRYTIE ŠTATISTÍK</summary>
   <div id="api-data-quality-content"><p>Vyhodnocujem dostupnosť API štatistík...</p></div>
 </details>
-<details class="card stats-card">
+<details class="card stats-card" id="system-stats-card">
 <summary>📊 ŠTATISTIKY SYSTÉMU</summary>
 <div id="system-stats"><p>Načítavam štatistiky...</p></div>
 </details>
