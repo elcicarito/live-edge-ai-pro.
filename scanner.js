@@ -4625,7 +4625,7 @@
     const quickStats = document.createElement("div");
     quickStats.classList.add("match-quick-stats");
     if (noSignal) quickStats.classList.add("no-signal-expand-stats", "no-signal-quick-stats");
-    quickStats.style.cssText = "display:flex;flex-wrap:wrap;gap:5px;margin:3px 0 9px;";
+    quickStats.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:6px;margin:3px 0 9px;";
     const quickFind = pattern => {
       const item = displayStats.find(stat =>
         pattern.test(String(stat.label || stat.name || stat.category || "").toLowerCase())
@@ -4646,7 +4646,7 @@
       const chip = document.createElement("span");
       chip.classList.add("match-quick-stat");
       chip.textContent = `${label} ${value.home} : ${value.away}${suffix || value.suffix || ""}`;
-      chip.style.cssText = "font-size:10px;font-weight:800;color:#d5e2ef;background:#142338;border:1px solid #2b4059;border-radius:7px;padding:4px 7px;font-variant-numeric:tabular-nums;white-space:nowrap;";
+      chip.style.cssText = "display:block;min-width:0;text-align:center;font-size:10px;font-weight:800;color:#d5e2ef;background:linear-gradient(135deg,#172a40,#122033);border:1px solid #2b4059;border-radius:8px;padding:6px 5px;font-variant-numeric:tabular-nums;white-space:nowrap;";
       quickStats.appendChild(chip);
     };
     const quickSot = quickFind(/shots? on target|shots? on goal|strely na br[aá]nu/);
@@ -4666,7 +4666,10 @@
     addQuickStat("ŽK", quickFind(/yellow cards|[zž]lt[eé] karty/));
     addQuickStat("ČK", quickFind(/red cards|[cč]erven[eé] karty/));
     if (quickStats.childElementCount) {
-      card.appendChild(quickStats);
+      const quickStatsHeading = document.createElement("div");
+      quickStatsHeading.textContent = "RÝCHLE ŠTATISTIKY · DOMÁCI : HOSTIA";
+      quickStatsHeading.style.cssText = "font-size:9px;font-weight:900;letter-spacing:.55px;color:#829bb5;margin:3px 1px 6px;";
+      card.append(quickStatsHeading, quickStats);
     } else {
       const unavailable = document.createElement("div");
       unavailable.textContent = "ŠTATISTIKY ZATIAĽ NIE SÚ DOSTUPNÉ";
