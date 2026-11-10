@@ -278,6 +278,7 @@ function main() {
   fs.writeFileSync(OUTPUT, JSON.stringify(report, null, 2) + "\n");
   console.log("Flashscore archive quality report created:", JSON.stringify(report.summary));
   console.log("Flashscore archive cadence:", JSON.stringify(report.cadence_minutes));
+  console.log("Flashscore archive temporal coverage:", JSON.stringify(report.temporal_coverage));
 }
 if (require.main === module) {
   try { main(); }
