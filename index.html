@@ -737,6 +737,39 @@ details>summary{outline-offset:4px}
   #system-stats-card #system-stats{padding:0 10px 12px}
 }
 
+
+/* AI Edge Selector: read-only shadow monitoring panel */
+.ai-edge-card{border:1px solid #28536a!important;border-left:4px solid #38bdf8!important;background:linear-gradient(145deg,#12283d,#0d1929)!important}
+.ai-edge-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.ai-edge-head h3{margin:5px 0!important;color:#e8f6ff;font-size:17px}
+.ai-edge-head p{margin:0;color:#91a9bf;font-size:10px;line-height:1.45}
+.ai-edge-kicker{font-size:9px;font-weight:900;letter-spacing:1.1px;color:#64c9ed}
+.ai-edge-mode{flex:0 0 auto;padding:6px 8px;border:1px solid #37617a;border-radius:20px;background:#102d42;color:#7dd3fc;font-size:9px;font-weight:900}
+.ai-edge-state{margin:13px 0 10px;padding:9px 11px;border-radius:9px;font-size:10px;font-weight:900;line-height:1.45}
+.ai-edge-state.muted{background:#17283a;border:1px solid #354b61;color:#b7c7d8}
+.ai-edge-state.warn{background:#382c16;border:1px solid #80602a;color:#fcd78a}
+.ai-edge-state.good{background:#12352c;border:1px solid #287457;color:#8ef0c4}
+.ai-edge-state.bad{background:#3a2025;border:1px solid #8c3e4b;color:#ffb5bf}
+.ai-edge-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.ai-edge-metric{min-width:0;padding:10px 8px;border:1px solid #2b435b;border-radius:10px;background:#101f31}
+.ai-edge-metric strong{display:block;color:#e9f5ff;font-size:19px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.ai-edge-metric span{display:block;margin-top:4px;color:#91a8bd;font-size:9px;line-height:1.3}
+.ai-edge-section-title{margin:14px 0 7px;color:#91a9bf;font-size:9px;font-weight:900;letter-spacing:.8px}
+.ai-edge-horizons{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.ai-edge-horizons>div{padding:10px;border:1px solid #2b435b;border-radius:9px;background:#122238}
+.ai-edge-horizons b,.ai-edge-horizons span{display:block}
+.ai-edge-horizons b{font-size:10px;color:#dceeff}
+.ai-edge-horizons span{margin-top:5px;font-size:9px;color:#91a8bd}
+.ai-edge-data-meta{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}
+.ai-edge-data-meta>div{display:flex;justify-content:space-between;gap:8px;padding:7px 8px;border-radius:8px;background:#0e1b2b;font-size:9px}
+.ai-edge-data-meta span{color:#8fa6bd}
+.ai-edge-data-meta b{color:#d8e8f5;text-align:right}
+.ai-edge-warning{margin:10px 0 7px;padding:9px 10px;border-left:2px solid #d5a54a;background:#2b261b;color:#e9d8b4;font-size:9px;line-height:1.5}
+.ai-edge-footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px;color:#8097ae;font-size:9px}
+.ai-edge-link{display:inline-block;margin-top:10px;color:#7dd3fc;font-size:9px;font-weight:900;text-decoration:none;letter-spacing:.5px}
+.ai-edge-link:hover{text-decoration:underline}
+@media(max-width:560px){.ai-edge-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ai-edge-metric{padding:9px}.ai-edge-metric strong{font-size:18px}.ai-edge-data-meta>div{display:block}.ai-edge-data-meta b{display:block;text-align:left;margin-top:4px}}
+
 </style>
 </head>
 
@@ -766,6 +799,31 @@ details>summary{outline-offset:4px}
 <section id="live-pressure-overview" aria-live="polite" aria-label="Najvyšší aktuálny tlak v LIVE zápasoch">
   <div style="font-size:12px;font-weight:900;color:#c8e7ff">🔥 TOP LIVE TLAK</div>
   <div style="font-size:10px;color:#8fa6bf;margin-top:5px">Čakám na aktuálne štatistiky zápasov…</div>
+</section>
+
+
+<section id="ai-edge-selector-panel" class="card ai-edge-card" aria-live="polite">
+  <div class="ai-edge-head">
+    <div><div class="ai-edge-kicker">PREDIKČNÁ ANALYTIKA · FUTBAL</div><h3>🎯 AI EDGE SELECTOR</h3>
+      <p>Výber kvalitných predikčných príležitostí · bez kurzov a bez automatických stávok</p></div>
+    <span class="ai-edge-mode">SHADOW MODE</span>
+  </div>
+  <div id="ai-edge-state" class="ai-edge-state muted">NAČÍTAVAM DÁTOVÝ AUDIT…</div>
+  <div id="ai-edge-metrics" class="ai-edge-metrics">
+    <div class="ai-edge-metric"><strong>—</strong><span>Archivované zápasy</span></div>
+    <div class="ai-edge-metric"><strong>—</strong><span>Flashscore snímky</span></div>
+    <div class="ai-edge-metric"><strong>—</strong><span>Potvrdené označenia</span></div>
+    <div class="ai-edge-metric"><strong>—</strong><span>Zápasy so štatistikami</span></div>
+  </div>
+  <div class="ai-edge-section-title">STAV PREDIKČNÉHO MODULU</div>
+  <div class="ai-edge-horizons">
+    <div><b>GÓL DO 15 MIN</b><span>Čaká na validovaný model</span></div>
+    <div><b>GÓL DO 25 MIN</b><span>Čaká na validovaný model</span></div>
+  </div>
+  <div id="ai-edge-data-meta" class="ai-edge-data-meta"><div><span>Načítavam report…</span><b>—</b></div></div>
+  <p id="ai-edge-warning" class="ai-edge-warning">Predikcie sú vypnuté, kým nebude overená kvalita datasetu a modelu.</p>
+  <div class="ai-edge-footer"><span id="ai-edge-updated">Čakám na report…</span><span id="ai-edge-audit-status">Audit workflow: —</span></div>
+  <a id="ai-edge-audit-link" class="ai-edge-link" href="https://github.com/elcicarito/live-edge-ai-pro./actions/workflows/ai-edge-selector-dataset.yml" target="_blank" rel="noopener">OTVORIŤ AUDIT NA GITHUBE ↗</a>
 </section>
 
 <div id="signal" hidden></div>
@@ -922,6 +980,7 @@ OBNOVIŤ SKENER
 <script src="./scanner.js?v=184"></script>
 <script src="./basketball.js?v=12"></script>
 <script src="./hockey.js?v=1"></script>
+<script src="./ai-edge-selector-ui.js?v=1"></script>
 
 </body>
 </html>
