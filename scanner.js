@@ -4462,7 +4462,7 @@
     addText(target, "Štatistiky, incidenty, HT údaje a zostavy sa počítajú iba z polí skutočne prítomných v API. Zápasy sa deduplikujú podľa ID; chýbajúce údaje sa nepovažujú za nulu. Počty incidentov sú udalosti v uloženom zápase, nie počet historických LIVE snapshotov.");
   }
 
-  function renderSystemStats(current, signalArchive, matchArchive) {
+  function renderSystemStats(current, bttsArchive, matchArchive) {
     if (!systemStatsEl) return;
     systemStatsEl.innerHTML = "";
 
@@ -5918,7 +5918,7 @@
           }
           lastRenderedMatchArchive = matchArchive;
         }
-        renderSystemStats(current, signalArchive, matchArchive);
+        renderSystemStats(current, bttsArchive, matchArchive);
         renderApiDataQuality(current, matchArchive, []);
         if (
         signalArchive !== lastRenderedPerformanceGreen ||
@@ -6069,7 +6069,7 @@
         lastRenderedMatchArchive = matchArchive;
         renderApiDataQuality(current, matchArchive, []);
       }
-      renderSystemStats(current, signalArchive, matchArchive);
+      renderSystemStats(current, bttsArchive, matchArchive);
       if (
         signalArchive !== lastRenderedPerformanceGreen ||
         bttsArchive !== lastRenderedPerformanceBtts
