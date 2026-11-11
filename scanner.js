@@ -1573,7 +1573,7 @@
         return { interval: null, reason: "unknown-current-minute" };
       }
       // Nulová minúta je platný začiatok zápasu: krátky prvý interval možno zaradiť do 01–15.
-      const previousInterval = previousMinute === 0 && currentMinute >= 1 && currentMinute <= 15
+      const previousInterval = previousMinute === 0
         ? definitions.find(item => item.start === 1 && item.end === 15)
         : definitions.find(item => previousMinute >= item.start && previousMinute <= item.end);
       const currentInterval = definitions.find(item => currentMinute >= item.start && currentMinute <= item.end);
