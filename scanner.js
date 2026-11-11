@@ -5268,12 +5268,30 @@
     leagueLine.style.cssText = "font-size:12px;color:#a8b8cc;margin:2px 0 9px;";
     card.appendChild(leagueLine);
     const collectedDate = collectedAt ? new Date(collectedAt) : null;
-    if (collectedDate && Number.isFinite(collectedDate.getTime())) {
-      const dataStamp = document.createElement("div");
-      dataStamp.classList.add("match-data-stamp");
-      dataStamp.textContent = `ZBER DÁT · ${collectedDate.toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
-      card.appendChild(dataStamp);
-    }
+    const collectedTime = collectedDate && Number.isFinite(collectedDate.getTime()) ? collectedDate.getTime() : NaN;
+    const matchDataAge = Number.isFinite(collectedTime) ? Math.max(0, Date.now() - collectedTime) : null;
+    const matchDataFreshness = matchDataAge === null
+      ? { label: "ČAS MERANIA NEZNÁMY", color: "#f87171" }
+      : matchDataAge <= 3 * 60 * 1000
+        ? { label: "ČERSTVÉ", color: "#39e6a5" }
+        : matchDataAge <= MAX_DATA_AGE_MS
+          ? { label: "ONESKORENÉ", color: "#fbbf24" }
+          : { label: "ZASTARANÉ", color: "#f87171" };
+    const matchDataStamp = document.createElement("div");
+    matchDataStamp.classList.add("match-data-stamp");
+    const timeLabel = Number.isFinite(collectedTime)
+      ? collectedDate.toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      : "—";
+    const ageLabel = matchDataAge === null
+      ? "vek neznámy"
+      : matchDataAge < 60000
+        ? Math.floor(matchDataAge / 1000) + " s"
+        : Math.floor(matchDataAge / 60000) + " min";
+    const statsPresent = displayStats.length > 0;
+    matchDataStamp.textContent = `POSLEDNÉ MERANIE · ${timeLabel} · ${ageLabel} · ${matchDataFreshness.label} · ŠTATISTIKY ${statsPresent ? "DOSTUPNÉ" : "NEDOSTUPNÉ"}`;
+    matchDataStamp.style.color = matchDataFreshness.color;
+    matchDataStamp.style.lineHeight = "1.45";
+    card.appendChild(matchDataStamp);
 
     const priority = getMatchPriority(match, historyData, collectedAt, matchAllowsSignals, staleMode, signalArchive, bttsArchive);
 
