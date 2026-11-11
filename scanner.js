@@ -3122,9 +3122,14 @@
       };
       const latest=points[points.length-1];
       const latestValidLabel=document.createElement("div");
-      latestValidLabel.textContent="POSLEDNÝ PLATNÝ INTERVAL · "+timeLabel(latest.time);
-      latestValidLabel.style.cssText="font-size:9px;font-weight:800;letter-spacing:.35px;color:"+(result.recent?"#94a3b8":"#fbbf24")+";margin:2px 0 5px;";
+      latestValidLabel.textContent=interpretation.noActivity
+        ? "POSLEDNÉ HISTORICKÉ MERANIE · "+timeLabel(latest.time)+" · bez novej aktivity"
+        : "POSLEDNÝ PLATNÝ INTERVAL · "+timeLabel(latest.time);
+      latestValidLabel.style.cssText="font-size:9px;font-weight:800;letter-spacing:.35px;color:"+(interpretation.noActivity?"#fbbf24":"#94a3b8")+";margin:2px 0 5px;";
       panel.appendChild(latestValidLabel);
+      if (interpretation.noActivity) {
+        addText(panel, "Historické rozdelenie momenta z posledného platného merania – nejde o aktuálny tlak.", "10px");
+      }
       addLegend("DOMÁCI","#22c55e",latest.home);
       addLegend("HOSTIA","#94a3b8",latest.away);
       panel.appendChild(legend);
