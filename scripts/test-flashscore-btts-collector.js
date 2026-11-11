@@ -90,7 +90,7 @@ assert.equal(typeof metricContext.ai_quality_score.away, "number");
   }));
   fs.writeFileSync(
     path.join(timelineDir, "flashscore-match-timeline-2026-W46.jsonl.gz"),
-    zlib.gzipSync(JSON.stringify(timelineEntry) + "\\n")
+    zlib.gzipSync(JSON.stringify(timelineEntry))
   );
   const streamedHistory = await loadTimelineHistory(timelineDir);
   assert.equal(streamedHistory.length, 1, "timeline archive must stream and parse JSONL rows");
