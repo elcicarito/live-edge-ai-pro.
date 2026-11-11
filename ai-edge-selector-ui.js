@@ -140,7 +140,15 @@
     const saved=ledgerWrite(items);
     const hits=items.filter(x=>x.status==="HIT").length,misses=items.filter(x=>x.status==="MISS").length,unresolved=items.filter(x=>x.status==="UNRESOLVED").length,open=items.filter(x=>x.status==="OPEN").length;
     const summary=$("ai-edge-prediction-summary"),list=$("ai-edge-prediction-log");
-    if(summary) summary.innerHTML='<div><span>Uložené pozorovania</span><b>'+fmt(items.length)+'</b></div><div><span>Správne · HIT</span><b>'+fmt(hits)+'</b></div><div><span>Nesprávne · MISS</span><b>'+fmt(misses)+'</b></div><div><span>Nevyhodnotiteľné</span><b>'+fmt(unresolved)+'</b></div><div><span>Otvorené</span><b>'+fmt(open)+'</b></div>';
+    if(summary){
+      const groups=[{id:15,label:"Gól do 15 min"},{id:25,label:"Gól do 25 min"},{id:"FT",label:"Gól do konca zápasu"},{id:"NEXT_TEAM",label:"Ďalší skórujúci tím"}];
+      const groupHtml=groups.map(g=>{
+        const rows=items.filter(x=>x.target===g.id),h=rows.filter(x=>x.status==="HIT").length,m=rows.filter(x=>x.status==="MISS").length,u=rows.filter(x=>x.status==="UNRESOLVED").length,o=rows.filter(x=>x.status==="OPEN").length;
+        const decided=h+m,rate=decided?Math.round(h/decided*100)+"%":"—";
+        return '<div class="ai-edge-prediction-group"><strong>'+g.label+'</strong><span>HIT '+fmt(h)+' · MISS '+fmt(m)+' · nevyhodnotiteľné '+fmt(u)+' · otvorené '+fmt(o)+'</span><b>Úspešnosť vyhodnotených: '+rate+' ('+fmt(decided)+')</b></div>';
+      }).join("");
+      summary.innerHTML='<div><span>Všetky pozorovania</span><b>'+fmt(items.length)+'</b></div><div><span>HIT</span><b>'+fmt(hits)+'</b></div><div><span>MISS</span><b>'+fmt(misses)+'</b></div><div><span>Nevyhodnotiteľné</span><b>'+fmt(unresolved)+'</b></div><div><span>Otvorené</span><b>'+fmt(open)+'</b></div>'+groupHtml;
+    }
     if(list){
       const recent=items.slice().reverse().slice(0,8);
       list.innerHTML=recent.length?recent.map(p=>{
