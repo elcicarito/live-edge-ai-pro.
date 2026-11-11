@@ -34,7 +34,7 @@ for (const [snapshot, expected] of cases) {
 }
 const pairStart = source.indexOf("const activityIntervalForPair = (");
 assert.notEqual(pairStart, -1, "activity interval attribution helper must exist");
-const pairEnd = source.indexOf("\\n    };", pairStart);
+const pairEnd = source.indexOf("\n    };", pairStart);
 assert.notEqual(pairEnd, -1, "activity interval attribution helper must be closed");
 const pairExpression = source.slice(pairStart + "const activityIntervalForPair = ".length, pairEnd + 6).trim();
 const activityIntervalForPair = vm.runInNewContext("const activityIntervalForPair = " + pairExpression + "; activityIntervalForPair");
