@@ -90,7 +90,16 @@ function getBttsCandidates(match) {
     });
   }
   return candidates.map(candidate => ({
-    ...candidate, minute, homeScore, awayScore, combinedSot, combinedShots
+    ...candidate,
+    minute,
+    homeScore,
+    awayScore,
+    combinedSot,
+    combinedShots,
+    homeSot: sot.home,
+    awaySot: sot.away,
+    homeShots: total.home,
+    awayShots: total.away
   }));
 }
 
@@ -151,12 +160,30 @@ async function run({ current, archive, detailsFetcher = getDetails, now = new Da
         createdAt: collectedAt,
         status: "OPEN",
         sourceSnapshot: {
+          schema_version: 2,
           collected_at: collectedAt,
           minute: candidate.minute,
           live_clock: match.live_clock || null,
           stage: match.stage || match.status_text || null,
           home_score: candidate.homeScore,
           away_score: candidate.awayScore,
+          stats_summary: {
+            home_shots_on_target: candidate.homeSot,
+            away_shots_on_target: candidate.awaySot,
+            combined_shots_on_target: candidate.combinedSot,
+            home_total_shots: candidate.homeShots,
+            away_total_shots: candidate.awayShots,
+            combined_total_shots: candidate.combinedShots
+          },
+          metric_availability: {
+            score: true,
+            minute: true,
+            shots_on_target: true,
+            total_shots: true,
+            goal_threat: false,
+            activity_rate: false,
+            ai_quality_score: false
+          },
           raw_stats: Array.isArray(match.stats) && match.stats.length ? match.stats : match.flashscore_stats || []
         }
       });
