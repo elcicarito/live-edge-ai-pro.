@@ -3055,17 +3055,17 @@
         addText(panel, "Tlak v poslednom intervale (" + result.recent.minutes + " min): Domáci " + result.recent.home + "/100 | Hostia " + result.recent.away + "/100", "13px");
       }
       if (interpretation.lowSample) {
-        addText(panel, "MALÁ VZORKA: iba " + interpretation.sampleCount + " nová sledovaná udalosť/udalosti v intervale; pomer momenta môže byť výrazný aj pri nízkej aktivite.", "10px");
+        addText(panel, "MALÁ VZORKA: iba " + interpretation.sampleCount + " nový strelecký prírastok/prírastky v intervale; pomer momenta môže byť výrazný aj pri nízkej aktivite.", "10px");
       }
       addText(panel, "Aktivita za 10 min: Domáci " + result.recent.homeRate.toFixed(1) + " | Hostia " + result.recent.awayRate.toFixed(1));
       addText(panel, "Vážený index: strely na bránu × 3 + strely mimo bránu, prepočítané na 10 minút; nejde o doslovný počet striel.", "10px");
       const used = result.recent.used.map(x => {
-        const label = x.key === "sot" ? "SOT" : x.key === "off" ? "strely mimo" : "rohy";
+        const label = x.key === "sot" ? "SOT" : "strely mimo";
         return label + " " + x.home + ":" + x.away;
       }).join(" · ");
-      addText(panel, "Nové udalosti: " + used, "10px");
+      addText(panel, "Nové strelecké prírastky: " + used, "10px");
     } else {
-      addText(panel, "Čakám na platné porovnanie dvoch meraní v intervale 1,5–15 minút. Bez nových striel/rohov sa tlak nevymýšľa.", "11px");
+      addText(panel, "Čakám na platné porovnanie dvoch meraní v intervale 1,5–15 minút. Bez nových striel sa strelecký tlak nevymýšľa; rohy sú iba doplnkový údaj.", "11px");
     }
     if (result.acceleration) {
       addText(panel, "Zrýchlenie: domáci " + result.acceleration.homeState + " (" + result.acceleration.homePreviousRate + " → " + result.acceleration.homeLatestRate + "), hostia " + result.acceleration.awayState + " (" + result.acceleration.awayPreviousRate + " → " + result.acceleration.awayLatestRate + ")", "11px");
