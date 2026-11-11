@@ -117,6 +117,8 @@ const stoppedMomentum = classifyMomentumActivity({ home: 79, away: 21 }, { homeR
 assert.equal(stoppedMomentum.dominance, "DOMÁCI");
 assert.equal(stoppedMomentum.current, "BEZ NOVEJ SLEDOVANEJ AKTIVITY");
 assert.equal(stoppedMomentum.noActivity, true);
+assert.ok(source.includes("POSLEDNÉ HISTORICKÉ MERANIE"), "zero-activity chart must label its last point as historical");
+assert.ok(source.includes("Historické rozdelenie momenta z posledného platného merania – nejde o aktuálny tlak."), "zero-activity chart must explain the historical ratio");
 assert.ok(source.includes("pomer tlaku sa nezobrazuje."), "zero activity must not display a stale pressure ratio");
 assert.match(stoppedMomentum.development, /SPOMAĽUJE/);
 const activeMomentum = classifyMomentumActivity({ home: 45, away: 55 }, { homeRate: 2.5, awayRate: 0.5 }, null);
