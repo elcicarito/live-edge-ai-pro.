@@ -43,6 +43,11 @@ on:
 permissions:
   contents: read
 
+# Serialize repeated validation runs without cancelling an active run.
+concurrency:
+  group: flashscore-clock-tests
+  cancel-in-progress: false
+
 jobs:
   test:
     runs-on: ubuntu-latest
