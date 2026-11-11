@@ -1874,6 +1874,51 @@
       addText(target, "Prírastky sa započítajú iba pri susedných snímkach s odstupom najviac 7 minút, ak obe časové značky patria do rovnakého 15-minútového úseku. Prechody cez hranicu úseku a neznámy začiatok sa vynechávajú; aktivita medzi meraniami sa nedá presne rozdeliť.", "10px");
     }
 
+    // Odvodené góly vznikajú iba pri preukázateľnom zvýšení skóre medzi dvoma uloženými snímkami.
+    // Ich čas je interval meraní, nikdy nie vymyslená presná minúta.
+    const deriveScoreChanges = (rows, officialEvents = []) => {
+      const parseMinute = value => {
+        const match = String(value ?? "").match(/(\\d+)(?:\\s*\\+\\s*(\\d+))?/);
+        if (!match) return null;
+        const minute = Number(match[1]) + Number(match[2] || 0);
+        return Number.isFinite(minute) ? minute : null;
+      };
+      const formatMinute = value => String(value) + "′";
+      const derived = [];
+      for (let index = 1; index < rows.length; index++) {
+        const previous = rows[index - 1];
+        const current = rows[index];
+        if (!previous?.match || !current?.match || !(Number(current.time) > Number(previous.time))) continue;
+        const previousHome = Number(previous.match.home_score);
+        const previousAway = Number(previous.match.away_score);
+        const currentHome = Number(current.match.home_score);
+        const currentAway = Number(current.match.away_score);
+        if (![previousHome, previousAway, currentHome, currentAway].every(Number.isInteger)) continue;
+        const homeDelta = currentHome - previousHome;
+        const awayDelta = currentAway - previousAway;
+        if (homeDelta < 0 || awayDelta < 0 || homeDelta + awayDelta === 0) continue;
+        const previousMinute = parseMinute(previous.match.live_minute ?? previous.match.minute);
+        const currentMinute = parseMinute(current.match.live_minute ?? current.match.minute);
+        if (previousMinute !== null && currentMinute !== null && currentMinute < previousMinute) continue;
+        const hasOfficialGoalInRange = officialEvents.some(event => {
+          if (event.kind !== "⚽ Gól" && event.kind !== "⚽ Penalta") return false;
+          const eventMinute = parseMinute(event.minute);
+          return eventMinute !== null && previousMinute !== null && currentMinute !== null && eventMinute >= previousMinute && eventMinute <= currentMinute;
+        });
+        if (hasOfficialGoalInRange) continue;
+        const clock = value => new Date(Number(value)).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" });
+        const range = previousMinute !== null && currentMinute !== null
+          ? "medzi " + formatMinute(previousMinute) + "–" + formatMinute(currentMinute)
+          : "medzi " + clock(previous.time) + "–" + clock(current.time);
+        const score = previousHome + ":" + previousAway + " → " + currentHome + ":" + currentAway;
+        const homeName = String(current.match.home || current.match.home_name || "Domáci");
+        const awayName = String(current.match.away || current.match.away_name || "Hostia");
+        if (homeDelta > 0) derived.push({ kind: "⚽ Gól (odvodený zo skóre)", minute: range, detail: homeName + " · +" + homeDelta + " · skóre " + score, time: currentMinute ?? Number(current.time) / 60000, derived: true });
+        if (awayDelta > 0) derived.push({ kind: "⚽ Gól (odvodený zo skóre)", minute: range, detail: awayName + " · +" + awayDelta + " · skóre " + score, time: currentMinute ?? Number(current.time) / 60000, derived: true });
+      }
+      return derived;
+    };
+
     // Incidenty sa čítajú iba z polí, ktoré sú skutočne uložené vo Flashscore snímkach.
     const sources = [...records.map(row => row.match), match];
     const found = new Map();
@@ -1911,13 +1956,15 @@
       });
     };
     sources.forEach(source => walk(source));
-    const events = [...found.values()].sort((a, b) => a.time - b.time).slice(0, 12);
+    const officialEvents = [...found.values()];
+    const derivedEvents = deriveScoreChanges(valid, officialEvents);
+    const events = [...officialEvents, ...derivedEvents].sort((a, b) => a.time - b.time).slice(0, 12);
     const eventHeading = document.createElement("div");
-    eventHeading.textContent = "SKUTOČNÉ UDALOSTI ZÁPASU";
+    eventHeading.textContent = "ZACHYTENÉ A ODVODENÉ UDALOSTI ZÁPASU";
     eventHeading.style.cssText = "font-size:11px;font-weight:900;color:#dbeafe;margin:14px 0 7px;";
     target.appendChild(eventHeading);
     if (!events.length) {
-      addText(target, "Flashscore zatiaľ neposkytol uložené góly, karty ani striedania pre tento zápas.", "10px");
+      addText(target, "Flashscore zatiaľ neposkytol uložené udalosti a v uložených snímkach sa nezistila zmena skóre.", "10px");
     } else {
       events.forEach(event => {
         const row = document.createElement("div");
