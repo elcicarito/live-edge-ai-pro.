@@ -127,7 +127,7 @@ function deriveLiveClock(detail, fallbackStage, nowMs = Date.now()) {
   };
 }
 
-function makeMatch(raw, competition, stats, statsError, commentary, commentaryError, detail, detailError) {
+function makeMatch(raw, competition, stats, statsError, statsCollectedAt, statsFetchStatus, commentary, commentaryError, detail, detailError) {
   const home = nameOf(raw.home), away = nameOf(raw.away);
   const stage = String(detail?.stage || raw.stage || raw.status || "LIVE");
   const clock = deriveLiveClock(detail, stage);
@@ -172,6 +172,9 @@ function makeMatch(raw, competition, stats, statsError, commentary, commentaryEr
     commentary_error: commentaryError || null,
     start_time: raw.start_time || null,
     collected_at: now,
+    match_collected_at: now,
+    stats_collected_at: statsCollectedAt || null,
+    stats_fetch_status: statsFetchStatus,
     home_score: numberOf(raw.home_score),
     away_score: numberOf(raw.away_score),
     has_statistics: raw.has_statistics === true,
@@ -184,6 +187,9 @@ function makeMatch(raw, competition, stats, statsError, commentary, commentaryEr
 function snapshotOf(match) {
   return {
     collected_at: match.collected_at,
+    match_collected_at: match.match_collected_at,
+    stats_collected_at: match.stats_collected_at,
+    stats_fetch_status: match.stats_fetch_status,
     live_minute: match.live_minute,
     last_event_minute: match.last_event_minute,
     stage: match.stage,
@@ -226,6 +232,8 @@ async function main() {
       if (index >= rawMatches.length) return;
       const { raw, competition } = rawMatches[index];
       let stats = [], statsError = null;
+      let statsCollectedAt = null;
+      let statsFetchStatus = "not_requested";
       let commentary = { lastEventMinute: null, count: 0, availableTabs: [] };
       let commentaryError = null;
       let detail = null, detailError = null;
@@ -255,15 +263,18 @@ async function main() {
       ].map(value => String(value).toLowerCase());
       const statisticsTabAvailable = availableTabs.includes("statistics");
       if (raw.has_statistics === true || statisticsTabAvailable) {
+        statsFetchStatus = "error";
         try {
           const payload = await getJSON("/matches/statistics", { match: String(raw.id) });
           stats = allStats(payload);
+          statsCollectedAt = new Date().toISOString();
+          statsFetchStatus = stats.length ? "success_with_data" : "success_empty";
         } catch (error) {
           statsError = error.message;
           errors.push(String(raw.id) + " statistics: " + statsError);
         }
       }
-      records.push(makeMatch(raw, competition, stats, statsError, commentary, commentaryError, detail, detailError));
+      records.push(makeMatch(raw, competition, stats, statsError, statsCollectedAt, statsFetchStatus, commentary, commentaryError, detail, detailError));
     }
   });
   await Promise.all(workers);
