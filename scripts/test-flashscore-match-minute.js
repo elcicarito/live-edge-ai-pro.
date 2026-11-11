@@ -175,4 +175,7 @@ assert.equal(overCaptured[0].status, "over-captured", "captured increments above
 const missingCoverage = reconcileActivityCoverage(coverageRows, [], [coverageDefinitions[0]], () => null);
 assert.equal(missingCoverage[0].status, "missing", "missing endpoint stats must not produce a coverage percentage");
 
+assert.match(source, /Vážený index: strely na bránu × 3 \+ strely mimo bránu, prepočítané na 10 minút/);
+assert.match(source, /Platné intervaly v celej načítanej histórii/);
+assert.match(source, /najviac 10 posledných platných intervalov z posledných 45 minút/);
 console.log("Flashscore match-minute clock, activity-bin, score-change and activity-coverage diagnostics tests passed.");
