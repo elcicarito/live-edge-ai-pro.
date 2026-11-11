@@ -64,12 +64,7 @@ assert.notEqual(analysisStart, -1, "score-change diagnostics helper must exist")
 const analysisEnd = source.indexOf("\n    };", analysisStart);
 assert.notEqual(analysisEnd, -1, "score-change diagnostics helper must be closed");
 const analysisExpression = source.slice(analysisStart + "const analyzeScoreChanges = ".length, analysisEnd + 6).trim();
-const deriveStart = source.indexOf("const deriveScoreChanges = (");
-assert.notEqual(deriveStart, -1, "score-change retrospective helper must exist");
-const deriveEnd = source.indexOf("\n    };", deriveStart);
-assert.notEqual(deriveEnd, -1, "score-change helper must be closed");
-const deriveExpression = source.slice(deriveStart + "const deriveScoreChanges = ".length, deriveEnd + 6).trim();
-const deriveScoreChanges = vm.runInNewContext("const analyzeScoreChanges = " + analysisExpression + "; const deriveScoreChanges = " + deriveExpression + "; deriveScoreChanges");
+const deriveScoreChanges = (rows, officialEvents = []) => analyzeScoreChanges(rows, officialEvents).events;
 const snapshots = [
   { time: 1000, match: { home_score: 1, away_score: 1, live_minute: "43′", home: "Home", away: "Away" } },
   { time: 2000, match: { home_score: 3, away_score: 1, live_minute: "55′", home: "Home", away: "Away" } }
