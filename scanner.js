@@ -1774,6 +1774,38 @@
       });
     }
     target.appendChild(diagnosticPanel);
+    const coveragePanel = document.createElement("div");
+    coveragePanel.style.cssText = "padding:9px 10px;margin:8px 0 10px;background:#102337;border:1px solid #36516b;border-radius:9px;";
+    const coverageTitle = document.createElement("div");
+    coverageTitle.textContent = "KONTROLA POKRYTIA ZACHYTENEJ AKTIVITY";
+    coverageTitle.style.cssText = "font-size:10px;font-weight:900;color:#e2e8f0;margin-bottom:6px;";
+    coveragePanel.appendChild(coverageTitle);
+    let coverageRows = 0;
+    activityCoverage.forEach(item => {
+      if (item.status === "missing") return;
+      coverageRows++;
+      const line = document.createElement("div");
+      line.style.cssText = "padding:5px 0;border-top:1px solid #294257;font-size:10px;line-height:1.45;";
+      const capturedText = item.captured.home + ":" + item.captured.away;
+      if (item.status === "reset") {
+        line.textContent = item.label + " · neporovnateľné: reset kumulatívneho počítadla";
+      } else if (item.status === "over-captured") {
+        line.textContent = item.label + " · zachytené " + capturedText + " prevyšuje celkový prírastok " + item.total.home + ":" + item.total.away + " — preveriť nekonzistenciu dát";
+        line.style.color = "#fbbf24";
+      } else {
+        const percent = value => value === null ? "bez zmeny" : value + "%";
+        line.textContent = item.label + " · celkový prírastok " + item.total.home + ":" + item.total.away +
+          " · zachytené " + capturedText +
+          " · nepriradené " + item.unassigned.home + ":" + item.unassigned.away +
+          " · pokrytie D/H " + percent(item.coverage.home) + " / " + percent(item.coverage.away);
+        line.style.color = item.unassigned.home || item.unassigned.away ? "#fcd34d" : "#baf7df";
+      }
+      coveragePanel.appendChild(line);
+    });
+    if (coverageRows) {
+      addText(coveragePanel, "Porovnanie je od prvého po posledné meranie s dostupnou hodnotou danej metriky. Nepriradený rozdiel môže pochádzať z dlhých medzier, prestávky, prechodov medzi 15-minútovými úsekmi alebo neúplných párov; nie je automaticky chybou zberača.", "9px");
+      target.appendChild(coveragePanel);
+    }
     if (!intervalRows.length) {
       addText(target, "Pre časové úseky zatiaľ nie je dosť susedných snímok s platnými kumulatívnymi štatistikami.", "10px");
     } else {
