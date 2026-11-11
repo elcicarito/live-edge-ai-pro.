@@ -4,9 +4,12 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 const source = fs.readFileSync(require("node:path").join(__dirname, "..", "scanner.js"), "utf8");
-const match = source.match(/const minuteOf = snapshot => \\{[\\s\\S]*?\\n    \\};/);
-assert.ok(match, "minuteOf parser must exist in scanner.js");
-const minuteOf = vm.runInNewContext("(" + match[0].replace(/^const minuteOf = /, "").replace(/;$/, "") + ")");
+const start = source.indexOf("    const minuteOf = snapshot => {");
+assert.notEqual(start, -1, "minuteOf parser must exist in scanner.js");
+const end = source.indexOf("\\n    };", start);
+assert.notEqual(end, -1, "minuteOf parser must be closed");
+const expression = source.slice(start + "    const minuteOf = ".length, end + 5).trim();
+const minuteOf = vm.runInNewContext("(" + expression + ")");
 
 const cases = [
   [{ live_minute: 49 }, 49],
