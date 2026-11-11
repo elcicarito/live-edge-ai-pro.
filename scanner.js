@@ -1835,6 +1835,30 @@
         line.style.color = item.unassigned.home || item.unassigned.away ? "#fcd34d" : "#baf7df";
       }
       coveragePanel.appendChild(line);
+      if (item.unassigned && (item.unassigned.home || item.unassigned.away)) {
+        const reasonLabels = {
+          "gap-over-7": "medzera nad 7 min",
+          "half-time": "prestávka HT",
+          "finished-or-penalties": "koniec / penalty",
+          "missing-minute": "chýbajúca minúta",
+          "crosses-interval-boundary": "prechod cez hranicu 15-minútového úseku",
+          "unknown-start-minute": "neznáma začiatočná minúta",
+          "outside-defined-intervals": "mimo definovaných časových úsekov",
+          "no-usable-stats": "bez použiteľných štatistík",
+          "invalid-gap": "neplatný časový odstup"
+        };
+        item.causes.forEach(cause => {
+          const causeLine = document.createElement("div");
+          causeLine.style.cssText = "padding:3px 0 3px 8px;font-size:9px;color:#9fb5cb;line-height:1.4;";
+          const samples = cause.samples.map(sample =>
+            sample.fromAt + " (" + sample.fromMinute + "′) → " + sample.toAt + " (" + sample.toMinute + "′), " + sample.gap + " min"
+          ).join("; ");
+          causeLine.textContent = "Možný zdroj · " + (reasonLabels[cause.reason] || cause.reason) +
+            " · prírastok v preskočených dvojiciach " + cause.home + ":" + cause.away +
+            (samples ? " · " + samples : "");
+          coveragePanel.appendChild(causeLine);
+        });
+      }
     });
     if (coverageRows) {
       addText(coveragePanel, "Porovnanie je od prvého po posledné meranie s dostupnou hodnotou danej metriky. Nepriradený rozdiel môže pochádzať z dlhých medzier, prestávky, prechodov medzi 15-minútovými úsekmi alebo neúplných párov; nie je automaticky chybou zberača.", "9px");
