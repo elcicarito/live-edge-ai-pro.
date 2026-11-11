@@ -1,0 +1,29 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const vm = require("node:vm");
+const source = fs.readFileSync(require("node:path").join(__dirname, "..", "scanner.js"), "utf8");
+const match = source.match(/const minuteOf = snapshot => \\{[\\s\\S]*?\\n    \\};/);
+assert.ok(match, "minuteOf parser must exist in scanner.js");
+const minuteOf = vm.runInNewContext("(" + match[0].replace(/^const minuteOf = /, "").replace(/;$/, "") + ")");
+
+const cases = [
+  [{ live_minute: 49 }, 49],
+  [{ live_minute: "49′" }, 49],
+  [{ minute: "45:00" }, 45],
+  [{ live_minute: "45+2" }, 47],
+  [{ live_minute: "45+2′" }, 47],
+  [{ live_minute: "90+4" }, 94],
+  [{ live_minute: 120 }, 120],
+  [{ live_minute: "HT" }, null],
+  [{ live_minute: "FT" }, null],
+  [{ live_minute: "2nd Half" }, null],
+  [{ live_minute: "LIVE" }, null],
+  [{ live_minute: "45+99" }, null],
+  [{ live_minute: 0 }, null]
+];
+for (const [snapshot, expected] of cases) {
+  assert.equal(minuteOf(snapshot), expected, JSON.stringify(snapshot));
+}
+console.log("Flashscore match-minute parsing tests passed.");
