@@ -1544,8 +1544,22 @@
     };
     const minuteOf = snapshot => {
       const raw = snapshot?.live_minute ?? snapshot?.minute;
-      const parsed = Number(String(raw ?? "").replace(/[^0-9]/g, ""));
-      return Number.isFinite(parsed) && parsed >= 1 && parsed <= 120 ? parsed : null;
+      if (raw === null || raw === undefined || String(raw).trim() === "") return null;
+      if (typeof raw === "number") {
+        return Number.isInteger(raw) && raw >= 1 && raw <= 120 ? raw : null;
+      }
+      const text = String(raw).trim().toUpperCase();
+      // Prestávka/koniec zápasu nie sú číselná minúta. Neodvodzujeme ju zo skóre ani fázy.
+      if (/^(?:HT|HALF.?TIME|BREAK|FT|FULL.?TIME|AET|PEN(?:ALTIES)?)$/.test(text)) return null;
+      let parsed = null;
+      const stoppage = text.match(/^(\\d{1,3})\\s*\\+\\s*(\\d{1,2})\\s*(?:['′]|MIN(?:UTE)?|MINÚTA)?$/);
+      if (stoppage) {
+        parsed = Number(stoppage[1]) + Number(stoppage[2]);
+      } else {
+        const regular = text.match(/^(\\d{1,3})(?::\\d{2})?\\s*(?:['′]|MIN(?:UTE)?|MINÚTA)?$/);
+        if (regular) parsed = Number(regular[1]);
+      }
+      return Number.isInteger(parsed) && parsed >= 1 && parsed <= 120 ? parsed : null;
     };
     const statNumber = value => {
       const parsed = Number(String(value ?? "").replace(",", ".").replace(/[^0-9.-]/g, ""));
