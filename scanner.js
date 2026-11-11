@@ -4474,7 +4474,9 @@
       ? Number(current.live_count)
       : (Array.isArray(current?.records) ? current.records.length : 0);
 
-    const signals = Array.isArray(signalArchive?.signals) ? signalArchive.signals : null;
+    // Úvodná signálová analytika číta iba skutočný Flashscore BTTS archív.
+    // Starý kombinovaný archív signálov sa zámerne nepoužíva.
+    const signals = Array.isArray(bttsArchive?.signals) ? bttsArchive.signals : null;
     const wins = signals ? signals.filter(item => item?.status === "WIN").length : null;
     const losses = signals ? signals.filter(item => item?.status === "LOSS").length : null;
     const open = signals ? signals.filter(item => item?.status === "OPEN").length : null;
