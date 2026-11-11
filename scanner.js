@@ -4533,6 +4533,7 @@
 
     const heading = document.createElement("div");
     heading.textContent = "STAV ZBERU A VÝSLEDKY";
+    addText(systemStatsEl, "Signálová analytika používa výhradne uložený Flashscore BTTS archív; výsledkový archív zápasov sa používa samostatne na počty čakajúcich a potvrdených zápasov.");
     heading.style.cssText = "font-size:14px;font-weight:900;margin:4px 0 10px;";
     systemStatsEl.appendChild(heading);
 
