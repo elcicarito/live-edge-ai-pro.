@@ -90,6 +90,17 @@
       const live=usable.find(x=>String(x.record.match.id)===String(p.matchId));
       if(live) timeline.push({time:now,match:live.record.match});
       timeline.sort((a,b)=>a.time-b.time);
+      if(p.target==="RESULT_1X2"){
+        const last=timeline[timeline.length-1];
+        const ended=last&&/finished|ended|after penalties|\\bft\\b/i.test(String(last.match?.status||"")+" "+String(last.match?.status_text||""));
+        if(ended){
+          const hs=Number(last.match.home_score)||0,as=Number(last.match.away_score)||0;
+          const actual=hs>as?"HOME":as>hs?"AWAY":"DRAW";
+          p.status=actual===p.predictedOutcome?"HIT":"MISS";
+          p.actualOutcome=actual;p.resultScore=hs+":"+as;p.checkedAt=last.time;
+        }
+        continue;
+      }
       if(p.target==="BTTS"){
         const bothScored=timeline.find(x=>(Number(x.match?.home_score)||0)>0&&(Number(x.match?.away_score)||0)>0);
         if(bothScored){
@@ -160,6 +171,24 @@
           startHome:Number(m.home_score)||0,startAway:Number(m.away_score)||0,startGoals:scoreOf(m),
           pressure,pressureSide:predictedTeam,status:"OPEN"});
       }
+      // Experimental 1X2 baseline: score state first; pressure only breaks late level-score ties.
+      if(minute>=60&&minute<90){
+        const hs=Number(m.home_score)||0,as=Number(m.away_score)||0;
+        const gap=fx.home-fx.away;
+        let predictedOutcome=null,rule="";
+        if(hs>as){predictedOutcome="HOME";rule="aktuálne vedenie";}
+        else if(as>hs){predictedOutcome="AWAY";rule="aktuálne vedenie";}
+        else if(minute>=65&&gap>=18){predictedOutcome="HOME";rule="vyrovnané skóre · výrazný tlak domácich";}
+        else if(minute>=65&&gap<=-18){predictedOutcome="AWAY";rule="vyrovnané skóre · výrazný tlak hostí";}
+        else if(minute>=75&&Math.abs(gap)<=8){predictedOutcome="DRAW";rule="neskoré vyrovnané skóre a tlak";}
+        if(predictedOutcome){
+          const key=[m.id,"RESULT_1X2",Math.floor(minute/10),hs,as].join(":");
+          if(!items.some(x=>x.id===key)) items.push({id:key,matchId:String(m.id),home:m.home,away:m.away,
+            target:"RESULT_1X2",predictedOutcome,rule,startMinute:minute,deadlineMinute:120,createdAt:now,
+            startHome:hs,startAway:as,pressure:Math.max(fx.home,fx.away),pressureGap:Math.round(gap),
+            status:"OPEN"});
+        }
+      }
       const hs=Number(m.home_score)||0,as=Number(m.away_score)||0;
       const bothAlreadyScored=hs>0&&as>0;
       const scorelessPressure=hs===0&&as===0?Math.min(fx.home,fx.away):(hs===0?fx.home:as===0?fx.away:0);
@@ -175,7 +204,7 @@
     const hits=items.filter(x=>x.status==="HIT").length,misses=items.filter(x=>x.status==="MISS").length,unresolved=items.filter(x=>x.status==="UNRESOLVED").length,open=items.filter(x=>x.status==="OPEN").length;
     const summary=$("ai-edge-prediction-summary"),list=$("ai-edge-prediction-log");
     if(summary){
-      const groups=[{id:15,label:"Gól do 15 min"},{id:25,label:"Gól do 25 min"},{id:"FT",label:"Gól do konca zápasu"},{id:"NEXT_TEAM",label:"Ďalší skórujúci tím"},{id:"BTTS",label:"BTTS · oba tímy skórujú"}];
+      const groups=[{id:15,label:"Gól do 15 min"},{id:25,label:"Gól do 25 min"},{id:"FT",label:"Gól do konca zápasu"},{id:"NEXT_TEAM",label:"Ďalší skórujúci tím"},{id:"BTTS",label:"BTTS · oba tímy skórujú"},{id:"RESULT_1X2",label:"1X2 · konečný výsledok"}];
       const groupHtml=groups.map(g=>{
         const rows=items.filter(x=>x.target===g.id),h=rows.filter(x=>x.status==="HIT").length,m=rows.filter(x=>x.status==="MISS").length,u=rows.filter(x=>x.status==="UNRESOLVED").length,o=rows.filter(x=>x.status==="OPEN").length;
         const decided=h+m,rate=decided?Math.round(h/decided*100)+"%":"—";
@@ -187,9 +216,9 @@
       const recent=items.slice().reverse().slice(0,8);
       list.innerHTML=recent.length?recent.map(p=>{
         const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":p.status==="UNRESOLVED"?"NEVYHODNOTITEĽNÉ":"OPEN";
-        const horizon=p.target==="FT"?"gól do konca zápasu":p.target==="NEXT_TEAM"?"ďalší gól · "+esc(p.predictedTeam):p.target==="BTTS"?"oba tímy skórujú do FT":"gól do "+p.target+" min";
+        const horizon=p.target==="FT"?"gól do konca zápasu":p.target==="NEXT_TEAM"?"ďalší gól · "+esc(p.predictedTeam):p.target==="BTTS"?"oba tímy skórujú do FT":p.target==="RESULT_1X2"?"1X2 · "+(p.predictedOutcome==="HOME"?esc(p.home):p.predictedOutcome==="AWAY"?esc(p.away):"remíza"):"gól do "+p.target+" min";
         const extra=p.status==="HIT"?(p.target==="BTTS"?" · oba tímy skórovali · "+(p.resultScore||""): " · gól "+(p.resultMinute??"—")+"′"):p.status==="MISS"?(p.target==="BTTS"?" · aspoň jeden tím neskóroval":" · bez gólu v horizonte"):p.status==="UNRESOLVED"?" · čas gólu alebo celý horizont sa nedá potvrdiť":" · čaká na výsledok";
-        const pressureText=p.target==="BTTS"?" · tlak chýbajúceho tímu "+(p.scorelessPressure??"—")+"/100":" · tlak "+p.pressure+"/100";
+        const pressureText=p.target==="BTTS"?" · tlak chýbajúceho tímu "+(p.scorelessPressure??"—")+"/100":p.target==="RESULT_1X2"?" · pravidlo: "+esc(p.rule||""):" · tlak "+p.pressure+"/100";
         return '<div class="ai-edge-prediction-item"><span class="ai-edge-prediction-status '+(p.status==="UNRESOLVED"?"unresolved":status.toLowerCase())+'">'+status+'</span><strong>'+esc(p.home)+' – '+esc(p.away)+'</strong><br>'+horizon+' · '+p.startMinute+'′'+pressureText+esc(extra)+'</div>';
       }).join(""):'<p>Zatiaľ nebol zachytený dostatočne silný tlak na vytvorenie pozorovania.</p>';
       if(!saved) list.innerHTML+='<p class="ai-edge-note">Prehliadač nepovolil lokálne uloženie histórie.</p>';
