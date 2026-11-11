@@ -83,15 +83,27 @@
       const firstGoal=timeline.find(x=>scoreOf(x.match)>p.startGoals);
       if(firstGoal){
         const goalMinute=minuteOf(firstGoal.match);
-        p.status=Number.isFinite(goalMinute)&&goalMinute<=p.deadlineMinute?"HIT":"MISS";
+        const beforeGoal=timeline.filter(x=>x.time<firstGoal.time).slice(-1)[0];
+        if(Number.isFinite(goalMinute)&&goalMinute<=p.deadlineMinute){
+          p.status="HIT";
+        }else if(beforeGoal&&Number.isFinite(minuteOf(beforeGoal.match))&&minuteOf(beforeGoal.match)>=p.deadlineMinute){
+          p.status="MISS";
+        }else{
+          // The first observed score change crossed the deadline: exact goal timing is unknown.
+          p.status="UNRESOLVED";
+        }
         p.checkedAt=firstGoal.time;p.resultMinute=Number.isFinite(goalMinute)?goalMinute:null;
         p.resultScore=(Number(firstGoal.match.home_score)||0)+":"+(Number(firstGoal.match.away_score)||0);
         p.goalTeam=(Number(firstGoal.match.home_score)||0)>p.startHome?p.home:(Number(firstGoal.match.away_score)||0)>p.startAway?p.away:"Neznámy tím";
       }else{
         const last=timeline[timeline.length-1];
+        const lastMinute=last?minuteOf(last.match):NaN;
         const ended=last&&/finished|ended|after penalties|ft/i.test(String(last.match?.status||last.match?.status_text||""));
-        if(last&&(minuteOf(last.match)>=p.deadlineMinute||ended)){
+        if(last&&Number.isFinite(lastMinute)&&lastMinute>=p.deadlineMinute){
           p.status="MISS";p.checkedAt=last.time;p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
+        }else if(last&&ended){
+          // A match ended before the prediction horizon expired; this is not a fair miss.
+          p.status="UNRESOLVED";p.checkedAt=last.time;p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
         }
       }
     }
@@ -112,15 +124,15 @@
       }
     }
     const saved=ledgerWrite(items);
-    const hits=items.filter(x=>x.status==="HIT").length,misses=items.filter(x=>x.status==="MISS").length,open=items.filter(x=>x.status==="OPEN").length;
+    const hits=items.filter(x=>x.status==="HIT").length,misses=items.filter(x=>x.status==="MISS").length,unresolved=items.filter(x=>x.status==="UNRESOLVED").length,open=items.filter(x=>x.status==="OPEN").length;
     const summary=$("ai-edge-prediction-summary"),list=$("ai-edge-prediction-log");
-    if(summary) summary.innerHTML='<div><span>Uložené pozorovania</span><b>'+fmt(items.length)+'</b></div><div><span>Správne · HIT</span><b>'+fmt(hits)+'</b></div><div><span>Nesprávne · MISS</span><b>'+fmt(misses)+'</b></div><div><span>Otvorené</span><b>'+fmt(open)+'</b></div>';
+    if(summary) summary.innerHTML='<div><span>Uložené pozorovania</span><b>'+fmt(items.length)+'</b></div><div><span>Správne · HIT</span><b>'+fmt(hits)+'</b></div><div><span>Nesprávne · MISS</span><b>'+fmt(misses)+'</b></div><div><span>Nevyhodnotiteľné</span><b>'+fmt(unresolved)+'</b></div><div><span>Otvorené</span><b>'+fmt(open)+'</b></div>';
     if(list){
       const recent=items.slice().reverse().slice(0,8);
       list.innerHTML=recent.length?recent.map(p=>{
-        const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":"OPEN";
-        const extra=p.status==="HIT"?" · gól "+(p.resultMinute??"—")+"′":p.status==="MISS"?" · bez gólu v horizonte":" · čaká na výsledok";
-        return '<div class="ai-edge-prediction-item"><span class="ai-edge-prediction-status '+status.toLowerCase()+'">'+status+'</span><strong>'+esc(p.home)+' – '+esc(p.away)+'</strong><br>Gól do '+p.target+' min · '+p.startMinute+'′ · tlak '+p.pressure+'/100'+esc(extra)+'</div>';
+        const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":p.status==="UNRESOLVED"?"NEVYHODNOTITEĽNÉ":"OPEN";
+        const extra=p.status==="HIT"?" · gól "+(p.resultMinute??"—")+"′":p.status==="MISS"?" · bez gólu v horizonte":p.status==="UNRESOLVED"?" · čas gólu alebo celý horizont sa nedá potvrdiť":" · čaká na výsledok";
+        return '<div class="ai-edge-prediction-item"><span class="ai-edge-prediction-status '+(p.status==="UNRESOLVED"?"unresolved":status.toLowerCase())+'">'+status+'</span><strong>'+esc(p.home)+' – '+esc(p.away)+'</strong><br>Gól do '+p.target+' min · '+p.startMinute+'′ · tlak '+p.pressure+'/100'+esc(extra)+'</div>';
       }).join(""):'<p>Zatiaľ nebol zachytený dostatočne silný tlak na vytvorenie pozorovania.</p>';
       if(!saved) list.innerHTML+='<p class="ai-edge-note">Prehliadač nepovolil lokálne uloženie histórie.</p>';
     }
