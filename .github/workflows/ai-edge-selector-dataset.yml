@@ -1,0 +1,48 @@
+name: AI Edge Selector Flashscore Dataset Audit
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/ai-edge-selector-dataset.js'
+      - 'scripts/test-ai-edge-selector-dataset.js'
+      - '.github/workflows/ai-edge-selector-dataset.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout application code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: app
+      - name: Checkout permanent Flashscore archive
+        uses: actions/checkout@v4
+        with:
+          ref: live-data-v2
+          path: flashscore-data
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Test delay-aware label logic
+        working-directory: app
+        run: node scripts/test-ai-edge-selector-dataset.js
+      - name: Build Flashscore-only shadow dataset
+        working-directory: app
+        run: node scripts/ai-edge-selector-dataset.js --data-dir ../flashscore-data/data --output-dir audit-output
+      - name: Upload dataset audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-edge-selector-flashscore-dataset
+          path: |
+            app/audit-output/ai-edge-selector-dataset.json
+            app/audit-output/ai-edge-selector-dataset.csv
+            app/audit-output/ai-edge-selector-report.md
+          retention-days: 30
