@@ -1536,6 +1536,8 @@
       gapOver15: 0,
       invalidGap: 0,
       missingMinute: 0,
+      halfTimePairs: 0,
+      finishedOrPenaltiesPairs: 0,
       missingInterval: 0,
       noUsableStats: 0,
       partialStats: 0,
@@ -1591,20 +1593,30 @@
       const minute = minuteOf(current.match);
       if (gap > 7 || minute === null) {
         if (minute === null && gap <= 7) {
-          activityDiagnostics.missingMinute++;
           const match = current.match || {};
-          const rawClock = value => value === null || value === undefined || String(value).trim() === "" ? "—" : String(value).trim();
-          if (!activityDiagnostics.missingMinuteSamples) activityDiagnostics.missingMinuteSamples = [];
-          if (activityDiagnostics.missingMinuteSamples.length < 5) {
-            activityDiagnostics.missingMinuteSamples.push({
-              at: new Date(current.time).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" }),
-              liveMinute: rawClock(match.live_minute),
-              minute: rawClock(match.minute),
-              liveClock: rawClock(match.live_clock),
-              stage: rawClock(match.stage || match.status_text),
-              diagnostic: rawClock(match.clock_diagnostic),
-              coreMinute: rawClock(match.core_minute_raw)
-            });
+          const clockText = String(match.live_minute ?? match.minute ?? match.live_clock ?? "").trim().toUpperCase();
+          const stageText = String(match.stage || match.status_text || "").trim().toUpperCase();
+          const isHalfTime = /^(?:HT|HALF.?TIME|BREAK)$/.test(clockText) || /HALF.?TIME|HALF TIME|PRESTÁVKA|PRESTAVKA/.test(stageText);
+          const isFinished = /^(?:FT|FULL.?TIME|AET|PEN(?:ALTIES)?)$/.test(clockText) || /FINISHED|FULL.?TIME|AFTER.?EXTRA|PENALT/.test(stageText);
+          if (isHalfTime) {
+            activityDiagnostics.halfTimePairs++;
+          } else if (isFinished) {
+            activityDiagnostics.finishedOrPenaltiesPairs++;
+          } else {
+            activityDiagnostics.missingMinute++;
+            const rawClock = value => value === null || value === undefined || String(value).trim() === "" ? "—" : String(value).trim();
+            if (!activityDiagnostics.missingMinuteSamples) activityDiagnostics.missingMinuteSamples = [];
+            if (activityDiagnostics.missingMinuteSamples.length < 5) {
+              activityDiagnostics.missingMinuteSamples.push({
+                at: new Date(current.time).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" }),
+                liveMinute: rawClock(match.live_minute),
+                minute: rawClock(match.minute),
+                liveClock: rawClock(match.live_clock),
+                stage: rawClock(match.stage || match.status_text),
+                diagnostic: rawClock(match.clock_diagnostic),
+                coreMinute: rawClock(match.core_minute_raw)
+              });
+            }
           }
         }
         continue;
@@ -1674,7 +1686,9 @@
     addText(diagnosticPanel,
       "Vynechané: medzera nad 7 min " + activityDiagnostics.gapOver7 +
       " (z toho nad 15 min " + activityDiagnostics.gapOver15 + ")" +
-      " | bez minúty zápasu " + activityDiagnostics.missingMinute +
+      " | prestávka HT " + activityDiagnostics.halfTimePairs +
+      " | koniec/penalty " + activityDiagnostics.finishedOrPenaltiesPairs +
+      " | skutočne bez minúty " + activityDiagnostics.missingMinute +
       " | bez použiteľnej štatistiky " + activityDiagnostics.noUsableStats,
       "10px");
     addText(diagnosticPanel,
