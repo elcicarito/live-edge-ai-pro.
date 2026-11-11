@@ -9,7 +9,7 @@ assert.notEqual(start, -1, "minuteOf parser must exist in scanner.js");
 const end = source.indexOf("\n    };", start);
 assert.notEqual(end, -1, "minuteOf parser must be closed");
 const expression = source.slice(start + "    const minuteOf = ".length, end + 6).trim();
-const minuteOf = vm.runInNewContext("(" + expression + ")");
+const minuteOf = vm.runInNewContext("const minuteOf = " + expression + "; minuteOf");
 
 const cases = [
   [{ live_minute: 49 }, 49],
