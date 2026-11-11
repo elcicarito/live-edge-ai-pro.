@@ -1878,7 +1878,7 @@
     // Ich čas je interval meraní, nikdy nie vymyslená presná minúta.
     const deriveScoreChanges = (rows, officialEvents = []) => {
       const parseMinute = value => {
-        const match = String(value ?? "").match(/(\\d+)(?:\\s*\\+\\s*(\\d+))?/);
+        const match = String(value ?? "").match(/(\d+)(?:\s*\+\s*(\d+))?/);
         if (!match) return null;
         const minute = Number(match[1]) + Number(match[2] || 0);
         return Number.isFinite(minute) ? minute : null;
