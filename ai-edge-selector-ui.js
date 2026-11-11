@@ -99,7 +99,9 @@
         const last=timeline[timeline.length-1];
         const lastMinute=last?minuteOf(last.match):NaN;
         const ended=last&&/finished|ended|after penalties|ft/i.test(String(last.match?.status||last.match?.status_text||""));
-        if(last&&Number.isFinite(lastMinute)&&lastMinute>=p.deadlineMinute){
+        if(p.target==="FT"&&ended){
+          p.status="MISS";p.checkedAt=last.time;p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
+        }else if(last&&Number.isFinite(lastMinute)&&lastMinute>=p.deadlineMinute){
           p.status="MISS";p.checkedAt=last.time;p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
         }else if(last&&ended){
           // A match ended before the prediction horizon expired; this is not a fair miss.
@@ -112,12 +114,12 @@
       const m=record.match,minute=minuteOf(m);
       if(m.status!=="live"||!fx.ready||!Number.isFinite(minute)) continue;
       const pressure=Math.max(fx.home,fx.away);
-      for(const target of [{mins:15,threshold:45},{mins:25,threshold:35}]){
-        if(pressure<target.threshold||minute>90-target.mins) continue;
-        const bucket=Math.floor(minute/5),key=[m.id,target.mins,bucket,m.home_score,m.away_score].join(":");
+      for(const target of [{mins:15,threshold:45},{mins:25,threshold:35},{mins:"FT",threshold:40}]){
+        if(pressure<target.threshold||(target.mins!=="FT"&&minute>90-target.mins)) continue;
+        const bucket=target.mins==="FT"?"FT":Math.floor(minute/5),key=[m.id,target.mins,bucket,m.home_score,m.away_score].join(":");
         if(items.some(x=>x.id===key)) continue;
         items.push({id:key,matchId:String(m.id),home:m.home,away:m.away,target:target.mins,
-          startMinute:minute,deadlineMinute:minute+target.mins,createdAt:now,
+          startMinute:minute,deadlineMinute:target.mins==="FT"?120:minute+target.mins,createdAt:now,
           startHome:Number(m.home_score)||0,startAway:Number(m.away_score)||0,
           startGoals:scoreOf(m),pressure,pressureSide:fx.home>fx.away?m.home:fx.away>fx.home?m.away:"Vyrovnaný",
           status:"OPEN"});
@@ -131,8 +133,9 @@
       const recent=items.slice().reverse().slice(0,8);
       list.innerHTML=recent.length?recent.map(p=>{
         const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":p.status==="UNRESOLVED"?"NEVYHODNOTITEĽNÉ":"OPEN";
+        const horizon=p.target==="FT"?"konca zápasu":p.target+" min";
         const extra=p.status==="HIT"?" · gól "+(p.resultMinute??"—")+"′":p.status==="MISS"?" · bez gólu v horizonte":p.status==="UNRESOLVED"?" · čas gólu alebo celý horizont sa nedá potvrdiť":" · čaká na výsledok";
-        return '<div class="ai-edge-prediction-item"><span class="ai-edge-prediction-status '+(p.status==="UNRESOLVED"?"unresolved":status.toLowerCase())+'">'+status+'</span><strong>'+esc(p.home)+' – '+esc(p.away)+'</strong><br>Gól do '+p.target+' min · '+p.startMinute+'′ · tlak '+p.pressure+'/100'+esc(extra)+'</div>';
+        return '<div class="ai-edge-prediction-item"><span class="ai-edge-prediction-status '+(p.status==="UNRESOLVED"?"unresolved":status.toLowerCase())+'">'+status+'</span><strong>'+esc(p.home)+' – '+esc(p.away)+'</strong><br>Gól do '+horizon+' · '+p.startMinute+'′ · tlak '+p.pressure+'/100'+esc(extra)+'</div>';
       }).join(""):'<p>Zatiaľ nebol zachytený dostatočne silný tlak na vytvorenie pozorovania.</p>';
       if(!saved) list.innerHTML+='<p class="ai-edge-note">Prehliadač nepovolil lokálne uloženie histórie.</p>';
     }
