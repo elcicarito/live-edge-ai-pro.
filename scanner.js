@@ -2036,6 +2036,7 @@
       let scoreChanges = 0;
       let suppressedDuplicates = 0;
       let unclassifiedChanges = 0;
+      const seenScoreTransitions = new Set();
       for (let index = 1; index < rows.length; index++) {
         const previous = rows[index - 1];
         const current = rows[index];
@@ -2071,6 +2072,12 @@
           suppressedDuplicates++;
           continue;
         }
+        const transitionKey = previousHome + ":" + previousAway + "→" + currentHome + ":" + currentAway;
+        if (seenScoreTransitions.has(transitionKey)) {
+          suppressedDuplicates++;
+          continue;
+        }
+        seenScoreTransitions.add(transitionKey);
         const clock = value => new Date(Number(value)).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" });
         const range = previousMinute !== null && currentMinute !== null
           ? "medzi " + formatMinute(previousMinute) + "–" + formatMinute(currentMinute)
