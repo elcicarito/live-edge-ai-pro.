@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# Prevent duplicate dataset audits from overlapping; never cancel an active audit.
+concurrency:
+  group: ai-edge-selector-dataset-audit
+  cancel-in-progress: false
+
 jobs:
   build-and-audit:
     runs-on: ubuntu-latest
