@@ -68,11 +68,13 @@ function statValue(stats, keyword) {
 }
 function uniqueHistory(match, history, collectedAt) {
   const id = String(match?.id || "");
+  const currentTime = Date.parse(collectedAt || "");
   const rows = (Array.isArray(history) ? history : [])
-    .filter(row => row?.match && String(row.match.id || "") === id && Number.isFinite(row.time))
+    .filter(row => row?.match && String(row.match.id || "") === id &&
+      Number.isFinite(row.time) &&
+      (!Number.isFinite(currentTime) || (row.time >= currentTime - 24 * 60 * 60 * 1000 && row.time <= currentTime + 60000)))
     .map(row => ({ time: Number(row.time), match: row.match }))
     .sort((a, b) => a.time - b.time);
-  const currentTime = Date.parse(collectedAt || "");
   if (Number.isFinite(currentTime) && !rows.some(row => Math.abs(row.time - currentTime) < 1000)) {
     rows.push({ time: currentTime, match });
     rows.sort((a, b) => a.time - b.time);
