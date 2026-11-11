@@ -3038,7 +3038,11 @@
       addText(panel, "BEZ NOVEJ AKTIVITY: v poslednom platnom intervale neboli zachytené nové sledované udalosti.", "11px");
     }
     if (result.recent) {
-      addText(panel, "Tlak v poslednom intervale (" + result.recent.minutes + " min): Domáci " + result.recent.home + "/100 | Hostia " + result.recent.away + "/100", "13px");
+      if (interpretation.noActivity) {
+        addText(panel, "Posledný interval (" + result.recent.minutes + " min): bez novej sledovanej aktivity; pomer tlaku sa nezobrazuje.", "11px");
+      } else {
+        addText(panel, "Tlak v poslednom intervale (" + result.recent.minutes + " min): Domáci " + result.recent.home + "/100 | Hostia " + result.recent.away + "/100", "13px");
+      }
       addText(panel, "Aktivita za 10 min: Domáci " + result.recent.homeRate.toFixed(1) + " | Hostia " + result.recent.awayRate.toFixed(1));
       addText(panel, "Vážený index: strely na bránu × 3 + strely mimo bránu, prepočítané na 10 minút; nejde o doslovný počet striel.", "10px");
       const used = result.recent.used.map(x => {
