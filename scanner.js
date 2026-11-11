@@ -3002,13 +3002,17 @@
     const homeRate = Number(recent.homeRate) || 0;
     const awayRate = Number(recent.awayRate) || 0;
     const noActivity = homeRate <= 0 && awayRate <= 0;
+    const sampleCount = Array.isArray(recent.used)
+      ? recent.used.reduce((sum, item) => sum + (Number(item.home) || 0) + (Number(item.away) || 0), 0)
+      : null;
+    const lowSample = sampleCount !== null && sampleCount <= 2;
     const current = noActivity ? "BEZ NOVEJ SLEDOVANEJ AKTIVITY"
       : homeRate > awayRate ? "DOMÁCI"
       : awayRate > homeRate ? "HOSTIA" : "OBOJSTRANNÁ AKTIVITA";
     const development = acceleration
       ? "Domáci " + acceleration.homeState + " · hostia " + acceleration.awayState
       : "ČAKÁM NA ĎALŠIE PLATNÉ MERANIE";
-    return { dominance, current, noActivity, development };
+    return { dominance, current, noActivity, lowSample, sampleCount, development };
   };
 
   // New descriptive momentum display. It is intentionally separate from the legacy green signal.
@@ -3049,6 +3053,9 @@
         addText(panel, "Posledný interval (" + result.recent.minutes + " min): bez novej sledovanej aktivity; pomer tlaku sa nezobrazuje.", "11px");
       } else {
         addText(panel, "Tlak v poslednom intervale (" + result.recent.minutes + " min): Domáci " + result.recent.home + "/100 | Hostia " + result.recent.away + "/100", "13px");
+      }
+      if (interpretation.lowSample) {
+        addText(panel, "MALÁ VZORKA: iba " + interpretation.sampleCount + " nová sledovaná udalosť/udalosti v intervale; pomer momenta môže byť výrazný aj pri nízkej aktivite.", "10px");
       }
       addText(panel, "Aktivita za 10 min: Domáci " + result.recent.homeRate.toFixed(1) + " | Hostia " + result.recent.awayRate.toFixed(1));
       addText(panel, "Vážený index: strely na bránu × 3 + strely mimo bránu, prepočítané na 10 minút; nejde o doslovný počet striel.", "10px");
