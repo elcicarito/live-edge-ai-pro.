@@ -102,6 +102,12 @@ assert.equal(typeof metricContext.ai_quality_score.away, "number");
   assert.equal(metricRun.signals[0].sourceSnapshot.metric_availability.activity_rate, true);
   assert.equal(metricRun.signals[0].sourceSnapshot.metric_availability.ai_quality_score, true);
   assert.equal(typeof metricRun.signals[0].sourceSnapshot.scanner_context.ai_quality_score.away, "number");
+  assert.equal(metricRun.signals[0].qualityScoreVersion, "ai-quality-v1");
+  assert.equal(metricRun.signals[0].qualityScoreSide, "away");
+  assert.equal(metricRun.signals[0].qualityScore, metricRun.signals[0].sourceSnapshot.scanner_context.ai_quality_score.away);
+  assert.equal(metricRun.signals[0].pressureHome, 60);
+  assert.equal(metricRun.signals[0].goalThreatAway, 40);
+  assert.equal(metricRun.signals[0].activityHome, 20);
   const second = await run({ current, archive: first, now: new Date().toISOString() });
   assert.equal(second.signals.length, 2, "duplicate signal must not be added");
 
