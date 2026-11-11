@@ -109,7 +109,7 @@ assert.equal(unclassified.unclassifiedChanges, 1);
 
 const momentumClassifyStart = source.indexOf("const classifyMomentumActivity = (");
 assert.notEqual(momentumClassifyStart, -1, "momentum activity interpretation helper must exist");
-const momentumClassifyEnd = source.indexOf("\\n  };", momentumClassifyStart);
+const momentumClassifyEnd = source.indexOf("\n  };", momentumClassifyStart);
 assert.notEqual(momentumClassifyEnd, -1, "momentum activity interpretation helper must be closed");
 const momentumClassifyExpression = source.slice(momentumClassifyStart + "const classifyMomentumActivity = ".length, momentumClassifyEnd + 5).trim();
 const classifyMomentumActivity = vm.runInNewContext("const classifyMomentumActivity = " + momentumClassifyExpression + "; classifyMomentumActivity");
