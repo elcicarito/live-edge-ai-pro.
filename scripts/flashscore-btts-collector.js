@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const zlib = require("node:zlib");
 
 const DATA = path.join(process.cwd(), "data");
 const CURRENT_PATH = path.join(DATA, "flashscore-live-current.json");
@@ -43,6 +44,213 @@ function statPair(stats, names) {
   const away = numeric(item.away_numeric ?? item.away);
   return home === null || away === null ? null : { home, away };
 }
+// These calculations intentionally mirror scanner.js AI Quality v1.
+const MIN_GAP_MINUTES = 1.5;
+const MAX_GAP_MINUTES = 15;
+function statValue(stats, keyword) {
+  const candidates = (Array.isArray(stats) ? stats : []).filter(stat =>
+    String(stat?.label || stat?.name || stat?.type || stat?.category || "").trim().toLowerCase().includes(keyword)
+  );
+  if (!candidates.length) return null;
+  const hasPeriod = candidates.some(stat => String(stat?.period || "").trim());
+  const item = hasPeriod
+    ? candidates.find(stat => String(stat?.period || "").trim().toLowerCase() === "match")
+    : candidates[0];
+  if (!item) return null;
+  const parse = value => {
+    if (value === null || value === undefined || String(value).trim() === "") return null;
+    const n = Number(String(value).replace("%", "").replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  };
+  const home = parse(item.home_numeric ?? item.home);
+  const away = parse(item.away_numeric ?? item.away);
+  return home === null || away === null ? null : { home, away };
+}
+function uniqueHistory(match, history, collectedAt) {
+  const id = String(match?.id || "");
+  const rows = (Array.isArray(history) ? history : [])
+    .filter(row => row?.match && String(row.match.id || "") === id && Number.isFinite(row.time))
+    .map(row => ({ time: Number(row.time), match: row.match }))
+    .sort((a, b) => a.time - b.time);
+  const currentTime = Date.parse(collectedAt || "");
+  if (Number.isFinite(currentTime) && !rows.some(row => Math.abs(row.time - currentTime) < 1000)) {
+    rows.push({ time: currentTime, match });
+    rows.sort((a, b) => a.time - b.time);
+  }
+  return rows.filter((row, index) => index === 0 || row.time !== rows[index - 1].time);
+}
+function calculatePressure(stats) {
+  const measures = [{ key: "possession", weight: 0.10 }, { key: "shots on target", weight: 0.40 }, { key: "shots off target", weight: 0.50 }];
+  let home = 0, away = 0, totalWeight = 0;
+  for (const measure of measures) {
+    const value = statValue(stats, measure.key);
+    if (!value) continue;
+    const total = value.home + value.away;
+    const ratio = total > 0 ? value.home / total : 0.5;
+    home += ratio * measure.weight;
+    away += (1 - ratio) * measure.weight;
+    totalWeight += measure.weight;
+  }
+  return totalWeight ? { home: Math.round(home / totalWeight * 100), away: Math.round(away / totalWeight * 100) } : null;
+}
+function getMatchReliability(records) {
+  if (!records.length) return null;
+  let momentumReady = 0;
+  for (const row of records) {
+    const stats = row.match?.stats || [];
+    if (statValue(stats, "shots on target") && statValue(stats, "shots off target")) momentumReady++;
+  }
+  const gaps = [];
+  for (let i = 1; i < records.length; i++) {
+    const minutes = (records[i].time - records[i - 1].time) / 60000;
+    if (Number.isFinite(minutes) && minutes > 0) gaps.push(minutes);
+  }
+  return {
+    count: records.length,
+    momentumCoverage: Math.round(momentumReady / records.length * 100),
+    maxGap: gaps.length ? Math.max(...gaps) : null
+  };
+}
+function getActivitySnapshot(match, records, collectedAt) {
+  const currentShots = statValue(match.stats || [], "shots on target");
+  const currentAttacks = statValue(match.stats || [], "shots off target");
+  if (!currentShots || !currentAttacks) return null;
+  const currentTime = Date.parse(collectedAt || "");
+  if (!Number.isFinite(currentTime)) return null;
+  const previous = records.filter(row => row.time < currentTime - 1000).at(-1);
+  if (!previous) return null;
+  const minutes = (currentTime - previous.time) / 60000;
+  if (!Number.isFinite(minutes) || minutes < MIN_GAP_MINUTES || minutes > MAX_GAP_MINUTES) return null;
+  const oldShots = statValue(previous.match.stats || [], "shots on target");
+  const oldAttacks = statValue(previous.match.stats || [], "shots off target");
+  if (!oldShots || !oldAttacks ||
+      currentShots.home < oldShots.home || currentShots.away < oldShots.away ||
+      currentAttacks.home < oldAttacks.home || currentAttacks.away < oldAttacks.away) return null;
+  const homeActivity = (currentShots.home - oldShots.home) * 3 + currentAttacks.home - oldAttacks.home;
+  const awayActivity = (currentShots.away - oldShots.away) * 3 + currentAttacks.away - oldAttacks.away;
+  return {
+    homeActivityRate: homeActivity / minutes * 10,
+    awayActivityRate: awayActivity / minutes * 10,
+    intervalMinutes: Number(minutes.toFixed(1)),
+    previousCollectedAt: new Date(previous.time).toISOString()
+  };
+}
+function getAcceleration(records) {
+  const intervals = [];
+  let previousValidIntervalEnd = null;
+  const consecutive = [];
+  for (let i = 1; i < records.length; i++) {
+    const previous = records[i - 1], current = records[i];
+    const minutes = (current.time - previous.time) / 60000;
+    if (!Number.isFinite(minutes) || minutes < MIN_GAP_MINUTES || minutes > MAX_GAP_MINUTES) {
+      previousValidIntervalEnd = null; consecutive.length = 0; continue;
+    }
+    const oldSot = statValue(previous.match.stats || [], "shots on target");
+    const sot = statValue(current.match.stats || [], "shots on target");
+    const oldOff = statValue(previous.match.stats || [], "shots off target");
+    const off = statValue(current.match.stats || [], "shots off target");
+    if (!oldSot || !sot || !oldOff || !off ||
+        sot.home < oldSot.home || sot.away < oldSot.away ||
+        off.home < oldOff.home || off.away < oldOff.away) {
+      previousValidIntervalEnd = null; consecutive.length = 0; continue;
+    }
+    const interval = {
+      time: current.time,
+      homeRate: ((sot.home - oldSot.home) * 3 + off.home - oldOff.home) / minutes * 10,
+      awayRate: ((sot.away - oldSot.away) * 3 + off.away - oldOff.away) / minutes * 10
+    };
+    intervals.push(interval);
+    if (previousValidIntervalEnd === previous.time) consecutive.push(interval);
+    else { consecutive.length = 0; consecutive.push(interval); }
+    previousValidIntervalEnd = current.time;
+  }
+  if (consecutive.length < 2) return null;
+  const prev = consecutive.at(-2), last = consecutive.at(-1);
+  return {
+    homeDelta: Number((last.homeRate - prev.homeRate).toFixed(1)),
+    awayDelta: Number((last.awayRate - prev.awayRate).toFixed(1))
+  };
+}
+function buildSignalContext(match, history, collectedAt, now) {
+  const records = uniqueHistory(match, history, collectedAt);
+  const pressure = calculatePressure(match.stats || []);
+  const activity = getActivitySnapshot(match, records, collectedAt);
+  const threat = pressure && activity ? {
+    home: Math.min(100, Math.round(pressure.home * 0.45 + Math.min(activity.homeActivityRate * 3, 40) * 0.55)),
+    away: Math.min(100, Math.round(pressure.away * 0.45 + Math.min(activity.awayActivityRate * 3, 40) * 0.55))
+  } : null;
+  const reliability = getMatchReliability(records);
+  const acceleration = getAcceleration(records);
+  const age = Date.parse(now) - Date.parse(collectedAt || "");
+  let quality = null;
+  if (threat && activity && reliability && reliability.count >= 3 &&
+      Number.isFinite(age) && age >= 0 && age <= 7 * 60 * 1000) {
+    const freshness = age <= 2 * 60000 ? 100 : age <= 4 * 60000 ? 80 : age <= 7 * 60000 ? 50 : 0;
+    const sampleDepth = Math.min(100, reliability.count / 5 * 100);
+    const dataQuality = Math.round(reliability.momentumCoverage * 0.7 + sampleDepth * 0.3);
+    quality = {};
+    for (const side of ["home", "away"]) {
+      const activityRate = activity[side + "ActivityRate"];
+      const components = [
+        { value: dataQuality, weight: 25 },
+        { value: freshness, weight: 20 },
+        { value: threat[side], weight: 20 },
+        { value: Math.max(0, Math.min(100, activityRate * 10)), weight: 20 }
+      ];
+      if (acceleration) components.push({
+        value: Math.max(0, Math.min(100, 50 + acceleration[side + "Delta"] * 5)),
+        weight: 15
+      });
+      const totalWeight = components.reduce((sum, item) => sum + item.weight, 0);
+      quality[side] = Math.round(components.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight);
+    }
+  }
+  return {
+    version: "scanner-ai-quality-v1",
+    sample_count: reliability?.count ?? records.length,
+    momentum_coverage_pct: reliability?.momentumCoverage ?? null,
+    pressure,
+    goal_threat: threat,
+    activity_rate_per_10min: activity ? {
+      home: Number(activity.homeActivityRate.toFixed(1)),
+      away: Number(activity.awayActivityRate.toFixed(1)),
+      interval_minutes: activity.intervalMinutes,
+      previous_collected_at: activity.previousCollectedAt
+    } : null,
+    acceleration,
+    ai_quality_score: quality
+  };
+}
+function loadTimelineHistory() {
+  const index = readJson(path.join(DATA, "flashscore-timeline-index.json"), null);
+  if (!index || index.source !== "Flashscore" || !Array.isArray(index.weeks)) return [];
+  const rows = [];
+  for (const week of index.weeks.slice(0, 2)) {
+    if (!/^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(week?.file || "")) continue;
+    const file = path.join(DATA, week.file);
+    if (!fs.existsSync(file)) continue;
+    const lines = zlib.gunzipSync(fs.readFileSync(file), { maxOutputLength: 100 * 1024 * 1024 }).toString("utf8").split(/\\r?\\n/);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      let entry; try { entry = JSON.parse(line); } catch { continue; }
+      const snap = entry.snapshot || {};
+      const time = Date.parse(snap.collected_at || "");
+      if (!entry.match_id || !Number.isFinite(time)) continue;
+      const stats = (Array.isArray(snap.stats) ? snap.stats : []).map(item => ({
+        ...item, label: item.label || item.name || "",
+        home: item.home_numeric ?? item.home, away: item.away_numeric ?? item.away
+      }));
+      rows.push({ time, match: {
+        id: String(entry.match_id), source: "Flashscore", status: "live",
+        status_text: String(snap.stage || "LIVE"), stage: snap.stage || null,
+        live_minute: snap.live_minute ?? null, live_clock: snap.live_clock || null,
+        home_score: snap.home_score ?? null, away_score: snap.away_score ?? null, stats
+      }});
+    }
+  }
+  return rows;
+}
+
 function getBttsCandidates(match) {
   if (!match || match.source !== "Flashscore") return [];
   const minute = numeric(match.live_minute);
@@ -117,7 +325,7 @@ async function getDetails(matchId) {
   if (!response.ok) throw new Error("Flashscore details HTTP " + response.status);
   return response.json();
 }
-async function run({ current, archive, detailsFetcher = getDetails, now = new Date().toISOString() }) {
+async function run({ current, archive, history = [], detailsFetcher = getDetails, now = new Date().toISOString() }) {
   if (!current || current.source !== "Flashscore" || !Array.isArray(current.records)) {
     throw new Error("Neplatný alebo chýbajúci Flashscore LIVE snapshot.");
   }
@@ -136,7 +344,9 @@ async function run({ current, archive, detailsFetcher = getDetails, now = new Da
     const age = Date.now() - Date.parse(collectedAt);
     if (!Number.isFinite(age) || age < -60000 || age > 7 * 60 * 1000) continue;
 
+    const historyRows = history.filter(row => String(row.match?.id || "") === id);
     for (const candidate of getBttsCandidates(match)) {
+      const signalContext = buildSignalContext(match, historyRows, collectedAt, now);
       const signalId = "flashscore_btts_" + id + "_" + candidate.tierKey;
       if (output.signals.some(item => item.signalId === signalId)) continue;
       output.signals.push({
@@ -180,10 +390,11 @@ async function run({ current, archive, detailsFetcher = getDetails, now = new Da
             minute: true,
             shots_on_target: true,
             total_shots: true,
-            goal_threat: false,
-            activity_rate: false,
-            ai_quality_score: false
+            goal_threat: Boolean(signalContext.goal_threat),
+            activity_rate: Boolean(signalContext.activity_rate_per_10min),
+            ai_quality_score: Boolean(signalContext.ai_quality_score)
           },
+          scanner_context: signalContext,
           raw_stats: Array.isArray(match.stats) && match.stats.length ? match.stats : match.flashscore_stats || []
         }
       });
@@ -236,7 +447,8 @@ async function main() {
   const archive = readJson(ARCHIVE_PATH, {
     schema_version: 1, source: "Flashscore", created_at: new Date().toISOString(), signals: []
   });
-  const output = await run({ current, archive });
+  const history = loadTimelineHistory();
+  const output = await run({ current, archive, history });
   writeJson(ARCHIVE_PATH, output);
   console.log("FLASHSCORE BTTS COLLECTOR:", JSON.stringify({
     total: output.signals.length,
@@ -251,4 +463,4 @@ if (require.main === module) main().catch(error => {
   console.error("FLASHSCORE BTTS COLLECTOR FAILED:", error);
   process.exit(1);
 });
-module.exports = { getBttsCandidates, run, isFinished };
+module.exports = { getBttsCandidates, run, isFinished, buildSignalContext, loadTimelineHistory };
