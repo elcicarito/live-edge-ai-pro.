@@ -133,6 +133,17 @@ assert.deepEqual(JSON.parse(JSON.stringify(coverageResult[0].coverage)), { home:
 assert.deepEqual(JSON.parse(JSON.stringify(coverageResult[1].unassigned)), { home: 1, away: 1 });
 assert.deepEqual(JSON.parse(JSON.stringify(coverageResult[2].unassigned)), { home: 0, away: 0 });
 assert.equal(coverageResult[2].coverage.home, 100);
+const skippedPairSamples = [
+  { key: "shots", label: "Strely", reason: "crosses-interval-boundary", delta: { home: 0, away: 2 }, fromMinute: 30, toMinute: 31, fromAt: "14:00", toAt: "14:02", gap: 2 },
+  { key: "sot", label: "Na bránu", reason: "crosses-interval-boundary", delta: { home: 0, away: 1 }, fromMinute: 30, toMinute: 31, fromAt: "14:00", toAt: "14:02", gap: 2 },
+  { key: "shots", label: "Strely", reason: "gap-over-7", delta: { home: 1, away: 0 }, fromMinute: 43, toMinute: 50, fromAt: "14:10", toAt: "14:18", gap: 8 }
+];
+const tracedCoverage = reconcileActivityCoverage(coverageRows, coverageBins, coverageDefinitions, (match, definition) => match.stats[definition.key] || null, skippedPairSamples);
+assert.equal(tracedCoverage[0].causes.length, 2, "coverage should retain distinct skipped-pair causes");
+assert.equal(tracedCoverage[0].causes.find(item => item.reason === "crosses-interval-boundary").away, 2);
+assert.equal(tracedCoverage[0].causes.find(item => item.reason === "gap-over-7").home, 1);
+assert.equal(tracedCoverage[0].causes[0].samples[0].fromMinute, 30);
+assert.equal(tracedCoverage[1].causes[0].delta, undefined, "cause aggregation must expose totals and samples, not fake exact attribution");
 const overCaptured = reconcileActivityCoverage(coverageRows, [{ values: { shots: { home: 9, away: 2 } } }], [coverageDefinitions[0]], (match, definition) => match.stats[definition.key] || null);
 assert.equal(overCaptured[0].status, "over-captured", "captured increments above cumulative total must be flagged");
 const missingCoverage = reconcileActivityCoverage(coverageRows, [], [coverageDefinitions[0]], () => null);
