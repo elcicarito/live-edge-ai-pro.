@@ -59,12 +59,17 @@ assert.equal(activityIntervalForPair(null, 47, definitions).reason, "unknown-sta
 assert.equal(activityIntervalForPair(45, null, definitions).reason, "unknown-current-minute");
 
 
+const analysisStart = source.indexOf("const analyzeScoreChanges = (");
+assert.notEqual(analysisStart, -1, "score-change diagnostics helper must exist");
+const analysisEnd = source.indexOf("\n    };", analysisStart);
+assert.notEqual(analysisEnd, -1, "score-change diagnostics helper must be closed");
+const analysisExpression = source.slice(analysisStart + "const analyzeScoreChanges = ".length, analysisEnd + 6).trim();
 const deriveStart = source.indexOf("const deriveScoreChanges = (");
 assert.notEqual(deriveStart, -1, "score-change retrospective helper must exist");
 const deriveEnd = source.indexOf("\n    };", deriveStart);
 assert.notEqual(deriveEnd, -1, "score-change helper must be closed");
 const deriveExpression = source.slice(deriveStart + "const deriveScoreChanges = ".length, deriveEnd + 6).trim();
-const deriveScoreChanges = vm.runInNewContext("const deriveScoreChanges = " + deriveExpression + "; deriveScoreChanges");
+const deriveScoreChanges = vm.runInNewContext("const analyzeScoreChanges = " + analysisExpression + "; const deriveScoreChanges = " + deriveExpression + "; deriveScoreChanges");
 const snapshots = [
   { time: 1000, match: { home_score: 1, away_score: 1, live_minute: "43′", home: "Home", away: "Away" } },
   { time: 2000, match: { home_score: 3, away_score: 1, live_minute: "55′", home: "Home", away: "Away" } }
@@ -87,11 +92,6 @@ const noMinute = deriveScoreChanges([
 assert.match(noMinute[0].minute, /12:46–13:14/, "missing match minute must use observation-time range");
 
 
-const analysisStart = source.indexOf("const analyzeScoreChanges = (");
-assert.notEqual(analysisStart, -1, "score-change diagnostics helper must exist");
-const analysisEnd = source.indexOf("\n    };", analysisStart);
-assert.notEqual(analysisEnd, -1, "score-change diagnostics helper must be closed");
-const analysisExpression = source.slice(analysisStart + "const analyzeScoreChanges = ".length, analysisEnd + 6).trim();
 const analyzeScoreChanges = vm.runInNewContext("const analyzeScoreChanges = " + analysisExpression + "; analyzeScoreChanges");
 const threeGoals = analyzeScoreChanges([
   { time: 1000, match: { home_score: 0, away_score: 0, live_minute: "27′" } },
