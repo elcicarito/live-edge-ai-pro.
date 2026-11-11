@@ -5251,14 +5251,20 @@
     const currentGreen = allowSignals && match.source !== "Flashscore" &&
       Boolean(makeSignal(match, threat, snapshot, collectedAt));
     const confirmed = currentGreen || hasOpenGreen || hasOpenBtts;
-    // Current cumulative pressure is available from the live stats alone.
-    // Interval activity remains a separate, history-dependent refinement.
-    const score = threat
-      ? Math.max(threat.home, threat.away)
-      : pressure
-        ? Math.max(pressure.home, pressure.away)
-        : 0;
-    const scoreBasis = threat ? "INTERVALOVÝ TLAK" : pressure ? "KUMULATÍVNA PREVAHA" : "BEZ ŠTATISTÍ";
+    // Číslo v TOP LIVE TLAK musí používať rovnaký kumulatívny výpočet ako Momentum panel.
+    // Legacy pressure/threat ostáva nedotknutý pre existujúce pravidlá signalizácie.
+    const momentum = window.LiveMomentumEngine?.analyse(
+      match,
+      historyRecords(historyData, id),
+      collectedAt
+    );
+    const cumulative = momentum?.ready ? momentum.pressure : null;
+    const score = cumulative
+      ? Math.max(cumulative.home, cumulative.away)
+      : 0;
+    const scoreBasis = cumulative
+      ? "KUMULATÍVNA PREVAHA · MOMENTUM"
+      : "KUMULATÍVNE ŠTATISTIKY NEDOSTUPNÉ";
 
     if (confirmed) {
       return {
@@ -5304,7 +5310,7 @@
       title.style.cssText = "font-size:12px;font-weight:900;letter-spacing:.8px;color:#c8e7ff;margin-bottom:4px;";
       pressureOverview.appendChild(title);
       const subtitle = document.createElement("div");
-      subtitle.textContent = "Kumulatívna prevaha z aktuálnych štatistík; intervalový tlak sa doplní po platných časových meraniach. Nie je to stávkový signál.";
+      subtitle.textContent = "Číslo = kumulatívna prevaha podľa rovnakého výpočtu ako v LIVE MOMENTUM. Trend je samostatné intervalové zrýchlenie; farba označuje stav signálu. Nie je to pravdepodobnosť gólu ani stávkový signál.";
       subtitle.style.cssText = "font-size:10px;color:#8fa6bf;margin-bottom:9px;line-height:1.4;";
       pressureOverview.appendChild(subtitle);
 
