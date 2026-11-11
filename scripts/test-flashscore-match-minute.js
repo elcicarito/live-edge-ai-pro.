@@ -138,11 +138,19 @@ const skippedPairSamples = [
   { key: "sot", label: "Na bránu", reason: "crosses-interval-boundary", delta: { home: 0, away: 1 }, fromMinute: 30, toMinute: 31, fromAt: "14:00", toAt: "14:02", gap: 2 },
   { key: "shots", label: "Strely", reason: "gap-over-7", delta: { home: 1, away: 0 }, fromMinute: 43, toMinute: 50, fromAt: "14:10", toAt: "14:18", gap: 8 }
 ];
-const tracedCoverage = reconcileActivityCoverage(coverageRows, coverageBins, coverageDefinitions, (match, definition) => match.stats[definition.key] || null, skippedPairSamples);
+const skippedMetricNotes = [
+  { key: "shots", label: "Strely", reason: "missing-metric-value", fromMinute: 31, toMinute: 34, fromAt: "14:02", toAt: "14:05", gap: 3 },
+  { key: "sot", label: "Na bránu", reason: "reset-metric-value", fromMinute: 46, toMinute: 49, fromAt: "14:17", toAt: "14:20", gap: 3 }
+];
+const tracedCoverage = reconcileActivityCoverage(coverageRows, coverageBins, coverageDefinitions, (match, definition) => match.stats[definition.key] || null, skippedPairSamples, skippedMetricNotes);
 assert.equal(tracedCoverage[0].causes.length, 2, "coverage should retain distinct skipped-pair causes");
 assert.equal(tracedCoverage[0].causes.find(item => item.reason === "crosses-interval-boundary").away, 2);
 assert.equal(tracedCoverage[0].causes.find(item => item.reason === "gap-over-7").home, 1);
 assert.equal(tracedCoverage[0].causes[0].samples[0].fromMinute, 30);
+assert.equal(tracedCoverage[0].causes.find(item => item.reason === "missing-metric-value").count, 1);
+assert.equal(tracedCoverage[0].causes.find(item => item.reason === "missing-metric-value").unquantified, true);
+assert.equal(tracedCoverage[0].causes.find(item => item.reason === "missing-metric-value").samples[0].fromMinute, 31);
+assert.equal(tracedCoverage[1].causes.find(item => item.reason === "reset-metric-value").count, 1);
 assert.equal(tracedCoverage[1].causes[0].delta, undefined, "cause aggregation must expose totals and samples, not fake exact attribution");
 const overCaptured = reconcileActivityCoverage(coverageRows, [{ values: { shots: { home: 9, away: 2 } } }], [coverageDefinitions[0]], (match, definition) => match.stats[definition.key] || null);
 assert.equal(overCaptured[0].status, "over-captured", "captured increments above cumulative total must be flagged");
