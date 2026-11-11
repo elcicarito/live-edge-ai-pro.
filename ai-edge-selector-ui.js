@@ -84,8 +84,12 @@
       if(firstGoal){
         const goalMinute=minuteOf(firstGoal.match);
         const beforeGoal=timeline.filter(x=>x.time<firstGoal.time).slice(-1)[0];
+        p.checkedAt=firstGoal.time;p.resultMinute=Number.isFinite(goalMinute)?goalMinute:null;
+        p.resultScore=(Number(firstGoal.match.home_score)||0)+":"+(Number(firstGoal.match.away_score)||0);
+        const homeDelta=(Number(firstGoal.match.home_score)||0)-p.startHome,awayDelta=(Number(firstGoal.match.away_score)||0)-p.startAway;
+        p.goalTeam=homeDelta>0&&awayDelta>0?"Neznámy tím":homeDelta>0?p.home:awayDelta>0?p.away:"Neznámy tím";
         if(p.target==="NEXT_TEAM"){
-          p.status=p.predictedTeam&&p.predictedTeam===p.goalTeam?"HIT":"MISS";
+          p.status=p.goalTeam==="Neznámy tím"?"UNRESOLVED":p.predictedTeam===p.goalTeam?"HIT":"MISS";
         }else if(Number.isFinite(goalMinute)&&goalMinute<=p.deadlineMinute){
           p.status="HIT";
         }else if(beforeGoal&&Number.isFinite(minuteOf(beforeGoal.match))&&minuteOf(beforeGoal.match)>=p.deadlineMinute){
@@ -94,11 +98,6 @@
           // The first observed score change crossed the deadline: exact goal timing is unknown.
           p.status="UNRESOLVED";
         }
-        p.checkedAt=firstGoal.time;p.resultMinute=Number.isFinite(goalMinute)?goalMinute:null;
-        p.resultScore=(Number(firstGoal.match.home_score)||0)+":"+(Number(firstGoal.match.away_score)||0);
-        const homeDelta=(Number(firstGoal.match.home_score)||0)-p.startHome,awayDelta=(Number(firstGoal.match.away_score)||0)-p.startAway;
-        p.goalTeam=homeDelta>0&&awayDelta>0?"Neznámy tím":homeDelta>0?p.home:awayDelta>0?p.away:"Neznámy tím";
-        if(p.target==="NEXT_TEAM"&&p.goalTeam==="Neznámy tím") p.status="UNRESOLVED";
       }else{
         const last=timeline[timeline.length-1];
         const lastMinute=last?minuteOf(last.match):NaN;
