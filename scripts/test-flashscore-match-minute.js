@@ -130,7 +130,7 @@ const momentumClassifyEnd = source.indexOf("\n  };", momentumClassifyStart);
 assert.notEqual(momentumClassifyEnd, -1, "momentum activity interpretation helper must be closed");
 const momentumClassifyExpression = source.slice(momentumClassifyStart + "const classifyMomentumActivity = ".length, momentumClassifyEnd + 5).trim();
 const classifyMomentumActivity = vm.runInNewContext("const classifyMomentumActivity = " + momentumClassifyExpression + "; classifyMomentumActivity");
-const stoppedMomentum = classifyMomentumActivity({ home: 79, away: 21 }, { homeRate: 0, awayRate: 0 }, { homeState: "SPOMAĽUJE", awayState: "STABILNÉ" });
+const stoppedMomentum = classifyMomentumActivity({ home: 79, away: 21 }, { homeRate: 0, awayRate: 0, used: [] }, { homeState: "SPOMAĽUJE", awayState: "STABILNÉ" });
 assert.equal(stoppedMomentum.dominance, "DOMÁCI");
 assert.equal(stoppedMomentum.current, "BEZ NOVEJ SLEDOVANEJ AKTIVITY");
 assert.equal(stoppedMomentum.noActivity, true);
