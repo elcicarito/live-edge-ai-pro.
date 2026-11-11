@@ -33,6 +33,7 @@ test("goal wholly inside delay-aware horizon is positive", () => {
   const rows = [
     snap("a", 10, 0, 0),
     snap("a", 12, 0, 0),
+    snap("a", 15, 0, 0),
     snap("a", 16, 1, 0),
     snap("a", 20, 1, 0),
     snap("a", 40, 1, 0)
