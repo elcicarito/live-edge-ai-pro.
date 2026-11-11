@@ -97,7 +97,7 @@
           p.resultScore=(Number(bothScored.match.home_score)||0)+":"+(Number(bothScored.match.away_score)||0);
         }else{
           const last=timeline[timeline.length-1];
-          const ended=last&&/finished|ended|after penalties|ft/i.test(String(last.match?.status||last.match?.status_text||""));
+          const ended=last&&/finished|ended|after penalties|\bft\b/i.test(String(last.match?.status||"")+" "+String(last.match?.status_text||""));
           if(ended){
             p.status="MISS";p.checkedAt=last.time;
             p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
@@ -126,7 +126,7 @@
       }else{
         const last=timeline[timeline.length-1];
         const lastMinute=last?minuteOf(last.match):NaN;
-        const ended=last&&/finished|ended|after penalties|ft/i.test(String(last.match?.status||last.match?.status_text||""));
+        const ended=last&&/finished|ended|after penalties|\bft\b/i.test(String(last.match?.status||"")+" "+String(last.match?.status_text||""));
         if((p.target==="FT"||p.target==="NEXT_TEAM")&&ended){
           p.status="MISS";p.checkedAt=last.time;p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
         }else if(last&&Number.isFinite(lastMinute)&&lastMinute>=p.deadlineMinute){
