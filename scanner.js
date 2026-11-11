@@ -3135,7 +3135,7 @@
       panel.appendChild(legend);
       const timeRange=document.createElement("div");
       timeRange.className="momentum-chart-range";
-      timeRange.textContent="Zobrazené platné intervaly · "+timeLabel(first)+" – "+timeLabel(last);
+      timeRange.textContent=(interpretation.noActivity?"Historické merania momenta":"Merania momenta z platných intervalov")+" · "+timeLabel(first)+" – "+timeLabel(last);
       panel.appendChild(timeRange);
     }
     const q=result.reliability;
