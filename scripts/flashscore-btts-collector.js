@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
+const readline = require("node:readline");
 
 const DATA = path.join(process.cwd(), "data");
 const CURRENT_PATH = path.join(DATA, "flashscore-live-current.json");
@@ -223,21 +224,23 @@ function buildSignalContext(match, history, collectedAt, now) {
     ai_quality_score: quality
   };
 }
-function loadTimelineHistory() {
-  const index = readJson(path.join(DATA, "flashscore-timeline-index.json"), null);
+async function loadTimelineHistory(dataDir = DATA) {
+  const index = readJson(path.join(dataDir, "flashscore-timeline-index.json"), null);
   if (!index || index.source !== "Flashscore" || !Array.isArray(index.weeks)) return [];
   const rows = [];
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   for (const week of index.weeks.slice(0, 2)) {
-    if (!/^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(week?.file || "")) continue;
-    const file = path.join(DATA, week.file);
+    if (!/^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(week?.file || "")) continue;
+    const file = path.join(dataDir, week.file);
     if (!fs.existsSync(file)) continue;
-    const lines = zlib.gunzipSync(fs.readFileSync(file), { maxOutputLength: 100 * 1024 * 1024 }).toString("utf8").split(/\r?\n/);
-    for (const line of lines) {
+    const input = fs.createReadStream(file).pipe(zlib.createGunzip());
+    const lines = readline.createInterface({ input, crlfDelay: Infinity });
+    for await (const line of lines) {
       if (!line.trim()) continue;
       let entry; try { entry = JSON.parse(line); } catch { continue; }
       const snap = entry.snapshot || {};
       const time = Date.parse(snap.collected_at || "");
-      if (!entry.match_id || !Number.isFinite(time)) continue;
+      if (!entry.match_id || !Number.isFinite(time) || time < cutoff) continue;
       const stats = (Array.isArray(snap.stats) ? snap.stats : []).map(item => ({
         ...item, label: item.label || item.name || "",
         home: item.home_numeric ?? item.home, away: item.away_numeric ?? item.away
@@ -460,7 +463,7 @@ async function main() {
   const archive = readJson(ARCHIVE_PATH, {
     schema_version: 1, source: "Flashscore", created_at: new Date().toISOString(), signals: []
   });
-  const history = loadTimelineHistory();
+  const history = await loadTimelineHistory();
   const output = await run({ current, archive, history });
   writeJson(ARCHIVE_PATH, output);
   console.log("FLASHSCORE BTTS COLLECTOR:", JSON.stringify({
