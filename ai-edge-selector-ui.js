@@ -92,12 +92,16 @@
       timeline.sort((a,b)=>a.time-b.time);
       if(p.target==="RESULT_1X2"){
         const last=timeline[timeline.length-1];
-        const ended=last&&/finished|ended|after penalties|\\bft\\b/i.test(String(last.match?.status||"")+" "+String(last.match?.status_text||""));
+        const statusText=last?String(last.match?.status||"")+" "+String(last.match?.status_text||"")+" "+String(last.match?.stage||""):"";
+        const ended=last&&/finished|ended|after penalties|abandoned|cancelled|postponed|suspended|\bft\b/i.test(statusText);
         if(ended){
+          const finalMinute=Number(last.match?.live_minute);
+          const nonRegulation=/after penalties|penalt(?:y|ies)|after extra time|\baet\b|abandoned|cancelled|postponed|suspended/i.test(statusText)||(Number.isFinite(finalMinute)&&finalMinute>100);
           const hs=Number(last.match.home_score)||0,as=Number(last.match.away_score)||0;
           const actual=hs>as?"HOME":as>hs?"AWAY":"DRAW";
-          p.status=actual===p.predictedOutcome?"HIT":"MISS";
-          p.actualOutcome=actual;p.resultScore=hs+":"+as;p.checkedAt=last.time;
+          p.status=nonRegulation?"UNRESOLVED":actual===p.predictedOutcome?"HIT":"MISS";
+          if(!nonRegulation) p.actualOutcome=actual;
+          p.resultScore=hs+":"+as;p.checkedAt=last.time;
         }
         continue;
       }
