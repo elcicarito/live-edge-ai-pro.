@@ -1600,12 +1600,31 @@
       const away = statNumber(item.away_numeric ?? item.away);
       return home === null || away === null ? null : { home, away };
     };
+    const unassignedActivityPairs = [];
+    const recordUnassignedPair = (previous, current, reason, gap, previousMinute, currentMinute) => {
+      statDefinitions.forEach(definition => {
+        const oldValue = getCumulativeStat(previous.match, definition);
+        const newValue = getCumulativeStat(current.match, definition);
+        if (!oldValue || !newValue || newValue.home < oldValue.home || newValue.away < oldValue.away) return;
+        const delta = { home: newValue.home - oldValue.home, away: newValue.away - oldValue.away };
+        if (!delta.home && !delta.away) return;
+        unassignedActivityPairs.push({
+          key: definition.key, label: definition.label, reason, delta,
+          fromMinute: previousMinute === null ? "?" : previousMinute,
+          toMinute: currentMinute === null ? "?" : currentMinute,
+          fromAt: new Date(previous.time).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" }),
+          toAt: new Date(current.time).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" }),
+          gap: Number.isFinite(gap) ? Number(gap.toFixed(1)) : null
+        });
+      });
+    };
     for (let index = 1; index < records.length; index++) {
       const previous = records[index - 1];
       const current = records[index];
       const gap = (current.time - previous.time) / 60000;
       if (!Number.isFinite(gap) || gap <= 0) {
         activityDiagnostics.invalidGap++;
+        recordUnassignedPair(previous, current, "invalid-gap", gap, minuteOf(previous.match), minuteOf(current.match));
         continue;
       }
       if (gap >= 1.5 && gap <= 15) activityDiagnostics.momentumWindowPairs++;
@@ -1614,6 +1633,7 @@
       if (gap > 0 && gap <= 7) activityDiagnostics.activityWindowPairs++;
       const minute = minuteOf(current.match);
       if (gap > 7 || minute === null) {
+        let skippedReason = gap > 7 ? "gap-over-7" : "missing-minute";
         if (minute === null && gap <= 7) {
           const match = current.match || {};
           const clockText = String(match.live_minute ?? match.minute ?? match.live_clock ?? "").trim().toUpperCase();
@@ -1622,8 +1642,10 @@
           const isFinished = /^(?:FT|FULL.?TIME|AET|PEN(?:ALTIES)?)$/.test(clockText) || /FINISHED|FULL.?TIME|AFTER.?EXTRA|PENALT/.test(stageText);
           if (isHalfTime) {
             activityDiagnostics.halfTimePairs++;
+            skippedReason = "half-time";
           } else if (isFinished) {
             activityDiagnostics.finishedOrPenaltiesPairs++;
+            skippedReason = "finished-or-penalties";
           } else {
             activityDiagnostics.missingMinute++;
             const rawClock = value => value === null || value === undefined || String(value).trim() === "" ? "—" : String(value).trim();
@@ -1641,6 +1663,7 @@
             }
           }
         }
+        recordUnassignedPair(previous, current, skippedReason, gap, minuteOf(previous.match), minute);
         continue;
       }
       const previousMinute = minuteOf(previous.match);
@@ -1653,6 +1676,7 @@
         } else {
           activityDiagnostics.missingInterval++;
         }
+        recordUnassignedPair(previous, current, attribution.reason || "missing-interval", gap, previousMinute, minute);
         continue;
       }
       const interval = attribution.interval;
@@ -1682,6 +1706,7 @@
       if (hasDelta && (missingMetricValues || resetMetricValues)) activityDiagnostics.partialStats++;
       if (!hasDelta) {
         activityDiagnostics.noUsableStats++;
+        recordUnassignedPair(previous, current, "no-usable-stats", gap, previousMinute, minute);
         continue;
       }
       if (!intervalTotals.has(interval.label)) {
@@ -1702,7 +1727,7 @@
     intervalHeading.style.cssText = "font-size:11px;font-weight:900;color:#dbeafe;margin:14px 0 7px;";
     target.appendChild(intervalHeading);
     const intervalRows = [...intervalTotals.values()].sort((a, b) => a.start - b.start);
-    const reconcileActivityCoverage = (rows, bins, definitions, getValue) => definitions.map(definition => {
+    const reconcileActivityCoverage = (rows, bins, definitions, getValue, skippedPairs = []) => definitions.map(definition => {
       const firstRow = rows.find(row => getValue(row.match, definition));
       const lastRow = [...rows].reverse().find(row => getValue(row.match, definition));
       const first = firstRow ? getValue(firstRow.match, definition) : null;
@@ -1715,9 +1740,9 @@
         }
         return sum;
       }, { home: 0, away: 0 });
-      if (!first || !last) return { key: definition.key, label: definition.label, status: "missing", captured };
+      if (!first || !last) return { key: definition.key, label: definition.label, status: "missing", captured, causes: [] };
       const total = { home: last.home - first.home, away: last.away - first.away };
-      if (total.home < 0 || total.away < 0) return { key: definition.key, label: definition.label, status: "reset", captured, total };
+      if (total.home < 0 || total.away < 0) return { key: definition.key, label: definition.label, status: "reset", captured, total, causes: [] };
       const overCaptured = captured.home > total.home || captured.away > total.away;
       const unassigned = {
         home: Math.max(0, total.home - captured.home),
@@ -1727,9 +1752,18 @@
         home: total.home > 0 ? Math.round(captured.home / total.home * 100) : null,
         away: total.away > 0 ? Math.round(captured.away / total.away * 100) : null
       };
-      return { key: definition.key, label: definition.label, status: overCaptured ? "over-captured" : "ok", captured, total, unassigned, coverage };
+      const byReason = new Map();
+      skippedPairs.filter(pair => pair.key === definition.key).forEach(pair => {
+        if (!byReason.has(pair.reason)) byReason.set(pair.reason, { home: 0, away: 0, samples: [] });
+        const item = byReason.get(pair.reason);
+        item.home += pair.delta.home;
+        item.away += pair.delta.away;
+        if (item.samples.length < 3) item.samples.push(pair);
+      });
+      const causes = [...byReason.entries()].map(([reason, value]) => ({ reason, ...value }));
+      return { key: definition.key, label: definition.label, status: overCaptured ? "over-captured" : "ok", captured, total, unassigned, coverage, causes };
     });
-    const activityCoverage = reconcileActivityCoverage(records, intervalRows, statDefinitions, getCumulativeStat);
+    const activityCoverage = reconcileActivityCoverage(records, intervalRows, statDefinitions, getCumulativeStat, unassignedActivityPairs);
     const diagnosticPanel = document.createElement("div");
     diagnosticPanel.style.cssText = "padding:8px 9px;margin:7px 0 10px;background:#0d1a2a;border:1px solid #30445d;border-radius:8px;";
     const diagnosticTitle = document.createElement("div");
