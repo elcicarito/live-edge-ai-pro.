@@ -3040,6 +3040,7 @@
     if (result.recent) {
       addText(panel, "Tlak v poslednom intervale (" + result.recent.minutes + " min): Domáci " + result.recent.home + "/100 | Hostia " + result.recent.away + "/100", "13px");
       addText(panel, "Aktivita za 10 min: Domáci " + result.recent.homeRate.toFixed(1) + " | Hostia " + result.recent.awayRate.toFixed(1));
+      addText(panel, "Vážený index: strely na bránu × 3 + strely mimo bránu, prepočítané na 10 minút; nejde o doslovný počet striel.", "10px");
       const used = result.recent.used.map(x => {
         const label = x.key === "sot" ? "SOT" : x.key === "off" ? "strely mimo" : "rohy";
         return label + " " + x.home + ":" + x.away;
@@ -3129,7 +3130,8 @@
       panel.appendChild(timeRange);
     }
     const q=result.reliability;
-    addText(panel, "Pokrytie archívnych meraní: základné strelecké dáta " + q.coreCoverage + "% | SOT aj strely mimo " + q.shotCoverage + "% | držanie lopty " + q.possessionCoverage + "% | platné intervaly " + q.intervalCount + ".", "10px");
+    addText(panel, "Pokrytie archívnych meraní: základné strelecké dáta " + q.coreCoverage + "% | SOT aj strely mimo " + q.shotCoverage + "% | držanie lopty " + q.possessionCoverage + "%.", "10px");
+    addText(panel, "Platné intervaly v celej načítanej histórii: " + q.intervalCount + ". Graf vyššie zobrazuje najviac 10 posledných platných intervalov z posledných 45 minút.", "10px");
     addText(panel, "Index momenta opisuje relatívnu aktivitu, nie pravdepodobnosť gólu. Rohy sú iba doplnkový údaj, ak ich Flashscore poskytne. Dangerous Attacks sa nepoužívajú.", "10px");
     target.appendChild(panel);
   }
