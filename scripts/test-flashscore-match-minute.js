@@ -107,6 +107,23 @@ const unclassified = analyzeScoreChanges([
 ]);
 assert.equal(unclassified.unclassifiedChanges, 1);
 
+const repeatedTransition = analyzeScoreChanges([
+  { time: 1000, match: { home_score: 0, away_score: 0, live_minute: "10′" } },
+  { time: 2000, match: { home_score: 1, away_score: 0, live_minute: "12′" } },
+  { time: 3000, match: { home_score: 2, away_score: 0, live_minute: "20′" } },
+  { time: 4000, match: { home_score: 1, away_score: 0, live_minute: "22′" } },
+  { time: 5000, match: { home_score: 2, away_score: 0, live_minute: "24′" } },
+  { time: 6000, match: { home_score: 3, away_score: 0, live_minute: "26′" } }
+]);
+assert.equal(repeatedTransition.events.length, 3, "a repeated score transition after a stale score rollback must not create a duplicate goal");
+assert.equal(repeatedTransition.suppressedDuplicates, 1, "repeated score transitions must be counted as suppressed duplicates");
+assert.deepEqual(repeatedTransition.events.map(event => event.detail), [
+  "Domáci · +1 · skóre 0:0 → 1:0",
+  "Domáci · +1 · skóre 1:0 → 2:0",
+  "Domáci · +1 · skóre 2:0 → 3:0"
+]);
+
+
 const momentumClassifyStart = source.indexOf("const classifyMomentumActivity = (");
 assert.notEqual(momentumClassifyStart, -1, "momentum activity interpretation helper must exist");
 const momentumClassifyEnd = source.indexOf("\n  };", momentumClassifyStart);
