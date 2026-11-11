@@ -176,6 +176,11 @@ function runCollector() {
     assert.equal(standardMatch.stats[0].label, "Shots on target", "timeline stats must expose the canonical label used by Momentum");
     assert.equal(standardMatch.has_statistics, true);
     assert.equal(standardMatch.stats_available, true);
+    assert.equal(standardMatch.stats_fetch_status, "success_with_data");
+    assert.ok(Number.isFinite(Date.parse(standardMatch.stats_collected_at)), "successful stats fetch must have its own timestamp");
+    assert.equal(standardMatch.match_collected_at, standardMatch.collected_at, "match collection timestamp must remain backward-compatible");
+    assert.equal(specialMatch.stats_fetch_status, "success_with_data");
+    assert.ok(Number.isFinite(Date.parse(specialMatch.stats_collected_at)));
     assert.equal(specialMatch.has_statistics, false);
     assert.equal(specialMatch.stats_available, true, "statistics tab must trigger a fetch even when has_statistics is false");
     assert.equal(specialMatch.available_tabs.includes("statistics"), true);
@@ -212,6 +217,8 @@ function runCollector() {
     assert.equal(specialTimeline[0].snapshot.live_clock, "31'");
     assert.equal(standardTimeline[0].snapshot.has_statistics, true);
     assert.equal(standardTimeline[0].snapshot.stats_available, true);
+    assert.equal(standardTimeline[0].snapshot.stats_fetch_status, "success_with_data");
+    assert.equal(standardTimeline[0].snapshot.stats_collected_at, standardMatch.stats_collected_at);
     assert.equal(specialTimeline[0].snapshot.has_statistics, false);
     assert.equal(specialTimeline[0].snapshot.stats_available, true);
 
