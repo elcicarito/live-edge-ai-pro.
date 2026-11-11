@@ -117,6 +117,7 @@ const stoppedMomentum = classifyMomentumActivity({ home: 79, away: 21 }, { homeR
 assert.equal(stoppedMomentum.dominance, "DOMÁCI");
 assert.equal(stoppedMomentum.current, "BEZ NOVEJ SLEDOVANEJ AKTIVITY");
 assert.equal(stoppedMomentum.noActivity, true);
+assert.ok(source.includes("pomer tlaku sa nezobrazuje."), "zero activity must not display a stale pressure ratio");
 assert.match(stoppedMomentum.development, /SPOMAĽUJE/);
 const activeMomentum = classifyMomentumActivity({ home: 45, away: 55 }, { homeRate: 2.5, awayRate: 0.5 }, null);
 assert.equal(activeMomentum.dominance, "HOSTIA");
