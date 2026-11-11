@@ -1550,7 +1550,7 @@
       const raw = snapshot?.live_minute ?? snapshot?.minute ?? snapshot?.live_clock;
       if (raw === null || raw === undefined || String(raw).trim() === "") return null;
       if (typeof raw === "number") {
-        return Number.isInteger(raw) && raw >= 1 && raw <= 120 ? raw : null;
+        return Number.isInteger(raw) && raw >= 0 && raw <= 120 ? raw : null;
       }
       const text = String(raw).trim().toUpperCase();
       // Prestávka/koniec zápasu nie sú číselná minúta. Neodvodzujeme ju zo skóre ani fázy.
@@ -1563,7 +1563,7 @@
         const regular = text.match(/^(\d{1,3})(?::\d{2})?\s*(?:['′]|MIN(?:UTE)?|MINÚTA)?$/);
         if (regular) parsed = Number(regular[1]);
       }
-      return Number.isInteger(parsed) && parsed >= 1 && parsed <= 120 ? parsed : null;
+      return Number.isInteger(parsed) && parsed >= 0 && parsed <= 120 ? parsed : null;
     };
     const activityIntervalForPair = (previousMinute, currentMinute, definitions) => {
       if (previousMinute === null || previousMinute === undefined) {
@@ -1572,7 +1572,10 @@
       if (currentMinute === null || currentMinute === undefined) {
         return { interval: null, reason: "unknown-current-minute" };
       }
-      const previousInterval = definitions.find(item => previousMinute >= item.start && previousMinute <= item.end);
+      // Nulová minúta je platný začiatok zápasu: krátky prvý interval možno zaradiť do 01–15.
+      const previousInterval = previousMinute === 0 && currentMinute >= 1 && currentMinute <= 15
+        ? definitions.find(item => item.start === 1 && item.end === 15)
+        : definitions.find(item => previousMinute >= item.start && previousMinute <= item.end);
       const currentInterval = definitions.find(item => currentMinute >= item.start && currentMinute <= item.end);
       if (!previousInterval || !currentInterval) {
         return { interval: null, reason: "outside-defined-intervals" };
@@ -1868,7 +1871,7 @@
         target.appendChild(summary);
         addText(target, "Súčet zahŕňa iba platné pozorované prírastky v zobrazených úsekoch. Každá štatistika sa hodnotí samostatne; nejde o predikciu gólu ani stávkový signál.", "10px");
       }
-      addText(target, "Prírastky sú sčítané zo susedných snímok s odstupom najviac 7 minút a priradené podľa minúty neskoršej snímky. Nezachytávajú aktivitu medzi meraniami.", "10px");
+      addText(target, "Prírastky sa započítajú iba pri susedných snímkach s odstupom najviac 7 minút, ak obe časové značky patria do rovnakého 15-minútového úseku. Prechody cez hranicu úseku a neznámy začiatok sa vynechávajú; aktivita medzi meraniami sa nedá presne rozdeliť.", "10px");
     }
 
     // Incidenty sa čítajú iba z polí, ktoré sú skutočne uložené vo Flashscore snímkach.
