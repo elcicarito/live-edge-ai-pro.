@@ -369,6 +369,17 @@ async function run({ current, archive, history = [], detailsFetcher = getDetails
         startScore: candidate.homeScore + ":" + candidate.awayScore,
         combinedSot: candidate.combinedSot,
         combinedShots: candidate.combinedShots,
+        pressureHome: signalContext.pressure?.home ?? null,
+        pressureAway: signalContext.pressure?.away ?? null,
+        goalThreatHome: signalContext.goal_threat?.home ?? null,
+        goalThreatAway: signalContext.goal_threat?.away ?? null,
+        activityHome: signalContext.activity_rate_per_10min?.home ?? null,
+        activityAway: signalContext.activity_rate_per_10min?.away ?? null,
+        ...(Number.isFinite(signalContext.ai_quality_score?.[candidate.predictedSide]) ? {
+          qualityScore: signalContext.ai_quality_score[candidate.predictedSide],
+          qualityScoreVersion: "ai-quality-v1",
+          qualityScoreSide: candidate.predictedSide
+        } : {}),
         createdAt: collectedAt,
         status: "OPEN",
         sourceSnapshot: {
