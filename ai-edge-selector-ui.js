@@ -90,6 +90,21 @@
       const live=usable.find(x=>String(x.record.match.id)===String(p.matchId));
       if(live) timeline.push({time:now,match:live.record.match});
       timeline.sort((a,b)=>a.time-b.time);
+      if(p.target==="BTTS"){
+        const bothScored=timeline.find(x=>(Number(x.match?.home_score)||0)>0&&(Number(x.match?.away_score)||0)>0);
+        if(bothScored){
+          p.status="HIT";p.checkedAt=bothScored.time;
+          p.resultScore=(Number(bothScored.match.home_score)||0)+":"+(Number(bothScored.match.away_score)||0);
+        }else{
+          const last=timeline[timeline.length-1];
+          const ended=last&&/finished|ended|after penalties|ft/i.test(String(last.match?.status||last.match?.status_text||""));
+          if(ended){
+            p.status="MISS";p.checkedAt=last.time;
+            p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
+          }
+        }
+        continue;
+      }
       const firstGoal=timeline.find(x=>scoreOf(x.match)>p.startGoals);
       if(firstGoal){
         const goalMinute=minuteOf(firstGoal.match);
@@ -145,12 +160,22 @@
           startHome:Number(m.home_score)||0,startAway:Number(m.away_score)||0,startGoals:scoreOf(m),
           pressure,pressureSide:predictedTeam,status:"OPEN"});
       }
+      const hs=Number(m.home_score)||0,as=Number(m.away_score)||0;
+      const bothAlreadyScored=hs>0&&as>0;
+      const scorelessPressure=hs===0&&as===0?Math.min(fx.home,fx.away):(hs===0?fx.home:as===0?fx.away:0);
+      if(!bothAlreadyScored&&minute>=10&&minute<=80&&pressure>=40&&scorelessPressure>=25){
+        const key=[m.id,"BTTS",hs,as].join(":");
+        if(!items.some(x=>x.id===key)) items.push({id:key,matchId:String(m.id),home:m.home,away:m.away,
+          target:"BTTS",startMinute:minute,deadlineMinute:120,createdAt:now,
+          startHome:hs,startAway:as,startGoals:hs+as,pressure,scorelessPressure,
+          pressureSide:hs===0&&as===0?"Oba tímy":hs===0?m.home:m.away,status:"OPEN"});
+      }
     }
     const saved=ledgerWrite(items);
     const hits=items.filter(x=>x.status==="HIT").length,misses=items.filter(x=>x.status==="MISS").length,unresolved=items.filter(x=>x.status==="UNRESOLVED").length,open=items.filter(x=>x.status==="OPEN").length;
     const summary=$("ai-edge-prediction-summary"),list=$("ai-edge-prediction-log");
     if(summary){
-      const groups=[{id:15,label:"Gól do 15 min"},{id:25,label:"Gól do 25 min"},{id:"FT",label:"Gól do konca zápasu"},{id:"NEXT_TEAM",label:"Ďalší skórujúci tím"}];
+      const groups=[{id:15,label:"Gól do 15 min"},{id:25,label:"Gól do 25 min"},{id:"FT",label:"Gól do konca zápasu"},{id:"NEXT_TEAM",label:"Ďalší skórujúci tím"},{id:"BTTS",label:"BTTS · oba tímy skórujú"}];
       const groupHtml=groups.map(g=>{
         const rows=items.filter(x=>x.target===g.id),h=rows.filter(x=>x.status==="HIT").length,m=rows.filter(x=>x.status==="MISS").length,u=rows.filter(x=>x.status==="UNRESOLVED").length,o=rows.filter(x=>x.status==="OPEN").length;
         const decided=h+m,rate=decided?Math.round(h/decided*100)+"%":"—";
@@ -162,7 +187,7 @@
       const recent=items.slice().reverse().slice(0,8);
       list.innerHTML=recent.length?recent.map(p=>{
         const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":p.status==="UNRESOLVED"?"NEVYHODNOTITEĽNÉ":"OPEN";
-        const horizon=p.target==="FT"?"konca zápasu":p.target==="NEXT_TEAM"?"ďalší gól · "+esc(p.predictedTeam):p.target+" min";
+        const horizon=p.target==="FT"?"konca zápasu":p.target==="NEXT_TEAM"?"ďalší gól · "+esc(p.predictedTeam):p.target==="BTTS"?"BTTS do konca zápasu":p.target+" min";
         const extra=p.status==="HIT"?" · gól "+(p.resultMinute??"—")+"′":p.status==="MISS"?" · bez gólu v horizonte":p.status==="UNRESOLVED"?" · čas gólu alebo celý horizont sa nedá potvrdiť":" · čaká na výsledok";
         return '<div class="ai-edge-prediction-item"><span class="ai-edge-prediction-status '+(p.status==="UNRESOLVED"?"unresolved":status.toLowerCase())+'">'+status+'</span><strong>'+esc(p.home)+' – '+esc(p.away)+'</strong><br>Gól do '+horizon+' · '+p.startMinute+'′ · tlak '+p.pressure+'/100'+esc(extra)+'</div>';
       }).join(""):'<p>Zatiaľ nebol zachytený dostatočne silný tlak na vytvorenie pozorovania.</p>';
