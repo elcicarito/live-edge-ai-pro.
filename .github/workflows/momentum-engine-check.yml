@@ -25,6 +25,11 @@ on:
 permissions:
   contents: read
 
+# Serialize repeated validation runs without cancelling an active run.
+concurrency:
+  group: momentum-engine-validation
+  cancel-in-progress: false
+
 jobs:
   validate:
     runs-on: ubuntu-latest
