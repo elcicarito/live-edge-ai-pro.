@@ -6,9 +6,9 @@ const vm = require("node:vm");
 const source = fs.readFileSync(require("node:path").join(__dirname, "..", "scanner.js"), "utf8");
 const start = source.indexOf("    const minuteOf = snapshot => {");
 assert.notEqual(start, -1, "minuteOf parser must exist in scanner.js");
-const end = source.indexOf("\\n    };", start);
+const end = source.indexOf("\n    };", start);
 assert.notEqual(end, -1, "minuteOf parser must be closed");
-const expression = source.slice(start + "    const minuteOf = ".length, end + 5).trim();
+const expression = source.slice(start + "    const minuteOf = ".length, end + 7).trim();
 const minuteOf = vm.runInNewContext("(" + expression + ")");
 
 const cases = [
