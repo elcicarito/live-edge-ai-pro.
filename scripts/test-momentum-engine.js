@@ -104,6 +104,12 @@ r=engine.analyse({stats:stats(4,1,5,2)},[
  make(t0+300000,stats(2,1,3,2))
 ],"2026-11-08T12:10:00Z");
 assert.ok(r.acceleration,"two adjacent valid intervals should enable acceleration");
+// Archive interval count is global; the chart is intentionally a capped recent window.
+const longHistory=Array.from({length:30},(_,i)=>make(t0+i*120000,stats(i+1,1,i+1,1)));
+r=engine.analyse({stats:stats(30,1,30,1)},longHistory.slice(0,-1),"2026-11-08T12:58:00Z");
+assert.equal(r.reliability.intervalCount,29,"intervalCount must cover the full loaded history");
+assert.equal(r.trend.length,10,"the chart must cap the visible series at ten recent intervals");
+assert.ok(r.trend.every(point=>point.time>=Date.parse("2026-11-08T12:13:00Z")),"the chart must exclude intervals older than its 45-minute window");
 // A valid interval with complete counters but no new events is still a real zero-activity measurement.
 r=engine.analyse({stats:stats(1,1,2,2,1,1)},[
  make(t0,stats(1,1,2,2,1,1))
