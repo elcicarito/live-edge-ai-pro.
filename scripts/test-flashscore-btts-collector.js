@@ -1,6 +1,10 @@
 "use strict";
 const assert = require("node:assert/strict");
-const { getBttsCandidates, run, isFinished, buildSignalContext } = require("./flashscore-btts-collector");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const zlib = require("node:zlib");
+const { getBttsCandidates, run, isFinished, buildSignalContext, loadTimelineHistory } = require("./flashscore-btts-collector");
 
 const base = {
   id: "abc123", source: "Flashscore", home: "Home FC", away: "Away FC",
@@ -71,6 +75,33 @@ assert.equal(typeof metricContext.ai_quality_score.home, "number");
 assert.equal(typeof metricContext.ai_quality_score.away, "number");
 
 (async () => {
+  const timelineDir = fs.mkdtempSync(path.join(os.tmpdir(), "flashscore-btts-timeline-"));
+  const timelineTime = new Date().toISOString();
+  const timelineEntry = {
+    match_id: "timeline-match-1",
+    snapshot: {
+      collected_at: timelineTime, stage: "2nd Half", live_minute: 48,
+      home_score: 1, away_score: 0,
+      stats: [{ name: "Shots on target", home_numeric: 3, away_numeric: 2 }]
+    }
+  };
+  fs.writeFileSync(path.join(timelineDir, "flashscore-timeline-index.json"), JSON.stringify({
+    source: "Flashscore", weeks: [{ file: "flashscore-match-timeline-2026-W46.jsonl.gz" }]
+  }));
+  fs.writeFileSync(
+    path.join(timelineDir, "flashscore-match-timeline-2026-W46.jsonl.gz"),
+    zlib.gzipSync(JSON.stringify(timelineEntry) + "\\n")
+  );
+  const streamedHistory = await loadTimelineHistory(timelineDir);
+  assert.equal(streamedHistory.length, 1, "timeline archive must stream and parse JSONL rows");
+  assert.equal(streamedHistory[0].match.id, "timeline-match-1");
+  assert.deepEqual(
+    [streamedHistory[0].match.stats[0].home, streamedHistory[0].match.stats[0].away],
+    [3, 2]
+  );
+  fs.rmSync(timelineDir, { recursive: true, force: true });
+
+
   const current = {
     source: "Flashscore", collected_at: new Date().toISOString(),
     records: [{ collected_at: new Date().toISOString(), match: base }]
