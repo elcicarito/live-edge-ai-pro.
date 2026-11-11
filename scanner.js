@@ -3005,7 +3005,7 @@
     const sampleCount = Array.isArray(recent.used)
       ? recent.used.reduce((sum, item) => sum + (Number(item.home) || 0) + (Number(item.away) || 0), 0)
       : null;
-    const lowSample = sampleCount !== null && sampleCount <= 2;
+    const lowSample = sampleCount !== null && sampleCount > 0 && sampleCount <= 2;
     const current = noActivity ? "BEZ NOVEJ SLEDOVANEJ AKTIVITY"
       : homeRate > awayRate ? "DOMÁCI"
       : awayRate > homeRate ? "HOSTIA" : "OBOJSTRANNÁ AKTIVITA";
