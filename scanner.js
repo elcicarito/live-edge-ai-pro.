@@ -1538,6 +1538,8 @@
       missingMinute: 0,
       halfTimePairs: 0,
       finishedOrPenaltiesPairs: 0,
+      crossedBucketPairs: 0,
+      unknownStartMinutePairs: 0,
       missingInterval: 0,
       noUsableStats: 0,
       partialStats: 0,
@@ -1562,6 +1564,23 @@
         if (regular) parsed = Number(regular[1]);
       }
       return Number.isInteger(parsed) && parsed >= 1 && parsed <= 120 ? parsed : null;
+    };
+    const activityIntervalForPair = (previousMinute, currentMinute, definitions) => {
+      if (previousMinute === null || previousMinute === undefined) {
+        return { interval: null, reason: "unknown-start-minute" };
+      }
+      if (currentMinute === null || currentMinute === undefined) {
+        return { interval: null, reason: "unknown-current-minute" };
+      }
+      const previousInterval = definitions.find(item => previousMinute >= item.start && previousMinute <= item.end);
+      const currentInterval = definitions.find(item => currentMinute >= item.start && currentMinute <= item.end);
+      if (!previousInterval || !currentInterval) {
+        return { interval: null, reason: "outside-defined-intervals" };
+      }
+      if (previousInterval.label !== currentInterval.label) {
+        return { interval: null, reason: "crosses-interval-boundary" };
+      }
+      return { interval: currentInterval, reason: null };
     };
     const statNumber = value => {
       const parsed = Number(String(value ?? "").replace(",", ".").replace(/[^0-9.-]/g, ""));
@@ -1621,11 +1640,19 @@
         }
         continue;
       }
-      const interval = intervalDefinitions.find(item => minute >= item.start && minute <= item.end);
-      if (!interval) {
-        activityDiagnostics.missingInterval++;
+      const previousMinute = minuteOf(previous.match);
+      const attribution = activityIntervalForPair(previousMinute, minute, intervalDefinitions);
+      if (!attribution.interval) {
+        if (attribution.reason === "crosses-interval-boundary") {
+          activityDiagnostics.crossedBucketPairs++;
+        } else if (attribution.reason === "unknown-start-minute") {
+          activityDiagnostics.unknownStartMinutePairs++;
+        } else {
+          activityDiagnostics.missingInterval++;
+        }
         continue;
       }
+      const interval = attribution.interval;
       const deltas = {};
       let hasDelta = false;
       let missingMetricValues = 0;
@@ -1689,6 +1716,8 @@
       " | prestávka HT " + activityDiagnostics.halfTimePairs +
       " | koniec/penalty " + activityDiagnostics.finishedOrPenaltiesPairs +
       " | skutočne bez minúty " + activityDiagnostics.missingMinute +
+      " | prechod cez hranicu úseku " + activityDiagnostics.crossedBucketPairs +
+      " | neznáma začiatočná minúta " + activityDiagnostics.unknownStartMinutePairs +
       " | bez použiteľnej štatistiky " + activityDiagnostics.noUsableStats,
       "10px");
     addText(diagnosticPanel,
