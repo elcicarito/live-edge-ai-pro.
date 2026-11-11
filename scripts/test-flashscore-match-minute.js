@@ -107,4 +107,35 @@ const unclassified = analyzeScoreChanges([
 ]);
 assert.equal(unclassified.unclassifiedChanges, 1);
 
-console.log("Flashscore match-minute clock, activity-bin and score-change diagnostics tests passed.");
+const coverageStart = source.indexOf("const reconcileActivityCoverage = (");
+assert.notEqual(coverageStart, -1, "activity coverage reconciliation helper must exist");
+const coverageEnd = source.indexOf("\\n    });", coverageStart);
+assert.notEqual(coverageEnd, -1, "activity coverage reconciliation helper must be closed");
+const coverageExpression = source.slice(coverageStart + "const reconcileActivityCoverage = ".length, coverageEnd + 7).trim();
+const reconcileActivityCoverage = vm.runInNewContext("const reconcileActivityCoverage = " + coverageExpression + "; reconcileActivityCoverage");
+const coverageDefinitions = [
+  { key: "shots", label: "Strely" },
+  { key: "sot", label: "Na bránu" },
+  { key: "corners", label: "Rohy" }
+];
+const coverageRows = [
+  { match: { stats: { shots: { home: 0, away: 0 }, sot: { home: 0, away: 0 }, corners: { home: 0, away: 0 } } } },
+  { match: { stats: { shots: { home: 8, away: 2 }, sot: { home: 5, away: 1 }, corners: { home: 3, away: 1 } } } }
+];
+const coverageBins = [{ values: {
+  shots: { home: 7, away: 1 },
+  sot: { home: 4, away: 0 },
+  corners: { home: 3, away: 1 }
+} }];
+const coverageResult = reconcileActivityCoverage(coverageRows, coverageBins, coverageDefinitions, (match, definition) => match.stats[definition.key] || null);
+assert.deepEqual(JSON.parse(JSON.stringify(coverageResult[0].unassigned)), { home: 1, away: 1 });
+assert.deepEqual(JSON.parse(JSON.stringify(coverageResult[0].coverage)), { home: 88, away: 50 });
+assert.deepEqual(JSON.parse(JSON.stringify(coverageResult[1].unassigned)), { home: 1, away: 1 });
+assert.deepEqual(JSON.parse(JSON.stringify(coverageResult[2].unassigned)), { home: 0, away: 0 });
+assert.equal(coverageResult[2].coverage.home, 100);
+const overCaptured = reconcileActivityCoverage(coverageRows, [{ values: { shots: { home: 9, away: 2 } } }], [coverageDefinitions[0]], (match, definition) => match.stats[definition.key] || null);
+assert.equal(overCaptured[0].status, "over-captured", "captured increments above cumulative total must be flagged");
+const missingCoverage = reconcileActivityCoverage(coverageRows, [], [coverageDefinitions[0]], () => null);
+assert.equal(missingCoverage[0].status, "missing", "missing endpoint stats must not produce a coverage percentage");
+
+console.log("Flashscore match-minute clock, activity-bin, score-change and activity-coverage diagnostics tests passed.");
