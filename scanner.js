@@ -1552,11 +1552,11 @@
       // Prestávka/koniec zápasu nie sú číselná minúta. Neodvodzujeme ju zo skóre ani fázy.
       if (/^(?:HT|HALF.?TIME|BREAK|FT|FULL.?TIME|AET|PEN(?:ALTIES)?)$/.test(text)) return null;
       let parsed = null;
-      const stoppage = text.match(/^(\\d{1,3})\\s*\\+\\s*(\\d{1,2})\\s*(?:['′]|MIN(?:UTE)?|MINÚTA)?$/);
+      const stoppage = text.match(/^(\d{1,3})\\s*\\+\\s*(\d{1,2})\\s*(?:['′]|MIN(?:UTE)?|MINÚTA)?$/);
       if (stoppage) {
         parsed = Number(stoppage[1]) + Number(stoppage[2]);
       } else {
-        const regular = text.match(/^(\\d{1,3})(?::\\d{2})?\\s*(?:['′]|MIN(?:UTE)?|MINÚTA)?$/);
+        const regular = text.match(/^(\d{1,3})(?::\d{2})?\\s*(?:['′]|MIN(?:UTE)?|MINÚTA)?$/);
         if (regular) parsed = Number(regular[1]);
       }
       return Number.isInteger(parsed) && parsed >= 1 && parsed <= 120 ? parsed : null;
