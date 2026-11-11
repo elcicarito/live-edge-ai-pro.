@@ -20,7 +20,7 @@ assert.ok(r.pressure&&r.recent);
 assert.equal(r.recent.minutes,5);
 assert.equal(r.recent.used.find(x=>x.key==="sot").home,1);
 assert.equal(r.recent.used.find(x=>x.key==="off").home,1);
-assert.equal(r.recent.used.find(x=>x.key==="corners").home,1);
+assert.ok(!r.recent.used.some(x=>x.key==="corners"),"corners must not affect shooting momentum");
 assert.ok(r.recent.homeRate>r.recent.awayRate);
 assert.equal(r.reliability.coreCoverage,100);
 assert.equal(r.reliability.shotCoverage,100);
@@ -40,7 +40,7 @@ r=engine.analyse({stats:byPeriod(3,1,2,1,2,0,60,40,0,5)},[
 ],"2026-11-08T12:05:00Z");
 assert.equal(r.recent.used.find(x=>x.key==="sot").home,1);
 assert.equal(r.recent.used.find(x=>x.key==="off").home,1);
-assert.equal(r.recent.used.find(x=>x.key==="corners").home,1);
+assert.ok(!r.recent.used.some(x=>x.key==="corners"),"period-aware corners must remain supplementary");
 assert.ok(r.pressure.home>60,"cumulative pressure must use Match rows, not 1st Half rows");
 
 // Raw Flashscore timeline schema uses name plus numeric value fields.
@@ -120,5 +120,5 @@ assert.equal(r.recent.homeRate,0);
 assert.equal(r.recent.awayRate,0);
 assert.equal(r.recent.activityHome,undefined);
 assert.equal(r.recent.activityAway,undefined);
-assert.equal(r.recent.used.length,3);
+assert.equal(r.recent.used.length,2,"zero-activity interval tracks shooting metrics only");
 console.log("Momentum engine tests passed.");
