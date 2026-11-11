@@ -14,6 +14,11 @@ const base = {
 const candidates = getBttsCandidates(base);
 assert.deepEqual(candidates.map(x => x.tierKey), ["10_sot5_shots8", "10_sot5_shots10"]);
 assert.equal(candidates[0].predictedSide, "away");
+assert.deepEqual(
+  [candidates[0].homeSot, candidates[0].awaySot, candidates[0].homeShots, candidates[0].awayShots],
+  [3, 2, 5, 5],
+  "signal candidate must retain exact per-team Match statistics"
+);
 assert.equal(getBttsCandidates({ ...base, live_minute: 51 }).length, 0);
 assert.equal(getBttsCandidates({ ...base, stage: "1st Half" }).length, 0);
 assert.equal(getBttsCandidates({ ...base, source: "ESPN" }).length, 0);
@@ -41,6 +46,18 @@ assert.equal(getBttsCandidates({ ...base, home_score: 0, away_score: 1,
   const first = await run({ current, archive, now: new Date().toISOString() });
   assert.equal(first.signals.length, 2);
   assert.equal(first.signals[0].status, "OPEN");
+  assert.equal(first.signals[0].sourceSnapshot.schema_version, 2);
+  assert.deepEqual(first.signals[0].sourceSnapshot.stats_summary, {
+    home_shots_on_target: 3,
+    away_shots_on_target: 2,
+    combined_shots_on_target: 5,
+    home_total_shots: 5,
+    away_total_shots: 5,
+    combined_total_shots: 10
+  });
+  assert.equal(first.signals[0].sourceSnapshot.metric_availability.goal_threat, false);
+  assert.equal(first.signals[0].sourceSnapshot.metric_availability.activity_rate, false);
+  assert.equal(first.signals[0].sourceSnapshot.metric_availability.ai_quality_score, false);
   const second = await run({ current, archive: first, now: new Date().toISOString() });
   assert.equal(second.signals.length, 2, "duplicate signal must not be added");
 
