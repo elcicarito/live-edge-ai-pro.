@@ -96,12 +96,14 @@
         }
         p.checkedAt=firstGoal.time;p.resultMinute=Number.isFinite(goalMinute)?goalMinute:null;
         p.resultScore=(Number(firstGoal.match.home_score)||0)+":"+(Number(firstGoal.match.away_score)||0);
-        p.goalTeam=(Number(firstGoal.match.home_score)||0)>p.startHome?p.home:(Number(firstGoal.match.away_score)||0)>p.startAway?p.away:"Neznámy tím";
+        const homeDelta=(Number(firstGoal.match.home_score)||0)-p.startHome,awayDelta=(Number(firstGoal.match.away_score)||0)-p.startAway;
+        p.goalTeam=homeDelta>0&&awayDelta>0?"Neznámy tím":homeDelta>0?p.home:awayDelta>0?p.away:"Neznámy tím";
+        if(p.target==="NEXT_TEAM"&&p.goalTeam==="Neznámy tím") p.status="UNRESOLVED";
       }else{
         const last=timeline[timeline.length-1];
         const lastMinute=last?minuteOf(last.match):NaN;
         const ended=last&&/finished|ended|after penalties|ft/i.test(String(last.match?.status||last.match?.status_text||""));
-        if(p.target==="FT"&&ended){
+        if((p.target==="FT"||p.target==="NEXT_TEAM")&&ended){
           p.status="MISS";p.checkedAt=last.time;p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
         }else if(last&&Number.isFinite(lastMinute)&&lastMinute>=p.deadlineMinute){
           p.status="MISS";p.checkedAt=last.time;p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
