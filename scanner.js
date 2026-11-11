@@ -1935,7 +1935,9 @@
       }
       return { events, scoreChanges, suppressedDuplicates, unclassifiedChanges };
     };
-    const deriveScoreChanges = (rows, officialEvents = []) => analyzeScoreChanges(rows, officialEvents).events;
+    const deriveScoreChanges = (rows, officialEvents = []) => {
+      return analyzeScoreChanges(rows, officialEvents).events;
+    };
 
     // Incidenty sa čítajú iba z polí, ktoré sú skutočne uložené vo Flashscore snímkach.
     const sources = [...records.map(row => row.match), match];
