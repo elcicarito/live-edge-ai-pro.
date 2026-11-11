@@ -226,10 +226,10 @@ function loadTimelineHistory() {
   if (!index || index.source !== "Flashscore" || !Array.isArray(index.weeks)) return [];
   const rows = [];
   for (const week of index.weeks.slice(0, 2)) {
-    if (!/^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(week?.file || "")) continue;
+    if (!/^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(week?.file || "")) continue;
     const file = path.join(DATA, week.file);
     if (!fs.existsSync(file)) continue;
-    const lines = zlib.gunzipSync(fs.readFileSync(file), { maxOutputLength: 100 * 1024 * 1024 }).toString("utf8").split(/\\r?\\n/);
+    const lines = zlib.gunzipSync(fs.readFileSync(file), { maxOutputLength: 100 * 1024 * 1024 }).toString("utf8").split(/\r?\n/);
     for (const line of lines) {
       if (!line.trim()) continue;
       let entry; try { entry = JSON.parse(line); } catch { continue; }
