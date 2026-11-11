@@ -143,7 +143,7 @@ const skippedMetricNotes = [
   { key: "sot", label: "Na bránu", reason: "reset-metric-value", fromMinute: 46, toMinute: 49, fromAt: "14:17", toAt: "14:20", gap: 3 }
 ];
 const tracedCoverage = reconcileActivityCoverage(coverageRows, coverageBins, coverageDefinitions, (match, definition) => match.stats[definition.key] || null, skippedPairSamples, skippedMetricNotes);
-assert.equal(tracedCoverage[0].causes.length, 2, "coverage should retain distinct skipped-pair causes");
+assert.equal(tracedCoverage[0].causes.length, 3, "coverage should retain skipped-pair causes and unquantified metric notes");
 assert.equal(tracedCoverage[0].causes.find(item => item.reason === "crosses-interval-boundary").away, 2);
 assert.equal(tracedCoverage[0].causes.find(item => item.reason === "gap-over-7").home, 1);
 assert.equal(tracedCoverage[0].causes[0].samples[0].fromMinute, 30);
