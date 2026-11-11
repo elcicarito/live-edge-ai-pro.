@@ -1702,6 +1702,34 @@
     intervalHeading.style.cssText = "font-size:11px;font-weight:900;color:#dbeafe;margin:14px 0 7px;";
     target.appendChild(intervalHeading);
     const intervalRows = [...intervalTotals.values()].sort((a, b) => a.start - b.start);
+    const reconcileActivityCoverage = (rows, bins, definitions, getValue) => definitions.map(definition => {
+      const firstRow = rows.find(row => getValue(row.match, definition));
+      const lastRow = [...rows].reverse().find(row => getValue(row.match, definition));
+      const first = firstRow ? getValue(firstRow.match, definition) : null;
+      const last = lastRow ? getValue(lastRow.match, definition) : null;
+      const captured = bins.reduce((sum, bin) => {
+        const value = bin.values[definition.key];
+        if (value) {
+          sum.home += value.home;
+          sum.away += value.away;
+        }
+        return sum;
+      }, { home: 0, away: 0 });
+      if (!first || !last) return { key: definition.key, label: definition.label, status: "missing", captured };
+      const total = { home: last.home - first.home, away: last.away - first.away };
+      if (total.home < 0 || total.away < 0) return { key: definition.key, label: definition.label, status: "reset", captured, total };
+      const overCaptured = captured.home > total.home || captured.away > total.away;
+      const unassigned = {
+        home: Math.max(0, total.home - captured.home),
+        away: Math.max(0, total.away - captured.away)
+      };
+      const coverage = {
+        home: total.home > 0 ? Math.round(captured.home / total.home * 100) : null,
+        away: total.away > 0 ? Math.round(captured.away / total.away * 100) : null
+      };
+      return { key: definition.key, label: definition.label, status: overCaptured ? "over-captured" : "ok", captured, total, unassigned, coverage };
+    });
+    const activityCoverage = reconcileActivityCoverage(records, intervalRows, statDefinitions, getCumulativeStat);
     const diagnosticPanel = document.createElement("div");
     diagnosticPanel.style.cssText = "padding:8px 9px;margin:7px 0 10px;background:#0d1a2a;border:1px solid #30445d;border-radius:8px;";
     const diagnosticTitle = document.createElement("div");
