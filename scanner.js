@@ -1601,20 +1601,38 @@
       return home === null || away === null ? null : { home, away };
     };
     const unassignedActivityPairs = [];
+    const unassignedActivityNotes = [];
+    const activityPairSample = (previous, current, gap, previousMinute, currentMinute) => ({
+      fromMinute: previousMinute === null ? "?" : previousMinute,
+      toMinute: currentMinute === null ? "?" : currentMinute,
+      fromAt: new Date(previous.time).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" }),
+      toAt: new Date(current.time).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" }),
+      gap: Number.isFinite(gap) ? Number(gap.toFixed(1)) : null
+    });
+    const recordUnassignedMetricNote = (definition, reason, previous, current, gap, previousMinute, currentMinute) => {
+      const note = {
+        key: definition.key, label: definition.label, reason,
+        ...activityPairSample(previous, current, gap, previousMinute, currentMinute)
+      };
+      unassignedActivityNotes.push(note);
+    };
     const recordUnassignedPair = (previous, current, reason, gap, previousMinute, currentMinute) => {
       statDefinitions.forEach(definition => {
         const oldValue = getCumulativeStat(previous.match, definition);
         const newValue = getCumulativeStat(current.match, definition);
-        if (!oldValue || !newValue || newValue.home < oldValue.home || newValue.away < oldValue.away) return;
+        if (!oldValue || !newValue) {
+          recordUnassignedMetricNote(definition, "missing-metric-value", previous, current, gap, previousMinute, currentMinute);
+          return;
+        }
+        if (newValue.home < oldValue.home || newValue.away < oldValue.away) {
+          recordUnassignedMetricNote(definition, "reset-metric-value", previous, current, gap, previousMinute, currentMinute);
+          return;
+        }
         const delta = { home: newValue.home - oldValue.home, away: newValue.away - oldValue.away };
         if (!delta.home && !delta.away) return;
         unassignedActivityPairs.push({
           key: definition.key, label: definition.label, reason, delta,
-          fromMinute: previousMinute === null ? "?" : previousMinute,
-          toMinute: currentMinute === null ? "?" : currentMinute,
-          fromAt: new Date(previous.time).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" }),
-          toAt: new Date(current.time).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" }),
-          gap: Number.isFinite(gap) ? Number(gap.toFixed(1)) : null
+          ...activityPairSample(previous, current, gap, previousMinute, currentMinute)
         });
       });
     };
@@ -1689,10 +1707,12 @@
         const newValue = getCumulativeStat(current.match, definition);
         if (!oldValue || !newValue) {
           missingMetricValues++;
+          recordUnassignedMetricNote(definition, "missing-metric-value", previous, current, gap, previousMinute, minute);
           return;
         }
         if (newValue.home < oldValue.home || newValue.away < oldValue.away) {
           resetMetricValues++;
+          recordUnassignedMetricNote(definition, "reset-metric-value", previous, current, gap, previousMinute, minute);
           return;
         }
         deltas[definition.key] = {
@@ -1727,7 +1747,7 @@
     intervalHeading.style.cssText = "font-size:11px;font-weight:900;color:#dbeafe;margin:14px 0 7px;";
     target.appendChild(intervalHeading);
     const intervalRows = [...intervalTotals.values()].sort((a, b) => a.start - b.start);
-    const reconcileActivityCoverage = (rows, bins, definitions, getValue, skippedPairs = []) => definitions.map(definition => {
+    const reconcileActivityCoverage = (rows, bins, definitions, getValue, skippedPairs = [], skippedNotes = []) => definitions.map(definition => {
       const firstRow = rows.find(row => getValue(row.match, definition));
       const lastRow = [...rows].reverse().find(row => getValue(row.match, definition));
       const first = firstRow ? getValue(firstRow.match, definition) : null;
@@ -1760,10 +1780,16 @@
         item.away += pair.delta.away;
         if (item.samples.length < 3) item.samples.push(pair);
       });
-      const causes = [...byReason.entries()].map(([reason, value]) => ({ reason, ...value }));
+      skippedNotes.filter(note => note.key === definition.key).forEach(note => {
+        if (!byReason.has(note.reason)) byReason.set(note.reason, { home: 0, away: 0, samples: [], count: 0, unquantified: true });
+        const item = byReason.get(note.reason);
+        item.count++;
+        if (item.samples.length < 3) item.samples.push(note);
+      });
+      const causes = [...byReason.entries()].map(([reason, value]) => ({ reason, ...value, count: value.count || value.samples.length }));
       return { key: definition.key, label: definition.label, status: overCaptured ? "over-captured" : "ok", captured, total, unassigned, coverage, causes };
     });
-    const activityCoverage = reconcileActivityCoverage(records, intervalRows, statDefinitions, getCumulativeStat, unassignedActivityPairs);
+    const activityCoverage = reconcileActivityCoverage(records, intervalRows, statDefinitions, getCumulativeStat, unassignedActivityPairs, unassignedActivityNotes);
     const diagnosticPanel = document.createElement("div");
     diagnosticPanel.style.cssText = "padding:8px 9px;margin:7px 0 10px;background:#0d1a2a;border:1px solid #30445d;border-radius:8px;";
     const diagnosticTitle = document.createElement("div");
@@ -1845,7 +1871,9 @@
           "unknown-start-minute": "neznáma začiatočná minúta",
           "outside-defined-intervals": "mimo definovaných časových úsekov",
           "no-usable-stats": "bez použiteľných štatistík",
-          "invalid-gap": "neplatný časový odstup"
+          "invalid-gap": "neplatný časový odstup",
+          "missing-metric-value": "chýbajúca hodnota metriky v dvojici",
+          "reset-metric-value": "reset počítadla metriky"
         };
         item.causes.forEach(cause => {
           const causeLine = document.createElement("div");
@@ -1853,8 +1881,10 @@
           const samples = cause.samples.map(sample =>
             sample.fromAt + " (" + sample.fromMinute + "′) → " + sample.toAt + " (" + sample.toMinute + "′), " + sample.gap + " min"
           ).join("; ");
+          const quantified = cause.home || cause.away;
           causeLine.textContent = "Možný zdroj · " + (reasonLabels[cause.reason] || cause.reason) +
-            " · prírastok v preskočených dvojiciach " + cause.home + ":" + cause.away +
+            (quantified ? " · prírastok v preskočených dvojiciach " + cause.home + ":" + cause.away
+              : " · dvojice " + cause.count + " · prírastok nemožno bezpečne vyčísliť") +
             (samples ? " · " + samples : "");
           coveragePanel.appendChild(causeLine);
         });
