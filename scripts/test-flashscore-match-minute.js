@@ -58,4 +58,32 @@ assert.equal(activityIntervalForPair(46, 49, definitions).interval.label, "46–
 assert.equal(activityIntervalForPair(null, 47, definitions).reason, "unknown-start-minute");
 assert.equal(activityIntervalForPair(45, null, definitions).reason, "unknown-current-minute");
 
+
+const deriveStart = source.indexOf("const deriveScoreChanges = (");
+assert.notEqual(deriveStart, -1, "score-change retrospective helper must exist");
+const deriveEnd = source.indexOf("\n    };", deriveStart);
+assert.notEqual(deriveEnd, -1, "score-change helper must be closed");
+const deriveExpression = source.slice(deriveStart + "const deriveScoreChanges = ".length, deriveEnd + 6).trim();
+const deriveScoreChanges = vm.runInNewContext("const deriveScoreChanges = " + deriveExpression + "; deriveScoreChanges");
+const snapshots = [
+  { time: 1000, match: { home_score: 1, away_score: 1, live_minute: "43′", home: "Home", away: "Away" } },
+  { time: 2000, match: { home_score: 3, away_score: 1, live_minute: "55′", home: "Home", away: "Away" } }
+];
+const inferred = deriveScoreChanges(snapshots);
+assert.equal(inferred.length, 1);
+assert.equal(inferred[0].minute, "medzi 43′–55′");
+assert.equal(inferred[0].detail, "Home · +2 · skóre 1:1 → 3:1");
+assert.equal(inferred[0].derived, true);
+assert.equal(deriveScoreChanges([snapshots[0], { time: 2000, match: { home_score: 1, away_score: 1, live_minute: "55′" } }]).length, 0,
+  "unchanged score must not create a goal");
+assert.equal(deriveScoreChanges([snapshots[0], { time: 2000, match: { home_score: 0, away_score: 1, live_minute: "55′" } }]).length, 0,
+  "score reversals must not create a goal");
+assert.equal(deriveScoreChanges(snapshots, [{ kind: "⚽ Gól", minute: "50′" }]).length, 0,
+  "an official goal in the same interval must suppress a duplicate inferred goal");
+const noMinute = deriveScoreChanges([
+  { time: Date.parse("2026-11-11T12:46:00"), match: { home_score: 1, away_score: 1 } },
+  { time: Date.parse("2026-11-11T13:14:00"), match: { home_score: 2, away_score: 1 } }
+]);
+assert.match(noMinute[0].minute, /12:46–13:14/, "missing match minute must use observation-time range");
+
 console.log("Flashscore match-minute clock and activity-bin tests passed.");
