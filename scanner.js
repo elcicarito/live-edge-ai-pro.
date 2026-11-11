@@ -1543,7 +1543,7 @@
       resetMetricValues: 0
     };
     const minuteOf = snapshot => {
-      const raw = snapshot?.live_minute ?? snapshot?.minute;
+      const raw = snapshot?.live_minute ?? snapshot?.minute ?? snapshot?.live_clock;
       if (raw === null || raw === undefined || String(raw).trim() === "") return null;
       if (typeof raw === "number") {
         return Number.isInteger(raw) && raw >= 1 && raw <= 120 ? raw : null;
