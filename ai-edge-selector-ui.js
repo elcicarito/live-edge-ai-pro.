@@ -187,9 +187,10 @@
       const recent=items.slice().reverse().slice(0,8);
       list.innerHTML=recent.length?recent.map(p=>{
         const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":p.status==="UNRESOLVED"?"NEVYHODNOTITEĽNÉ":"OPEN";
-        const horizon=p.target==="FT"?"konca zápasu":p.target==="NEXT_TEAM"?"ďalší gól · "+esc(p.predictedTeam):p.target==="BTTS"?"BTTS do konca zápasu":p.target+" min";
-        const extra=p.status==="HIT"?" · gól "+(p.resultMinute??"—")+"′":p.status==="MISS"?" · bez gólu v horizonte":p.status==="UNRESOLVED"?" · čas gólu alebo celý horizont sa nedá potvrdiť":" · čaká na výsledok";
-        return '<div class="ai-edge-prediction-item"><span class="ai-edge-prediction-status '+(p.status==="UNRESOLVED"?"unresolved":status.toLowerCase())+'">'+status+'</span><strong>'+esc(p.home)+' – '+esc(p.away)+'</strong><br>Gól do '+horizon+' · '+p.startMinute+'′ · tlak '+p.pressure+'/100'+esc(extra)+'</div>';
+        const horizon=p.target==="FT"?"gól do konca zápasu":p.target==="NEXT_TEAM"?"ďalší gól · "+esc(p.predictedTeam):p.target==="BTTS"?"oba tímy skórujú do FT":"gól do "+p.target+" min";
+        const extra=p.status==="HIT"?(p.target==="BTTS"?" · oba tímy skórovali · "+(p.resultScore||""): " · gól "+(p.resultMinute??"—")+"′"):p.status==="MISS"?(p.target==="BTTS"?" · aspoň jeden tím neskóroval":" · bez gólu v horizonte"):p.status==="UNRESOLVED"?" · čas gólu alebo celý horizont sa nedá potvrdiť":" · čaká na výsledok";
+        const pressureText=p.target==="BTTS"?" · tlak chýbajúceho tímu "+(p.scorelessPressure??"—")+"/100":" · tlak "+p.pressure+"/100";
+        return '<div class="ai-edge-prediction-item"><span class="ai-edge-prediction-status '+(p.status==="UNRESOLVED"?"unresolved":status.toLowerCase())+'">'+status+'</span><strong>'+esc(p.home)+' – '+esc(p.away)+'</strong><br>'+horizon+' · '+p.startMinute+'′'+pressureText+esc(extra)+'</div>';
       }).join(""):'<p>Zatiaľ nebol zachytený dostatočne silný tlak na vytvorenie pozorovania.</p>';
       if(!saved) list.innerHTML+='<p class="ai-edge-note">Prehliadač nepovolil lokálne uloženie histórie.</p>';
     }
