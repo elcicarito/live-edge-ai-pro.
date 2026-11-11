@@ -135,6 +135,7 @@ assert.equal(stoppedMomentum.dominance, "DOMÁCI");
 assert.equal(stoppedMomentum.current, "BEZ NOVEJ SLEDOVANEJ AKTIVITY");
 assert.equal(stoppedMomentum.noActivity, true);
 assert.equal(stoppedMomentum.lowSample, false);
+assert.equal(stoppedMomentum.sampleCount, 0);
 const oneEventMomentum = classifyMomentumActivity({ home: 99, away: 1 }, { homeRate: 4.9, awayRate: 0, used: [{ key: "off", home: 1, away: 0 }] }, null);
 assert.equal(oneEventMomentum.lowSample, true);
 assert.equal(oneEventMomentum.sampleCount, 1);
