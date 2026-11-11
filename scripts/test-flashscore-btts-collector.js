@@ -1,6 +1,6 @@
 "use strict";
 const assert = require("node:assert/strict");
-const { getBttsCandidates, run, isFinished } = require("./flashscore-btts-collector");
+const { getBttsCandidates, run, isFinished, buildSignalContext } = require("./flashscore-btts-collector");
 
 const base = {
   id: "abc123", source: "Flashscore", home: "Home FC", away: "Away FC",
@@ -37,6 +37,39 @@ assert.equal(getBttsCandidates({ ...base, home_score: 0, away_score: 1,
   stats: [{ name: "Shots on target", home: 3, away: 3 }, { name: "Total shots", home: 4, away: 4 }]
 }).length, 1);
 
+const metricNow = Date.now();
+const metricTime = offset => new Date(metricNow + offset * 60000).toISOString();
+const metricMatch = {
+  ...base,
+  stats: [
+    { name: "Ball possession", home: 60, away: 40 },
+    { name: "Shots on target", home: 3, away: 2 },
+    { name: "Shots off target", home: 3, away: 2 },
+    { name: "Total shots", home: 5, away: 5 }
+  ]
+};
+const metricHistory = [-4, -2].map((offset, index) => ({
+  time: Date.parse(metricTime(offset)),
+  match: {
+    ...metricMatch,
+    live_minute: 40 + index * 2,
+    stats: [
+      { name: "Ball possession", home: 60, away: 40 },
+      { name: "Shots on target", home: index + 1, away: index },
+      { name: "Shots off target", home: index + 1, away: index },
+      { name: "Total shots", home: index + 2, away: index + 2 }
+    ]
+  }
+}));
+const metricContext = buildSignalContext(metricMatch, metricHistory, metricTime(0), metricTime(0));
+assert.deepEqual(metricContext.pressure, { home: 60, away: 40 });
+assert.deepEqual(metricContext.goal_threat, { home: 49, away: 40 });
+assert.deepEqual(metricContext.activity_rate_per_10min, {
+  home: 20, away: 20, interval_minutes: 2, previous_collected_at: metricTime(-2)
+});
+assert.equal(typeof metricContext.ai_quality_score.home, "number");
+assert.equal(typeof metricContext.ai_quality_score.away, "number");
+
 (async () => {
   const current = {
     source: "Flashscore", collected_at: new Date().toISOString(),
@@ -58,6 +91,17 @@ assert.equal(getBttsCandidates({ ...base, home_score: 0, away_score: 1,
   assert.equal(first.signals[0].sourceSnapshot.metric_availability.goal_threat, false);
   assert.equal(first.signals[0].sourceSnapshot.metric_availability.activity_rate, false);
   assert.equal(first.signals[0].sourceSnapshot.metric_availability.ai_quality_score, false);
+  const metricNowIso = metricTime(0);
+  const metricRun = await run({
+    current: { source: "Flashscore", collected_at: metricNowIso, records: [{ collected_at: metricNowIso, match: metricMatch }] },
+    archive: { schema_version: 1, source: "Flashscore", signals: [] },
+    history: metricHistory,
+    now: metricNowIso
+  });
+  assert.equal(metricRun.signals[0].sourceSnapshot.metric_availability.goal_threat, true);
+  assert.equal(metricRun.signals[0].sourceSnapshot.metric_availability.activity_rate, true);
+  assert.equal(metricRun.signals[0].sourceSnapshot.metric_availability.ai_quality_score, true);
+  assert.equal(typeof metricRun.signals[0].sourceSnapshot.scanner_context.ai_quality_score.away, "number");
   const second = await run({ current, archive: first, now: new Date().toISOString() });
   assert.equal(second.signals.length, 2, "duplicate signal must not be added");
 
