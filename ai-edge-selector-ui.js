@@ -71,6 +71,16 @@
   function ledgerWrite(items){try{localStorage.setItem(LEDGER_KEY,JSON.stringify(items.slice(-500)));return true;}catch(_){return false;}}
   function updateShadowPredictions(usable,data){
     const items=ledgerRead(),history=Array.isArray(data.recent_history)?data.recent_history:[];
+    // Repair older NEXT_TEAM rows that were evaluated before goalTeam was assigned.
+    for(const p of items){
+      if(p.target!=="NEXT_TEAM"||p.status!=="MISS"||!p.resultScore) continue;
+      const parts=String(p.resultScore).split(":").map(Number);
+      if(parts.length!==2||!parts.every(Number.isFinite)) continue;
+      const hd=parts[0]-p.startHome,ad=parts[1]-p.startAway;
+      const actual=hd>0&&ad>0?"Neznámy tím":hd>0?p.home:ad>0?p.away:"Neznámy tím";
+      p.goalTeam=actual;
+      p.status=actual==="Neznámy tím"?"UNRESOLVED":actual===p.predictedTeam?"HIT":"MISS";
+    }
     const now=Date.parse(data.collected_at||"")||Date.now();
     const scoreOf=m=>(Number(m?.home_score)||0)+(Number(m?.away_score)||0);
     const minuteOf=m=>Number(m?.live_minute);
