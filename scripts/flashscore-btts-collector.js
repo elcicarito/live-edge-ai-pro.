@@ -230,7 +230,7 @@ async function loadTimelineHistory(dataDir = DATA) {
   const rows = [];
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   for (const week of index.weeks.slice(0, 2)) {
-    if (!/^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(week?.file || "")) continue;
+    if (!/^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(week?.file || "")) continue;
     const file = path.join(dataDir, week.file);
     if (!fs.existsSync(file)) continue;
     const input = fs.createReadStream(file).pipe(zlib.createGunzip());
