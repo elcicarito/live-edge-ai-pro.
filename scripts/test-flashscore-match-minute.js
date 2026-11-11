@@ -14,6 +14,9 @@ const minuteOf = vm.runInNewContext("const minuteOf = " + expression + "; minute
 const cases = [
   [{ live_minute: 49 }, 49],
   [{ live_minute: "49′" }, 49],
+  [{ live_clock: "49:23" }, 49],
+  [{ live_clock: "45+2′" }, 47],
+  [{ live_clock: "HT" }, null],
   [{ minute: "45:00" }, 45],
   [{ live_minute: "45+2" }, 47],
   [{ live_minute: "45+2′" }, 47],
