@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+# Keep duplicate training/evaluation runs serialized; do not cancel an active run.
+concurrency:
+  group: match-intelligence-training
+  cancel-in-progress: false
+
 jobs:
   train-and-evaluate:
     runs-on: ubuntu-latest
