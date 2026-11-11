@@ -24,7 +24,10 @@
     off:[/shots off target/i],
     corners:[/corner kicks/i,/corners/i,/rohov/i],
     possession:[/ball possession/i,/possession/i,/držanie lopty/i],
-    xg:[/^expected goals$/i,/^xg$/i],
+    xg:[/expected goals\s*\(xg\)/i,/^expected goals$/i,/^xg$/i],
+    xgot:[/xg on target/i],
+    box:[/shots inside the box/i],
+    touches:[/touches in opposition box/i],
     big:[/big chances/i]
   };
   function features(match, history, collectedAt){
@@ -51,7 +54,7 @@
       return Math.max(0,Math.min(100,Math.round(raw+ (poss?Math.max(0,poss-50)*0.18:0))));
     };
     const home=score("home"),away=score("away");
-    const hasCore=!!(values.sot||values.shots||values.corners||values.xg||values.big);
+    const hasCore=!!(values.sot||values.shots||values.corners||values.xg||values.xgot||values.box||values.touches||values.big);
     const statsAge=Date.parse(match.stats_collected_at||match.match_collected_at||match.collected_at||collectedAt||"");
     const age=Number.isFinite(statsAge)?Math.max(0,(Date.now()-statsAge)/60000):null;
     return {values,delta,home,away,hasCore,age,ready:hasCore&&age!==null&&age<=12};
@@ -84,7 +87,7 @@
       const minute=m.live_minute??"—", score=(m.home_score??0)+":"+ (m.away_score??0);
       const f15=fx.ready?(Math.max(fx.home,fx.away)>=48?"Silný tlak · sledovať gólový vývoj":Math.max(fx.home,fx.away)>=25?"Zvýšená aktivita · bez potvrdenej predikcie":"Bez výrazného tlaku"):"Nedostatok čerstvých dát";
       const f25=fx.ready?(Math.max(fx.home,fx.away)>=38?"Tlak prítomný · dlhší horizont":Math.max(fx.home,fx.away)>=20?"Mierna aktivita · neistota vysoká":"Nízka zachytená aktivita"):"Nedostatok čerstvých dát";
-      const statText=["SOT "+(fx.values.sot?fx.values.sot.home+":"+fx.values.sot.away:"—"),"strely "+(fx.values.shots?fx.values.shots.home+":"+fx.values.shots.away:"—"),"rohy "+(fx.values.corners?fx.values.corners.home+":"+fx.values.corners.away:"—"),"xG "+(fx.values.xg?fx.values.xg.home.toFixed(2)+":"+fx.values.xg.away.toFixed(2):"—")].join(" · ");
+      const statText=["SOT "+(fx.values.sot?fx.values.sot.home+":"+fx.values.sot.away:"—"),"strely "+(fx.values.shots?fx.values.shots.home+":"+fx.values.shots.away:"—"),"rohy "+(fx.values.corners?fx.values.corners.home+":"+fx.values.corners.away:"—"),"xG "+(fx.values.xg?fx.values.xg.home.toFixed(2)+":"+fx.values.xg.away.toFixed(2):"—"),"xGOT "+(fx.values.xgot?fx.values.xgot.home.toFixed(2)+":"+fx.values.xgot.away.toFixed(2):"—"),"v šestnástke "+(fx.values.box?fx.values.box.home+":"+fx.values.box.away:"—")].join(" · ");
       return '<article class="ai-edge-match"><div class="ai-edge-match-head"><span>'+esc(m.home)+' – '+esc(m.away)+'</span><span>'+esc(minute)+'′ · '+esc(score)+'</span></div><div class="ai-edge-match-sub">'+esc(m.competition||"")+' · dominantný tlak: '+esc(top)+'</div>'+
       '<div class="ai-edge-teamrow"><span>'+esc(m.home)+' · '+h[0]+'</span><b>'+fx.home+'/100</b></div><div class="ai-edge-bar"><i style="width:'+fx.home+'%"></i></div>'+
       '<div class="ai-edge-teamrow"><span>'+esc(m.away)+' · '+a[0]+'</span><b>'+fx.away+'/100</b></div><div class="ai-edge-bar"><i style="width:'+fx.away+'%;background:#f59e0b"></i></div>'+
