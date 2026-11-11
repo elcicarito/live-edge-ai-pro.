@@ -62,7 +62,8 @@
     if(!Number.isFinite(minutes)||minutes<MIN_GAP_MINUTES||minutes>MAX_GAP_MINUTES)return null;
     const old=snapshotStats(previous.match),now=snapshotStats(current.match);
     let home=0,away=0,used=[];
-    for(const d of DEFINITIONS){
+    // Corners remain supplementary match context; they do not contribute to shooting momentum.
+    for(const d of DEFINITIONS.filter(item=>item.key==="sot"||item.key==="off")){
       const a=old[d.key],b=now[d.key];
       if(!a||!b||b.home<a.home||b.away<a.away)continue;
       const dh=b.home-a.home,da=b.away-a.away;
