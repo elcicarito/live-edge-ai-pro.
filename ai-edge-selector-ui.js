@@ -65,12 +65,73 @@
     if(score>=25)return ["ZVÝŠENÝ TLAK","mid"];
     return ["NÍZKY TLAK","low"];
   }
+
+  const LEDGER_KEY="live-edge-ai-edge-shadow-v1";
+  function ledgerRead(){try{return JSON.parse(localStorage.getItem(LEDGER_KEY)||"[]").filter(x=>x&&x.id);}catch(_){return[];}}
+  function ledgerWrite(items){try{localStorage.setItem(LEDGER_KEY,JSON.stringify(items.slice(-500)));return true;}catch(_){return false;}}
+  function updateShadowPredictions(usable,data){
+    const items=ledgerRead(),history=Array.isArray(data.recent_history)?data.recent_history:[];
+    const now=Date.parse(data.collected_at||"")||Date.now();
+    const scoreOf=m=>(Number(m?.home_score)||0)+(Number(m?.away_score)||0);
+    const minuteOf=m=>Number(m?.live_minute);
+    for(const p of items.filter(x=>x.status==="OPEN")){
+      const timeline=history.filter(x=>String(x.match?.id)===String(p.matchId)&&Number(x.time)>=p.createdAt)
+        .map(x=>({time:Number(x.time),match:x.match}));
+      const live=usable.find(x=>String(x.record.match.id)===String(p.matchId));
+      if(live) timeline.push({time:now,match:live.record.match});
+      timeline.sort((a,b)=>a.time-b.time);
+      const firstGoal=timeline.find(x=>scoreOf(x.match)>p.startGoals);
+      if(firstGoal){
+        const goalMinute=minuteOf(firstGoal.match);
+        p.status=Number.isFinite(goalMinute)&&goalMinute<=p.deadlineMinute?"HIT":"MISS";
+        p.checkedAt=firstGoal.time;p.resultMinute=Number.isFinite(goalMinute)?goalMinute:null;
+        p.resultScore=(Number(firstGoal.match.home_score)||0)+":"+(Number(firstGoal.match.away_score)||0);
+        p.goalTeam=(Number(firstGoal.match.home_score)||0)>p.startHome?p.home:(Number(firstGoal.match.away_score)||0)>p.startAway?p.away:"Neznámy tím";
+      }else{
+        const last=timeline[timeline.length-1];
+        const ended=last&&/finished|ended|after penalties|ft/i.test(String(last.match?.status||last.match?.status_text||""));
+        if(last&&(minuteOf(last.match)>=p.deadlineMinute||ended)){
+          p.status="MISS";p.checkedAt=last.time;p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
+        }
+      }
+    }
+    const liveIds=new Set();
+    for(const {record,fx} of usable){
+      const m=record.match,minute=minuteOf(m);
+      if(m.status!=="live"||!fx.ready||!Number.isFinite(minute)) continue;
+      const pressure=Math.max(fx.home,fx.away);
+      for(const target of [{mins:15,threshold:45},{mins:25,threshold:35}]){
+        if(pressure<target.threshold||minute>90-target.mins) continue;
+        const bucket=Math.floor(minute/5),key=[m.id,target.mins,bucket,m.home_score,m.away_score].join(":");
+        if(items.some(x=>x.id===key)) continue;
+        items.push({id:key,matchId:String(m.id),home:m.home,away:m.away,target:target.mins,
+          startMinute:minute,deadlineMinute:minute+target.mins,createdAt:now,
+          startHome:Number(m.home_score)||0,startAway:Number(m.away_score)||0,
+          startGoals:scoreOf(m),pressure,pressureSide:fx.home>fx.away?m.home:fx.away>fx.home?m.away:"Vyrovnaný",
+          status:"OPEN"});
+      }
+    }
+    const saved=ledgerWrite(items);
+    const hits=items.filter(x=>x.status==="HIT").length,misses=items.filter(x=>x.status==="MISS").length,open=items.filter(x=>x.status==="OPEN").length;
+    const summary=$("ai-edge-prediction-summary"),list=$("ai-edge-prediction-log");
+    if(summary) summary.innerHTML='<div><span>Uložené pozorovania</span><b>'+fmt(items.length)+'</b></div><div><span>Správne · HIT</span><b>'+fmt(hits)+'</b></div><div><span>Nesprávne · MISS</span><b>'+fmt(misses)+'</b></div><div><span>Otvorené</span><b>'+fmt(open)+'</b></div>';
+    if(list){
+      const recent=items.slice().reverse().slice(0,8);
+      list.innerHTML=recent.length?recent.map(p=>{
+        const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":"OPEN";
+        const extra=p.status==="HIT"?" · gól "+(p.resultMinute??"—")+"′":p.status==="MISS"?" · bez gólu v horizonte":" · čaká na výsledok";
+        return '<div class="ai-edge-prediction-item"><span class="ai-edge-prediction-status '+status.toLowerCase()+'">'+status+'</span><strong>'+esc(p.home)+' – '+esc(p.away)+'</strong><br>Gól do '+p.target+' min · '+p.startMinute+'′ · tlak '+p.pressure+'/100'+esc(extra)+'</div>';
+      }).join(""):'<p>Zatiaľ nebol zachytený dostatočne silný tlak na vytvorenie pozorovania.</p>';
+      if(!saved) list.innerHTML+='<p class="ai-edge-note">Prehliadač nepovolil lokálne uloženie histórie.</p>';
+    }
+  }
   function render(data){
     const records=(data.records||[]).filter(r=>r.match?.source==="Flashscore"&&r.match.status==="live");
     const history=data.recent_history||[];
     const usable=records.map(r=>({record:r,fx:features(r.match,history,r.collected_at||data.collected_at)}));
     const withStats=usable.filter(x=>x.fx.hasCore).length;
     const fresh=usable.filter(x=>x.fx.ready).length;
+    updateShadowPredictions(usable,data);
     $("ai-edge-metrics").innerHTML=[
       ["<b>"+fmt(records.length)+"</b>","LIVE zápasy"],
       ["<b>"+fmt(withStats)+"</b>","So štatistikami"],
