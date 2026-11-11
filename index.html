@@ -770,6 +770,19 @@ details>summary{outline-offset:4px}
 .ai-edge-link:hover{text-decoration:underline}
 @media(max-width:560px){.ai-edge-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ai-edge-metric{padding:9px}.ai-edge-metric strong{font-size:18px}.ai-edge-data-meta>div{display:block}.ai-edge-data-meta b{display:block;text-align:left;margin-top:4px}}
 
+
+.ai-edge-live-list{display:grid;gap:9px;margin-top:9px}
+.ai-edge-match{padding:10px;border:1px solid #2b4058;border-radius:10px;background:#0b1726}
+.ai-edge-match-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:800;color:#e2e8f0}
+.ai-edge-match-sub{font-size:10px;color:#91a7bf;margin-top:4px}
+.ai-edge-teamrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-top:8px;font-size:11px;color:#dbeafe}
+.ai-edge-bar{height:6px;background:#26384d;border-radius:8px;overflow:hidden;margin-top:4px}
+.ai-edge-bar>i{display:block;height:100%;background:#38bdf8;border-radius:8px}
+.ai-edge-forecast{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}
+.ai-edge-forecast>div{padding:7px;background:#142338;border-radius:8px;font-size:10px;color:#b8cbe0}
+.ai-edge-forecast b{display:block;font-size:12px;color:#f8fafc;margin-bottom:3px}
+.ai-edge-note{font-size:10px;color:#94a3b8;margin-top:7px;line-height:1.45}
+
 </style>
 </head>
 
@@ -804,26 +817,22 @@ details>summary{outline-offset:4px}
 
 <section id="ai-edge-selector-panel" class="card ai-edge-card" aria-live="polite">
   <div class="ai-edge-head">
-    <div><div class="ai-edge-kicker">PREDIKČNÁ ANALYTIKA · FUTBAL</div><h3>🎯 AI EDGE SELECTOR</h3>
-      <p>Výber kvalitných predikčných príležitostí · bez kurzov a bez automatických stávok</p></div>
-    <span class="ai-edge-mode">SHADOW MODE</span>
+    <div><div class="ai-edge-kicker">LIVE INTELLIGENCE · FLASHSCORE</div><h3>🎯 AI EDGE SELECTOR</h3>
+      <p>Analýza diania na ihrisku · tlak, tempo a predbežný výhľad</p></div>
+    <span class="ai-edge-mode">LIVE SHADOW</span>
   </div>
-  <div id="ai-edge-state" class="ai-edge-state muted">NAČÍTAVAM DÁTOVÝ AUDIT…</div>
+  <div id="ai-edge-state" class="ai-edge-state muted">NAČÍTAVAM AKTUÁLNE LIVE DÁTA…</div>
   <div id="ai-edge-metrics" class="ai-edge-metrics">
-    <div class="ai-edge-metric"><strong>—</strong><span>Archivované zápasy</span></div>
-    <div class="ai-edge-metric"><strong>—</strong><span>Flashscore snímky</span></div>
-    <div class="ai-edge-metric"><strong>—</strong><span>Potvrdené označenia</span></div>
-    <div class="ai-edge-metric"><strong>—</strong><span>Zápasy so štatistikami</span></div>
+    <div class="ai-edge-metric"><strong>—</strong><span>LIVE zápasy</span></div>
+    <div class="ai-edge-metric"><strong>—</strong><span>So štatistikami</span></div>
+    <div class="ai-edge-metric"><strong>—</strong><span>Vyhodnotiteľné merania</span></div>
+    <div class="ai-edge-metric"><strong>—</strong><span>Čerstvosť dát</span></div>
   </div>
-  <div class="ai-edge-section-title">STAV PREDIKČNÉHO MODULU</div>
-  <div class="ai-edge-horizons">
-    <div><b>GÓL DO 15 MIN</b><span>Čaká na validovaný model</span></div>
-    <div><b>GÓL DO 25 MIN</b><span>Čaká na validovaný model</span></div>
-  </div>
-  <div id="ai-edge-data-meta" class="ai-edge-data-meta"><div><span>Načítavam report…</span><b>—</b></div></div>
-  <p id="ai-edge-warning" class="ai-edge-warning">Predikcie sú vypnuté, kým nebude overená kvalita datasetu a modelu.</p>
-  <div class="ai-edge-footer"><span id="ai-edge-updated">Čakám na report…</span><span id="ai-edge-audit-status">Audit workflow: —</span></div>
-  <a id="ai-edge-audit-link" class="ai-edge-link" href="https://github.com/elcicarito/live-edge-ai-pro./actions/workflows/ai-edge-selector-dataset.yml" target="_blank" rel="noopener">OTVORIŤ AUDIT NA GITHUBE ↗</a>
+  <div class="ai-edge-section-title">LIVE PREDIKČNÝ PREHĽAD</div>
+  <div id="ai-edge-live-list" class="ai-edge-live-list"><p>Čakám na aktuálne zápasy…</p></div>
+  <div id="ai-edge-data-meta" class="ai-edge-data-meta"></div>
+  <p id="ai-edge-warning" class="ai-edge-warning">Index tlaku je experimentálny signál z dostupných štatistík, nie overená pravdepodobnosť gólu. Model sa nesmie zamieňať s potvrdenou úspešnosťou.</p>
+  <div class="ai-edge-footer"><span id="ai-edge-updated">Čakám na LIVE feed…</span><span id="ai-edge-audit-status">Režim: LIVE shadow</span></div>
 </section>
 
 <div id="signal" hidden></div>
