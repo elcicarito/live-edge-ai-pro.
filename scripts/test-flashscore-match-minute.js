@@ -86,4 +86,30 @@ const noMinute = deriveScoreChanges([
 ]);
 assert.match(noMinute[0].minute, /12:46–13:14/, "missing match minute must use observation-time range");
 
-console.log("Flashscore match-minute clock and activity-bin tests passed.");
+
+const analysisStart = source.indexOf("const analyzeScoreChanges = (");
+assert.notEqual(analysisStart, -1, "score-change diagnostics helper must exist");
+const analysisEnd = source.indexOf("\n    };", analysisStart);
+assert.notEqual(analysisEnd, -1, "score-change diagnostics helper must be closed");
+const analysisExpression = source.slice(analysisStart + "const analyzeScoreChanges = ".length, analysisEnd + 6).trim();
+const analyzeScoreChanges = vm.runInNewContext("const analyzeScoreChanges = " + analysisExpression + "; analyzeScoreChanges");
+const threeGoals = analyzeScoreChanges([
+  { time: 1000, match: { home_score: 0, away_score: 0, live_minute: "27′" } },
+  { time: 2000, match: { home_score: 0, away_score: 1, live_minute: "39′" } },
+  { time: 3000, match: { home_score: 1, away_score: 1, live_minute: "HT" } },
+  { time: 4000, match: { home_score: 1, away_score: 2, live_minute: "56′" } }
+]);
+assert.equal(threeGoals.scoreChanges, 3);
+assert.equal(threeGoals.events.length, 3);
+assert.equal(threeGoals.suppressedDuplicates, 0);
+assert.equal(threeGoals.unclassifiedChanges, 0);
+const suppressed = analyzeScoreChanges(snapshots, [{ kind: "⚽ Gól", minute: "50′" }]);
+assert.equal(suppressed.suppressedDuplicates, 1);
+assert.equal(suppressed.events.length, 0);
+const unclassified = analyzeScoreChanges([
+  { time: 2000, match: { home_score: 0, away_score: 0, live_minute: "55′" } },
+  { time: 1000, match: { home_score: 1, away_score: 0, live_minute: "56′" } }
+]);
+assert.equal(unclassified.unclassifiedChanges, 1);
+
+console.log("Flashscore match-minute clock, activity-bin and score-change diagnostics tests passed.");
