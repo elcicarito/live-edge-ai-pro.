@@ -117,11 +117,11 @@ const repeatedTransition = analyzeScoreChanges([
 ]);
 assert.equal(repeatedTransition.events.length, 3, "a repeated score transition after a stale score rollback must not create a duplicate goal");
 assert.equal(repeatedTransition.suppressedDuplicates, 1, "repeated score transitions must be counted as suppressed duplicates");
-assert.deepEqual(repeatedTransition.events.map(event => event.detail), [
+assert.equal(repeatedTransition.events.map(event => event.detail).join("|"), [
   "Domáci · +1 · skóre 0:0 → 1:0",
   "Domáci · +1 · skóre 1:0 → 2:0",
   "Domáci · +1 · skóre 2:0 → 3:0"
-]);
+].join("|"));
 
 
 const momentumClassifyStart = source.indexOf("const classifyMomentumActivity = (");
