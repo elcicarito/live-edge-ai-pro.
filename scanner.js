@@ -2986,6 +2986,24 @@
     return { ready: true, sides };
   }
 
+  // Separates cumulative dominance from activity observed in the latest valid interval.
+  const classifyMomentumActivity = (pressure, recent, acceleration) => {
+    const dominance = !pressure ? "NEDOSTATOK DÁT"
+      : pressure.home > pressure.away ? "DOMÁCI"
+      : pressure.away > pressure.home ? "HOSTIA" : "VYROVNANÁ";
+    if (!recent) return { dominance, current: "ČAKÁM NA PLATNÝ INTERVAL", noActivity: false, development: "ČAKÁM NA ĎALŠIE PLATNÉ MERANIE" };
+    const homeRate = Number(recent.homeRate) || 0;
+    const awayRate = Number(recent.awayRate) || 0;
+    const noActivity = homeRate <= 0 && awayRate <= 0;
+    const current = noActivity ? "BEZ NOVEJ SLEDOVANEJ AKTIVITY"
+      : homeRate > awayRate ? "DOMÁCI"
+      : awayRate > homeRate ? "HOSTIA" : "OBOJSTRANNÁ AKTIVITA";
+    const development = acceleration
+      ? "Domáci " + acceleration.homeState + " · hostia " + acceleration.awayState
+      : "ČAKÁM NA ĎALŠIE PLATNÉ MERANIE";
+    return { dominance, current, noActivity, development };
+  };
+
   // New descriptive momentum display. It is intentionally separate from the legacy green signal.
   function renderMomentumEnginePanel(target, match, historyData, collectedAt) {
     const panel = document.createElement("div");
@@ -3007,11 +3025,17 @@
     status.textContent = result.status;
     status.style.cssText = "font-size:11px;font-weight:900;color:#7dd3fc;margin-bottom:8px;";
     panel.appendChild(status);
+    const interpretation = classifyMomentumActivity(result.pressure, result.recent, result.acceleration);
     if (result.pressure) {
-      addText(panel, "Kumulatívna prevaha: Domáci " + result.pressure.home + "/100 | Hostia " + result.pressure.away + "/100", "12px");
+      addText(panel, "DOMINANCIA: " + interpretation.dominance + " · Domáci " + result.pressure.home + "/100 | Hostia " + result.pressure.away + "/100", "12px");
       addText(panel, "Základ: strely na bránu, strely mimo bránu a držanie lopty podľa dostupnosti.", "10px");
     } else {
-      addText(panel, "Kumulatívny tlak zatiaľ nemožno určiť – chýbajú použiteľné štatistiky.", "11px");
+      addText(panel, "DOMINANCIA: zatiaľ neurčená – chýbajú použiteľné štatistiky.", "11px");
+    }
+    addText(panel, "AKTUÁLNY TLAK: " + interpretation.current, "12px");
+    addText(panel, "VÝVOJ TLAKU: " + interpretation.development, "11px");
+    if (interpretation.noActivity) {
+      addText(panel, "BEZ NOVEJ AKTIVITY: v poslednom platnom intervale neboli zachytené nové sledované udalosti.", "11px");
     }
     if (result.recent) {
       addText(panel, "Tlak v poslednom intervale (" + result.recent.minutes + " min): Domáci " + result.recent.home + "/100 | Hostia " + result.recent.away + "/100", "13px");
