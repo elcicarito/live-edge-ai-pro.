@@ -107,6 +107,24 @@ const unclassified = analyzeScoreChanges([
 ]);
 assert.equal(unclassified.unclassifiedChanges, 1);
 
+const momentumClassifyStart = source.indexOf("const classifyMomentumActivity = (");
+assert.notEqual(momentumClassifyStart, -1, "momentum activity interpretation helper must exist");
+const momentumClassifyEnd = source.indexOf("\\n  };", momentumClassifyStart);
+assert.notEqual(momentumClassifyEnd, -1, "momentum activity interpretation helper must be closed");
+const momentumClassifyExpression = source.slice(momentumClassifyStart + "const classifyMomentumActivity = ".length, momentumClassifyEnd + 5).trim();
+const classifyMomentumActivity = vm.runInNewContext("const classifyMomentumActivity = " + momentumClassifyExpression + "; classifyMomentumActivity");
+const stoppedMomentum = classifyMomentumActivity({ home: 79, away: 21 }, { homeRate: 0, awayRate: 0 }, { homeState: "SPOMAĽUJE", awayState: "STABILNÉ" });
+assert.equal(stoppedMomentum.dominance, "DOMÁCI");
+assert.equal(stoppedMomentum.current, "BEZ NOVEJ SLEDOVANEJ AKTIVITY");
+assert.equal(stoppedMomentum.noActivity, true);
+assert.match(stoppedMomentum.development, /SPOMAĽUJE/);
+const activeMomentum = classifyMomentumActivity({ home: 45, away: 55 }, { homeRate: 2.5, awayRate: 0.5 }, null);
+assert.equal(activeMomentum.dominance, "HOSTIA");
+assert.equal(activeMomentum.current, "DOMÁCI");
+assert.equal(activeMomentum.noActivity, false);
+const waitingMomentum = classifyMomentumActivity(null, null, null);
+assert.equal(waitingMomentum.current, "ČAKÁM NA PLATNÝ INTERVAL");
+
 const coverageStart = source.indexOf("const reconcileActivityCoverage = (");
 assert.notEqual(coverageStart, -1, "activity coverage reconciliation helper must exist");
 const coverageEnd = source.indexOf("\n    });", coverageStart);
