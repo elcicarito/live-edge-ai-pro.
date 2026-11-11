@@ -27,7 +27,7 @@ const cases = [
   [{ live_minute: "2nd Half" }, null],
   [{ live_minute: "LIVE" }, null],
   [{ live_minute: "45+99" }, null],
-  [{ live_minute: 0 }, null]
+  [{ live_minute: 0 }, 0]
 ];
 for (const [snapshot, expected] of cases) {
   assert.equal(minuteOf(snapshot), expected, JSON.stringify(snapshot));
@@ -48,6 +48,8 @@ const definitions = [
   { start: 76, end: 90, label: "76–90′" },
   { start: 91, end: 120, label: "90+′" }
 ];
+assert.equal(activityIntervalForPair(0, 2, definitions).interval.label, "01–15′");
+assert.equal(activityIntervalForPair(0, 16, definitions).reason, "crosses-interval-boundary");
 assert.equal(activityIntervalForPair(12, 15, definitions).interval.label, "01–15′");
 assert.equal(activityIntervalForPair(14, 15, definitions).interval.label, "01–15′");
 assert.equal(activityIntervalForPair(15, 16, definitions).reason, "crosses-interval-boundary");
