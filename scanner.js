@@ -1590,7 +1590,23 @@
       if (gap > 0 && gap <= 7) activityDiagnostics.activityWindowPairs++;
       const minute = minuteOf(current.match);
       if (gap > 7 || minute === null) {
-        if (minute === null && gap <= 7) activityDiagnostics.missingMinute++;
+        if (minute === null && gap <= 7) {
+          activityDiagnostics.missingMinute++;
+          const match = current.match || {};
+          const rawClock = value => value === null || value === undefined || String(value).trim() === "" ? "—" : String(value).trim();
+          if (!activityDiagnostics.missingMinuteSamples) activityDiagnostics.missingMinuteSamples = [];
+          if (activityDiagnostics.missingMinuteSamples.length < 5) {
+            activityDiagnostics.missingMinuteSamples.push({
+              at: new Date(current.time).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" }),
+              liveMinute: rawClock(match.live_minute),
+              minute: rawClock(match.minute),
+              liveClock: rawClock(match.live_clock),
+              stage: rawClock(match.stage || match.status_text),
+              diagnostic: rawClock(match.clock_diagnostic),
+              coreMinute: rawClock(match.core_minute_raw)
+            });
+          }
+        }
         continue;
       }
       const interval = intervalDefinitions.find(item => minute >= item.start && minute <= item.end);
@@ -1670,6 +1686,19 @@
     addText(diagnosticPanel,
       "Okno Momentum je iba časové porovnanie párov; jeho platnosť navyše vyžaduje úplné strelecké štatistiky. Aktivita používa prísnejšiu hranicu najviac 7 minút.",
       "9px");
+    if (activityDiagnostics.missingMinuteSamples?.length) {
+      addText(diagnosticPanel, "UKÁŽKA SNÍMOK BEZ ROZPOZNANEJ MINÚTY (max. 5):", "9px");
+      activityDiagnostics.missingMinuteSamples.forEach(sample => {
+        addText(diagnosticPanel,
+          sample.at + " · live_minute=" + sample.liveMinute +
+          " · minute=" + sample.minute +
+          " · live_clock=" + sample.liveClock +
+          " · stage=" + sample.stage +
+          " · clock=" + sample.diagnostic +
+          " · core=" + sample.coreMinute,
+          "9px");
+      });
+    }
     target.appendChild(diagnosticPanel);
     if (!intervalRows.length) {
       addText(target, "Pre časové úseky zatiaľ nie je dosť susedných snímok s platnými kumulatívnymi štatistikami.", "10px");
