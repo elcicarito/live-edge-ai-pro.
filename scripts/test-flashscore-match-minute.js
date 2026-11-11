@@ -32,4 +32,28 @@ const cases = [
 for (const [snapshot, expected] of cases) {
   assert.equal(minuteOf(snapshot), expected, JSON.stringify(snapshot));
 }
-console.log("Flashscore match-minute parsing tests passed.");
+const pairStart = source.indexOf("const activityIntervalForPair = (");
+assert.notEqual(pairStart, -1, "activity interval attribution helper must exist");
+const pairEnd = source.indexOf("\\n    };", pairStart);
+assert.notEqual(pairEnd, -1, "activity interval attribution helper must be closed");
+const pairExpression = source.slice(pairStart + "const activityIntervalForPair = ".length, pairEnd + 6).trim();
+const activityIntervalForPair = vm.runInNewContext("const activityIntervalForPair = " + pairExpression + "; activityIntervalForPair");
+
+const definitions = [
+  { start: 1, end: 15, label: "01–15′" },
+  { start: 16, end: 30, label: "16–30′" },
+  { start: 31, end: 45, label: "31–45′" },
+  { start: 46, end: 60, label: "46–60′" },
+  { start: 61, end: 75, label: "61–75′" },
+  { start: 76, end: 90, label: "76–90′" },
+  { start: 91, end: 120, label: "90+′" }
+];
+assert.equal(activityIntervalForPair(12, 15, definitions).interval.label, "01–15′");
+assert.equal(activityIntervalForPair(14, 15, definitions).interval.label, "01–15′");
+assert.equal(activityIntervalForPair(15, 16, definitions).reason, "crosses-interval-boundary");
+assert.equal(activityIntervalForPair(30, 31, definitions).reason, "crosses-interval-boundary");
+assert.equal(activityIntervalForPair(46, 49, definitions).interval.label, "46–60′");
+assert.equal(activityIntervalForPair(null, 47, definitions).reason, "unknown-start-minute");
+assert.equal(activityIntervalForPair(45, null, definitions).reason, "unknown-current-minute");
+
+console.log("Flashscore match-minute clock and activity-bin tests passed.");
