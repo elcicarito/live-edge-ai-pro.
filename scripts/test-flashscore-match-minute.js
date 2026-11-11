@@ -109,7 +109,7 @@ assert.equal(unclassified.unclassifiedChanges, 1);
 
 const coverageStart = source.indexOf("const reconcileActivityCoverage = (");
 assert.notEqual(coverageStart, -1, "activity coverage reconciliation helper must exist");
-const coverageEnd = source.indexOf("\\n    });", coverageStart);
+const coverageEnd = source.indexOf("\n    });", coverageStart);
 assert.notEqual(coverageEnd, -1, "activity coverage reconciliation helper must be closed");
 const coverageExpression = source.slice(coverageStart + "const reconcileActivityCoverage = ".length, coverageEnd + 7).trim();
 const reconcileActivityCoverage = vm.runInNewContext("const reconcileActivityCoverage = " + coverageExpression + "; reconcileActivityCoverage");
