@@ -134,6 +134,13 @@ const stoppedMomentum = classifyMomentumActivity({ home: 79, away: 21 }, { homeR
 assert.equal(stoppedMomentum.dominance, "DOMÁCI");
 assert.equal(stoppedMomentum.current, "BEZ NOVEJ SLEDOVANEJ AKTIVITY");
 assert.equal(stoppedMomentum.noActivity, true);
+assert.equal(stoppedMomentum.lowSample, false);
+const oneEventMomentum = classifyMomentumActivity({ home: 99, away: 1 }, { homeRate: 4.9, awayRate: 0, used: [{ key: "off", home: 1, away: 0 }] }, null);
+assert.equal(oneEventMomentum.lowSample, true);
+assert.equal(oneEventMomentum.sampleCount, 1);
+const threeEventMomentum = classifyMomentumActivity({ home: 90, away: 10 }, { homeRate: 8, awayRate: 0, used: [{ key: "off", home: 3, away: 0 }] }, null);
+assert.equal(threeEventMomentum.lowSample, false);
+assert.ok(source.includes("MALÁ VZORKA"), "small activity samples must be explicitly qualified in the UI");
 assert.ok(source.includes("POSLEDNÉ HISTORICKÉ MERANIE"), "zero-activity chart must label its last point as historical");
 assert.ok(source.includes("Historické rozdelenie momenta z posledného platného merania – nejde o aktuálny tlak."), "zero-activity chart must explain the historical ratio");
 assert.ok(source.includes('"Historické merania momenta":"Merania momenta z platných intervalov"'), "chart range must distinguish historical momentum from active intervals");
