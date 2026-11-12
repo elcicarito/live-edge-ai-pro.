@@ -91,7 +91,7 @@
         const pressure=p.target==="BTTS"?" · tlak tímu bez gólu "+fmt(p.scorelessPressure)+"/100":" · tlak "+fmt(p.pressure)+"/100";
         const stats=p.startStats||{};const statline=["SOT "+fmt(stats.sot?.home)+":"+fmt(stats.sot?.away),"strely "+fmt(stats.shots?.home)+":"+fmt(stats.shots?.away),"rohy "+fmt(stats.corners?.home)+":"+fmt(stats.corners?.away),"xG "+(stats.xg?Number(stats.xg.home).toFixed(2)+":"+Number(stats.xg.away).toFixed(2):"—")].join(" · ");
         const actualTeam=p.actualTeam?" · skóroval "+p.actualTeam:"";
-        const detail=p.status==="OPEN"?" · čaká na vyhodnotenie":p.status==="UNRESOLVED"?" · nedostatočné dôkazy na férové vyhodnotenie":result+actual+actualTeam;
+        const detail=p.status==="OPEN"?" · čaká na vyhodnotenie":p.status==="UNRESOLVED"?" · "+(p.unresolvedReason||"nedostatočné dôkazy na férové vyhodnotenie"):result+actual+actualTeam;
         return "<div class='ai-edge-prediction-item'><span class='ai-edge-prediction-status "+(p.status==="UNRESOLVED"?"unresolved":p.status==="HIT"?"hit":p.status==="MISS"?"miss":"open")+"'>"+status+"</span><strong>"+esc(p.home)+" – "+esc(p.away)+"</strong><br>"+esc(target)+" · "+fmt(p.startMinute)+"′ · skóre pri predikcii "+fmt(p.startHome)+":"+fmt(p.startAway)+pressure+"<br><span class='ai-edge-note'>"+esc(statline)+"</span>"+esc(detail)+"</div>";
       }).join(""):"<p>Zatiaľ nebola zachytená žiadna predikcia.</p>";
       list.innerHTML+="<p class='ai-edge-note'>Trvalý záznam · aktualizácia "+esc(date(ledger.updated_at))+" · zdroj Flashscore</p>";
