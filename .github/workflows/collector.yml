@@ -104,6 +104,11 @@ jobs:
       - name: Normalize Flashscore primary feed
         run: node scripts/flashscore-primary-adapter.js
 
+      - name: Build permanent AI Edge prediction history
+        run: |
+          node scripts/test-ai-edge-live-prediction-ledger.js
+          node scripts/ai-edge-live-prediction-ledger.js
+
       - name: Verify permanent Flashscore archive
         continue-on-error: true
         run: node scripts/flashscore-archive-integrity.js
