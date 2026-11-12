@@ -19,6 +19,7 @@ assert(rows.some(p=>p.target===15),"15-minute prediction created");
 assert(rows.some(p=>p.target===25),"25-minute prediction created");
 assert(rows.some(p=>p.target==="FT"),"FT prediction created");
 assert(rows.some(p=>p.target==="NEXT_TEAM"),"next-team prediction created");
+assert(rows.some(p=>p.target==="BTTS"),"BTTS prediction created");
 const p15=rows.find(p=>p.target===15),p25=rows.find(p=>p.target===25),next=rows.find(p=>p.target==="NEXT_TEAM");
 const later={source:"Flashscore",collected_at:new Date(now+600000).toISOString(),records:[],recent_history:[
  {time:now+300000,match:{...match,live_minute:55,home_score:1,away_score:0}},
