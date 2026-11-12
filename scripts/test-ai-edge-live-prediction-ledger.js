@@ -52,7 +52,7 @@ evaluate([btts],bttsFeed,{matches:{}},now+900000);
 assert.equal(btts.status,"HIT","BTTS is hit when both teams score in separate snapshots");
 
 
-const delayedMiss={...p15,status:"OPEN"};
+const delayedMiss={...p15,status:"OPEN",snapshots:[{time:now,minute:50,home_score:1,away_score:0,status:"live",status_text:"1st Half",stage:"1st Half"}]};
 const delayedTimeline={source:"Flashscore",collected_at:new Date(now+4000000).toISOString(),records:[],recent_history:[
  {time:now+180000,match:{...match,live_minute:53,home_score:2,away_score:0}},
  {time:now+2400000,match:{...match,live_minute:90,home_score:2,away_score:0}}
