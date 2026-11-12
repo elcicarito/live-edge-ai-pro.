@@ -125,12 +125,6 @@ jobs:
         continue-on-error: true
         run: node scripts/flashscore-archive-quality.js
 
-      - name: Export Flashscore-only training observations
-        run: node scripts/flashscore-live-observations.js
-      - name: Label observations with confirmed Flashscore outcomes
-        run: |
-          node scripts/test-flashscore-observation-labels.js
-          node scripts/flashscore-observation-labels.js
 
       - name: Save Flashscore data
         run: |
