@@ -66,6 +66,29 @@
     return ["NÍZKY TLAK","low"];
   }
 
+  async function loadModel(){
+    const url="https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-live-model.json?t="+Date.now();
+    const res=await fetch(url,{cache:"no-store",headers:{Accept:"application/json"}});
+    if(res.status===404)return null;
+    if(!res.ok)throw new Error("LIVE model HTTP "+res.status);
+    const model=await res.json();
+    if(model.source!=="Flashscore"||model.mode!=="FORWARD_ONLY_LIVE_TRAINING")throw new Error("Neplatný formát LIVE modelu");
+    return model;
+  }
+  function renderModelStatus(model){
+    const el=$("ai-edge-model-status");if(!el)return;
+    if(!model){
+      el.textContent="Čakám na prvý zber po aktivácii tréningu. Model začne prijímať iba nové Flashscore LIVE snímky; staršie zápasy sa spätne nenačítavajú.";
+      return;
+    }
+    const line=[15,25].map(h=>{
+      const item=model.models?.[String(h)]||{},counts=item.counts||{};
+      const status=item.status==="SHADOW_VALIDATED"?"tieňovo overený":item.status==="NOT_VALIDATED"?"zatiaľ neprekonal základný model":"zbiera vzorky";
+      return h+" min: "+status+" · tréning "+fmt(counts.train||0)+" · nezávislé overenie "+fmt(counts.validation||0);
+    }).join(" | ");
+    const phase=model.status==="SHADOW_VALIDATION_AVAILABLE"?"K dispozícii je tieňovo overený model; ostré pravdepodobnosti zatiaľ nemeníme.":"Model je vo fáze zberu a tréningu; pravdepodobnosti zatiaľ nezverejňuje.";
+    el.textContent="Spustené "+date(model.started_at)+" · 5-minútový buffer · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+line+". "+phase+" Tréning používa iba nové snímky od spustenia.";
+  }
   function renderPredictionLedger(ledger){
     const summary=$("ai-edge-prediction-summary"),list=$("ai-edge-prediction-log");
     if(!ledger){
@@ -106,13 +129,13 @@
     if(data.source!=="Flashscore"||data.mode!=="LIVE_PREDICTION_LEDGER")throw new Error("Neplatný formát trvalej histórie");
     return data;
   }
-  function render(data,ledger){
+  function render(data,ledger,model){
     const records=(data.records||[]).filter(r=>r.match?.source==="Flashscore"&&r.match.status==="live");
     const history=data.recent_history||[];
     const usable=records.map(r=>({record:r,fx:features(r.match,history,r.collected_at||data.collected_at)}));
     const withStats=usable.filter(x=>x.fx.hasCore).length;
     const fresh=usable.filter(x=>x.fx.ready).length;
-    renderPredictionLedger(ledger);
+    renderPredictionLedger(ledger);\n    renderModelStatus(model);
     $("ai-edge-metrics").innerHTML=[
       ["<b>"+fmt(records.length)+"</b>","LIVE zápasy"],
       ["<b>"+fmt(withStats)+"</b>","So štatistikami"],
@@ -142,7 +165,7 @@
     $("ai-edge-audit-status").textContent="LIVE predikcie · trvalá história · bez kurzov";
   }
   async function refresh(){
-    try{const [data,ledger]=await Promise.all([load(),loadLedger()]);if(data.source!=="Flashscore")throw new Error("Zdroj nie je Flashscore");render(data,ledger);}
+    try{const [data,ledger,model]=await Promise.all([load(),loadLedger(),loadModel()]);if(data.source!=="Flashscore")throw new Error("Zdroj nie je Flashscore");render(data,ledger,model);}
     catch(e){const s=$("ai-edge-state");if(s){s.className="ai-edge-state bad";s.textContent="LIVE DÁTA NEDOSTUPNÉ · "+e.message;}}
   }
   document.addEventListener("DOMContentLoaded",()=>{if(!$("ai-edge-selector-panel"))return;refresh();window.setInterval(refresh,60000);});
