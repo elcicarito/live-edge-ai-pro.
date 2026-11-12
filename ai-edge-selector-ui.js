@@ -85,12 +85,12 @@
       const rows=(ledger.predictions||[]).slice(0,12);
       list.innerHTML=rows.length?rows.map(p=>{
         const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":p.status==="UNRESOLVED"?"NEVYHODNOTITEĽNÉ":"OTVORENÉ";
-        const target=p.target==="RESULT_1X2"?"1X2 · "+(p.predictedOutcome==="HOME"?esc(p.home):p.predictedOutcome==="AWAY"?esc(p.away):"remíza"):p.target==="NEXT_TEAM"?"ďalší skórujúci · "+esc(p.predictedTeam||"—"):p.target==="BTTS"?"oba tímy skórujú do FT":p.target==="FT"?"gól do konca zápasu":"gól do "+p.target+" min";
-        const result=p.resultScore?" · výsledok "+esc(p.resultScore):"";
-        const actual=p.actualOutcome?" · skutočný výsledok "+(p.actualOutcome==="HOME"?esc(p.home):p.actualOutcome==="AWAY"?esc(p.away):"remíza"):"";
+        const target=p.target==="RESULT_1X2"?"1X2 · "+(p.predictedOutcome==="HOME"?p.home:p.predictedOutcome==="AWAY"?p.away:"remíza"):p.target==="NEXT_TEAM"?"ďalší skórujúci · "+esc(p.predictedTeam||"—"):p.target==="BTTS"?"oba tímy skórujú do FT":p.target==="FT"?"gól do konca zápasu":"gól do "+p.target+" min";
+        const result=p.resultScore?" · výsledok "+p.resultScore:"";
+        const actual=p.actualOutcome?" · skutočný výsledok "+(p.actualOutcome==="HOME"?p.home:p.actualOutcome==="AWAY"?p.away:"remíza"):"";
         const pressure=p.target==="BTTS"?" · tlak tímu bez gólu "+fmt(p.scorelessPressure)+"/100":" · tlak "+fmt(p.pressure)+"/100";
         const stats=p.startStats||{};const statline=["SOT "+fmt(stats.sot?.home)+":"+fmt(stats.sot?.away),"strely "+fmt(stats.shots?.home)+":"+fmt(stats.shots?.away),"rohy "+fmt(stats.corners?.home)+":"+fmt(stats.corners?.away),"xG "+(stats.xg?Number(stats.xg.home).toFixed(2)+":"+Number(stats.xg.away).toFixed(2):"—")].join(" · ");
-        const actualTeam=p.actualTeam?" · skóroval "+esc(p.actualTeam):"";
+        const actualTeam=p.actualTeam?" · skóroval "+p.actualTeam:"";
         const detail=p.status==="OPEN"?" · čaká na vyhodnotenie":p.status==="UNRESOLVED"?" · nedostatočné dôkazy na férové vyhodnotenie":result+actual+actualTeam;
         return "<div class='ai-edge-prediction-item'><span class='ai-edge-prediction-status "+(p.status==="UNRESOLVED"?"unresolved":p.status==="HIT"?"hit":p.status==="MISS"?"miss":"open")+"'>"+status+"</span><strong>"+esc(p.home)+" – "+esc(p.away)+"</strong><br>"+esc(target)+" · "+fmt(p.startMinute)+"′ · skóre pri predikcii "+fmt(p.startHome)+":"+fmt(p.startAway)+pressure+"<br><span class='ai-edge-note'>"+esc(statline)+"</span>"+esc(detail)+"</div>";
       }).join(""):"<p>Zatiaľ nebola zachytená žiadna predikcia.</p>";
