@@ -35,4 +35,13 @@ assert.equal(p1x2.status,"MISS");
 const extra={...p1x2,status:"OPEN"};
 evaluate([extra],{...later,recent_history:[]},{matches:{"fixture-1":{status:"CONFIRMED",home_score:2,away_score:1,confirmed_at:new Date(now+900000).toISOString(),final_match:{status_text:"After extra time"}}}},now+900000);
 assert.equal(extra.status,"UNRESOLVED");
+
+const btts={...p15,target:"BTTS",startHome:1,startAway:0,startGoals:1,status:"OPEN"};
+const bttsFeed={source:"Flashscore",collected_at:new Date(now+900000).toISOString(),records:[],recent_history:[
+ {time:now+300000,match:{...match,live_minute:55,home_score:1,away_score:0}},
+ {time:now+900000,match:{...match,live_minute:65,home_score:1,away_score:1}}
+]};
+evaluate([btts],bttsFeed,{matches:{}},now+900000);
+assert.equal(btts.status,"HIT","BTTS is hit when both teams score in separate snapshots");
+
 console.log("AI Edge live prediction ledger tests passed.");
