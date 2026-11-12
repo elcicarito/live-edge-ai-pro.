@@ -1,0 +1,38 @@
+"use strict";
+const assert=require("node:assert/strict");
+const {addPredictions,evaluate}=require("./ai-edge-live-prediction-ledger");
+const now=Date.parse("2026-11-12T20:00:00Z");
+const stats=[
+ {label:"Shots on target",home:5,away:2},
+ {label:"Total shots",home:12,away:7},
+ {label:"Shots off target",home:7,away:5},
+ {label:"Corner kicks",home:6,away:2},
+ {label:"Big chances",home:2,away:1},
+ {label:"Expected goals (xG)",home:1.4,away:0.7},
+ {label:"Ball possession",home:58,away:42}
+];
+const match={id:"fixture-1",source:"Flashscore",status:"live",home:"Home",away:"Away",competition:"Test league",live_minute:50,home_score:1,away_score:0,stats_collected_at:new Date(now).toISOString(),stats};
+const feed={source:"Flashscore",collected_at:new Date(now).toISOString(),records:[{collected_at:new Date(now).toISOString(),match}],recent_history:[]};
+const rows=[];
+addPredictions(rows,feed,now);
+assert(rows.some(p=>p.target===15),"15-minute prediction created");
+assert(rows.some(p=>p.target===25),"25-minute prediction created");
+assert(rows.some(p=>p.target==="FT"),"FT prediction created");
+assert(rows.some(p=>p.target==="NEXT_TEAM"),"next-team prediction created");
+const p15=rows.find(p=>p.target===15),p25=rows.find(p=>p.target===25),next=rows.find(p=>p.target==="NEXT_TEAM");
+const later={source:"Flashscore",collected_at:new Date(now+600000).toISOString(),records:[],recent_history:[
+ {time:now+300000,match:{...match,live_minute:55,home_score:1,away_score:0}},
+ {time:now+600000,match:{...match,live_minute:60,home_score:2,away_score:0}}
+]};
+evaluate([p15,p25,next],later,{matches:{}},now+600000);
+assert.equal(p15.status,"HIT");
+assert.equal(p25.status,"HIT");
+assert.equal(next.status,"HIT");
+const tied={...match,home_score:1,away_score:1};
+const p1x2={...p15,target:"RESULT_1X2",predictedOutcome:"HOME",startMinute:65,startHome:1,startAway:0};
+evaluate([p1x2],{...later,recent_history:[]},{matches:{"fixture-1":{status:"CONFIRMED",home_score:1,away_score:1,confirmed_at:new Date(now+900000).toISOString(),final_match:{status_text:"Finished"}}}},now+900000);
+assert.equal(p1x2.status,"MISS");
+const extra={...p1x2,status:"OPEN"};
+evaluate([extra],{...later,recent_history:[]},{matches:{"fixture-1":{status:"CONFIRMED",home_score:2,away_score:1,confirmed_at:new Date(now+900000).toISOString(),final_match:{status_text:"After extra time"}}}},now+900000);
+assert.equal(extra.status,"UNRESOLVED");
+console.log("AI Edge live prediction ledger tests passed.");
