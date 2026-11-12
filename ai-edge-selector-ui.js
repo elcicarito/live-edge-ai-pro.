@@ -66,176 +66,51 @@
     return ["NÍZKY TLAK","low"];
   }
 
-  const LEDGER_KEY="live-edge-ai-edge-shadow-v1";
-  function ledgerRead(){try{return JSON.parse(localStorage.getItem(LEDGER_KEY)||"[]").filter(x=>x&&x.id);}catch(_){return[];}}
-  function ledgerWrite(items){try{localStorage.setItem(LEDGER_KEY,JSON.stringify(items.slice(-500)));return true;}catch(_){return false;}}
-  function updateShadowPredictions(usable,data){
-    const items=ledgerRead(),history=Array.isArray(data.recent_history)?data.recent_history:[];
-    // Repair older NEXT_TEAM rows that were evaluated before goalTeam was assigned.
-    for(const p of items){
-      if(p.target!=="NEXT_TEAM"||p.status!=="MISS"||!p.resultScore) continue;
-      const parts=String(p.resultScore).split(":").map(Number);
-      if(parts.length!==2||!parts.every(Number.isFinite)) continue;
-      const hd=parts[0]-p.startHome,ad=parts[1]-p.startAway;
-      const actual=hd>0&&ad>0?"Neznámy tím":hd>0?p.home:ad>0?p.away:"Neznámy tím";
-      p.goalTeam=actual;
-      p.status=actual==="Neznámy tím"?"UNRESOLVED":actual===p.predictedTeam?"HIT":"MISS";
-    }
-    const now=Date.parse(data.collected_at||"")||Date.now();
-    const scoreOf=m=>(Number(m?.home_score)||0)+(Number(m?.away_score)||0);
-    const minuteOf=m=>Number(m?.live_minute);
-    for(const p of items.filter(x=>x.status==="OPEN")){
-      const timeline=history.filter(x=>String(x.match?.id)===String(p.matchId)&&Number(x.time)>=p.createdAt)
-        .map(x=>({time:Number(x.time),match:x.match}));
-      const live=usable.find(x=>String(x.record.match.id)===String(p.matchId));
-      if(live) timeline.push({time:now,match:live.record.match});
-      timeline.sort((a,b)=>a.time-b.time);
-      if(p.target==="RESULT_1X2"){
-        const last=timeline[timeline.length-1];
-        const statusText=last?String(last.match?.status||"")+" "+String(last.match?.status_text||"")+" "+String(last.match?.stage||""):"";
-        const ended=last&&/finished|ended|after penalties|abandoned|cancelled|postponed|suspended|\bft\b/i.test(statusText);
-        if(ended){
-          const finalMinute=Number(last.match?.live_minute);
-          const nonRegulation=/after penalties|penalt(?:y|ies)|after extra time|\baet\b|abandoned|cancelled|postponed|suspended/i.test(statusText)||(Number.isFinite(finalMinute)&&finalMinute>100);
-          const hs=Number(last.match.home_score)||0,as=Number(last.match.away_score)||0;
-          const actual=hs>as?"HOME":as>hs?"AWAY":"DRAW";
-          p.status=nonRegulation?"UNRESOLVED":actual===p.predictedOutcome?"HIT":"MISS";
-          if(!nonRegulation) p.actualOutcome=actual;
-          p.resultScore=hs+":"+as;p.checkedAt=last.time;
-        }
-        continue;
-      }
-      if(p.target==="BTTS"){
-        const bothScored=timeline.find(x=>(Number(x.match?.home_score)||0)>0&&(Number(x.match?.away_score)||0)>0);
-        if(bothScored){
-          p.status="HIT";p.checkedAt=bothScored.time;
-          p.resultScore=(Number(bothScored.match.home_score)||0)+":"+(Number(bothScored.match.away_score)||0);
-        }else{
-          const last=timeline[timeline.length-1];
-          const ended=last&&/finished|ended|after penalties|\bft\b/i.test(String(last.match?.status||"")+" "+String(last.match?.status_text||""));
-          if(ended){
-            p.status="MISS";p.checkedAt=last.time;
-            p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
-          }
-        }
-        continue;
-      }
-      const firstGoal=timeline.find(x=>scoreOf(x.match)>p.startGoals);
-      if(firstGoal){
-        const goalMinute=minuteOf(firstGoal.match);
-        const beforeGoal=timeline.filter(x=>x.time<firstGoal.time).slice(-1)[0];
-        p.checkedAt=firstGoal.time;p.resultMinute=Number.isFinite(goalMinute)?goalMinute:null;
-        p.resultScore=(Number(firstGoal.match.home_score)||0)+":"+(Number(firstGoal.match.away_score)||0);
-        const homeDelta=(Number(firstGoal.match.home_score)||0)-p.startHome,awayDelta=(Number(firstGoal.match.away_score)||0)-p.startAway;
-        p.goalTeam=homeDelta>0&&awayDelta>0?"Neznámy tím":homeDelta>0?p.home:awayDelta>0?p.away:"Neznámy tím";
-        if(p.target==="NEXT_TEAM"){
-          p.status=p.goalTeam==="Neznámy tím"?"UNRESOLVED":p.predictedTeam===p.goalTeam?"HIT":"MISS";
-        }else if(Number.isFinite(goalMinute)&&goalMinute<=p.deadlineMinute){
-          p.status="HIT";
-        }else if(beforeGoal&&Number.isFinite(minuteOf(beforeGoal.match))&&minuteOf(beforeGoal.match)>=p.deadlineMinute){
-          p.status="MISS";
-        }else{
-          // The first observed score change crossed the deadline: exact goal timing is unknown.
-          p.status="UNRESOLVED";
-        }
-      }else{
-        const last=timeline[timeline.length-1];
-        const lastMinute=last?minuteOf(last.match):NaN;
-        const ended=last&&/finished|ended|after penalties|\bft\b/i.test(String(last.match?.status||"")+" "+String(last.match?.status_text||""));
-        if((p.target==="FT"||p.target==="NEXT_TEAM")&&ended){
-          p.status="MISS";p.checkedAt=last.time;p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
-        }else if(last&&Number.isFinite(lastMinute)&&lastMinute>=p.deadlineMinute){
-          p.status="MISS";p.checkedAt=last.time;p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
-        }else if(last&&ended){
-          // A match ended before the prediction horizon expired; this is not a fair miss.
-          p.status="UNRESOLVED";p.checkedAt=last.time;p.resultScore=(Number(last.match.home_score)||0)+":"+(Number(last.match.away_score)||0);
-        }
-      }
-    }
-    const liveIds=new Set();
-    for(const {record,fx} of usable){
-      const m=record.match,minute=minuteOf(m);
-      if(m.status!=="live"||!fx.ready||!Number.isFinite(minute)) continue;
-      const pressure=Math.max(fx.home,fx.away);
-      for(const target of [{mins:15,threshold:45},{mins:25,threshold:35},{mins:"FT",threshold:40}]){
-        if(pressure<target.threshold||(target.mins!=="FT"&&minute>90-target.mins)) continue;
-        const bucket=target.mins==="FT"?"FT":Math.floor(minute/5),key=[m.id,target.mins,bucket,m.home_score,m.away_score].join(":");
-        if(items.some(x=>x.id===key)) continue;
-        items.push({id:key,matchId:String(m.id),home:m.home,away:m.away,target:target.mins,
-          startMinute:minute,deadlineMinute:target.mins==="FT"?120:minute+target.mins,createdAt:now,
-          startHome:Number(m.home_score)||0,startAway:Number(m.away_score)||0,
-          startGoals:scoreOf(m),pressure,pressureSide:fx.home>fx.away?m.home:fx.away>fx.home?m.away:"Vyrovnaný",
-          status:"OPEN"});
-      }
-      if(Math.abs(fx.home-fx.away)>=8&&pressure>=40){
-        const predictedTeam=fx.home>fx.away?m.home:m.away;
-        const key=[m.id,"NEXT_TEAM",Math.floor(minute/5),m.home_score,m.away_score].join(":");
-        if(!items.some(x=>x.id===key)) items.push({id:key,matchId:String(m.id),home:m.home,away:m.away,
-          target:"NEXT_TEAM",predictedTeam,startMinute:minute,deadlineMinute:120,createdAt:now,
-          startHome:Number(m.home_score)||0,startAway:Number(m.away_score)||0,startGoals:scoreOf(m),
-          pressure,pressureSide:predictedTeam,status:"OPEN"});
-      }
-      // Experimental 1X2 baseline: score state first; pressure only breaks late level-score ties.
-      if(minute>=60&&minute<90){
-        const hs=Number(m.home_score)||0,as=Number(m.away_score)||0;
-        const gap=fx.home-fx.away;
-        let predictedOutcome=null,rule="";
-        if(hs>as){predictedOutcome="HOME";rule="aktuálne vedenie";}
-        else if(as>hs){predictedOutcome="AWAY";rule="aktuálne vedenie";}
-        else if(minute>=65&&gap>=18){predictedOutcome="HOME";rule="vyrovnané skóre · výrazný tlak domácich";}
-        else if(minute>=65&&gap<=-18){predictedOutcome="AWAY";rule="vyrovnané skóre · výrazný tlak hostí";}
-        else if(minute>=75&&Math.abs(gap)<=8){predictedOutcome="DRAW";rule="neskoré vyrovnané skóre a tlak";}
-        if(predictedOutcome){
-          const key=[m.id,"RESULT_1X2",Math.floor(minute/10),hs,as].join(":");
-          if(!items.some(x=>x.id===key)) items.push({id:key,matchId:String(m.id),home:m.home,away:m.away,
-            target:"RESULT_1X2",predictedOutcome,rule,startMinute:minute,deadlineMinute:120,createdAt:now,
-            startHome:hs,startAway:as,pressure:Math.max(fx.home,fx.away),pressureGap:Math.round(gap),
-            status:"OPEN"});
-        }
-      }
-      const hs=Number(m.home_score)||0,as=Number(m.away_score)||0;
-      const bothAlreadyScored=hs>0&&as>0;
-      const scorelessPressure=hs===0&&as===0?Math.min(fx.home,fx.away):(hs===0?fx.home:as===0?fx.away:0);
-      if(!bothAlreadyScored&&minute>=10&&minute<=80&&pressure>=40&&scorelessPressure>=25){
-        const key=[m.id,"BTTS",hs,as].join(":");
-        if(!items.some(x=>x.id===key)) items.push({id:key,matchId:String(m.id),home:m.home,away:m.away,
-          target:"BTTS",startMinute:minute,deadlineMinute:120,createdAt:now,
-          startHome:hs,startAway:as,startGoals:hs+as,pressure,scorelessPressure,
-          pressureSide:hs===0&&as===0?"Oba tímy":hs===0?m.home:m.away,status:"OPEN"});
-      }
-    }
-    const saved=ledgerWrite(items);
-    const hits=items.filter(x=>x.status==="HIT").length,misses=items.filter(x=>x.status==="MISS").length,unresolved=items.filter(x=>x.status==="UNRESOLVED").length,open=items.filter(x=>x.status==="OPEN").length;
+  function renderPredictionLedger(ledger){
     const summary=$("ai-edge-prediction-summary"),list=$("ai-edge-prediction-log");
+    if(!ledger){
+      if(summary)summary.innerHTML="<div><span>Trvalá história</span><b>Čaká na prvý zber</b></div>";
+      if(list)list.innerHTML="<p>Trvalá história sa vytvorí po prvom úspešnom zbere s novým modulom.</p>";
+      return;
+    }
+    const counts=ledger.counts||{};
+    const groups=Object.entries(ledger.by_target||{});
     if(summary){
-      const groups=[{id:15,label:"Gól do 15 min"},{id:25,label:"Gól do 25 min"},{id:"FT",label:"Gól do konca zápasu"},{id:"NEXT_TEAM",label:"Ďalší skórujúci tím"},{id:"BTTS",label:"BTTS · oba tímy skórujú"},{id:"RESULT_1X2",label:"1X2 · konečný výsledok"}];
-      const groupHtml=groups.map(g=>{
-        const rows=items.filter(x=>x.target===g.id),h=rows.filter(x=>x.status==="HIT").length,m=rows.filter(x=>x.status==="MISS").length,u=rows.filter(x=>x.status==="UNRESOLVED").length,o=rows.filter(x=>x.status==="OPEN").length;
-        const decided=h+m,rate=decided?Math.round(h/decided*100)+"%":"—";
-        return '<div class="ai-edge-prediction-group"><strong>'+g.label+'</strong><span>HIT '+fmt(h)+' · MISS '+fmt(m)+' · nevyhodnotiteľné '+fmt(u)+' · otvorené '+fmt(o)+'</span><b>Úspešnosť vyhodnotených: '+rate+' ('+fmt(decided)+')</b></div>';
-      }).join("");
-      summary.innerHTML='<div><span>Všetky pozorovania</span><b>'+fmt(items.length)+'</b></div><div><span>HIT</span><b>'+fmt(hits)+'</b></div><div><span>MISS</span><b>'+fmt(misses)+'</b></div><div><span>Nevyhodnotiteľné</span><b>'+fmt(unresolved)+'</b></div><div><span>Otvorené</span><b>'+fmt(open)+'</b></div>'+groupHtml;
+      const totals=[["Všetky predikcie",ledger.total_predictions||0],["HIT",counts.HIT||0],["MISS",counts.MISS||0],["Nevyhodnotiteľné",counts.UNRESOLVED||0],["Otvorené",counts.OPEN||0]];
+      const cards=totals.map(x=>"<div><span>"+esc(x[0])+"</span><b>"+fmt(x[1])+"</b></div>").join("");
+      const breakdown=groups.map(([id,g])=>"<div class='ai-edge-prediction-group'><strong>"+esc(g.label)+"</strong><span>HIT "+fmt(g.HIT)+" · MISS "+fmt(g.MISS)+" · nevyhodnotiteľné "+fmt(g.UNRESOLVED)+" · otvorené "+fmt(g.OPEN)+"</span><b>Úspešnosť vyhodnotených: "+(g.accuracy===null||g.accuracy===undefined?"—":Math.round(g.accuracy*100)+"%")+" ("+fmt(g.decided)+")</b></div>").join("");
+      summary.innerHTML=cards+breakdown;
     }
     if(list){
-      const recent=items.slice().reverse().slice(0,8);
-      list.innerHTML=recent.length?recent.map(p=>{
-        const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":p.status==="UNRESOLVED"?"NEVYHODNOTITEĽNÉ":"OPEN";
-        const horizon=p.target==="FT"?"gól do konca zápasu":p.target==="NEXT_TEAM"?"ďalší gól · "+esc(p.predictedTeam):p.target==="BTTS"?"oba tímy skórujú do FT":p.target==="RESULT_1X2"?"1X2 · "+(p.predictedOutcome==="HOME"?esc(p.home):p.predictedOutcome==="AWAY"?esc(p.away):"remíza"):"gól do "+p.target+" min";
-        const actualLabel=p.actualOutcome==="HOME"?esc(p.home):p.actualOutcome==="AWAY"?esc(p.away):p.actualOutcome==="DRAW"?"remíza":"—";
-        const extra=p.status==="HIT"?(p.target==="BTTS"?" · oba tímy skórovali · "+(p.resultScore||""):p.target==="RESULT_1X2"?" · správne · "+actualLabel+" · "+(p.resultScore||""):" · gól "+(p.resultMinute??"—")+"′"):p.status==="MISS"?(p.target==="BTTS"?" · aspoň jeden tím neskóroval":p.target==="RESULT_1X2"?" · výsledok: "+actualLabel+" · "+(p.resultScore||""):" · bez gólu v horizonte"):p.status==="UNRESOLVED"?" · čas gólu alebo celý horizont sa nedá potvrdiť":" · čaká na výsledok";
-        const pressureText=p.target==="BTTS"?" · tlak chýbajúceho tímu "+(p.scorelessPressure??"—")+"/100":p.target==="RESULT_1X2"?" · pravidlo: "+esc(p.rule||""):" · tlak "+p.pressure+"/100";
-        return '<div class="ai-edge-prediction-item"><span class="ai-edge-prediction-status '+(p.status==="UNRESOLVED"?"unresolved":status.toLowerCase())+'">'+status+'</span><strong>'+esc(p.home)+' – '+esc(p.away)+'</strong><br>'+horizon+' · '+p.startMinute+'′'+pressureText+esc(extra)+'</div>';
-      }).join(""):'<p>Zatiaľ nebol zachytený dostatočne silný tlak na vytvorenie pozorovania.</p>';
-      if(!saved) list.innerHTML+='<p class="ai-edge-note">Prehliadač nepovolil lokálne uloženie histórie.</p>';
+      const rows=(ledger.predictions||[]).slice(0,12);
+      list.innerHTML=rows.length?rows.map(p=>{
+        const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":p.status==="UNRESOLVED"?"NEVYHODNOTITEĽNÉ":"OTVORENÉ";
+        const target=p.target==="RESULT_1X2"?"1X2 · "+(p.predictedOutcome==="HOME"?esc(p.home):p.predictedOutcome==="AWAY"?esc(p.away):"remíza"):p.target==="NEXT_TEAM"?"ďalší skórujúci · "+esc(p.predictedTeam||"—"):p.target==="BTTS"?"oba tímy skórujú do FT":p.target==="FT"?"gól do konca zápasu":"gól do "+p.target+" min";
+        const result=p.resultScore?" · výsledok "+esc(p.resultScore):"";
+        const actual=p.actualOutcome?" · skutočný výsledok "+(p.actualOutcome==="HOME"?esc(p.home):p.actualOutcome==="AWAY"?esc(p.away):"remíza"):"";
+        const pressure=p.target==="BTTS"?" · tlak tímu bez gólu "+fmt(p.scorelessPressure)+"/100":" · tlak "+fmt(p.pressure)+"/100";
+        const detail=p.status==="OPEN"?" · čaká na vyhodnotenie":p.status==="UNRESOLVED"?" · nedostatočné dôkazy na férové vyhodnotenie":result+actual;
+        return "<div class='ai-edge-prediction-item'><span class='ai-edge-prediction-status "+(p.status==="UNRESOLVED"?"unresolved":p.status==="HIT"?"hit":p.status==="MISS"?"miss":"open")+"'>"+status+"</span><strong>"+esc(p.home)+" – "+esc(p.away)+"</strong><br>"+esc(target)+" · "+fmt(p.startMinute)+"′"+pressure+esc(detail)+"</div>";
+      }).join(""):"<p>Zatiaľ nebola zachytená žiadna predikcia.</p>";
+      list.innerHTML+="<p class='ai-edge-note'>Trvalý záznam · aktualizácia "+esc(date(ledger.updated_at))+" · zdroj Flashscore</p>";
     }
   }
-  function render(data){
+  async function loadLedger(){
+    const url="https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-prediction-history.json?t="+Date.now();
+    const res=await fetch(url,{cache:"no-store",headers:{Accept:"application/json"}});
+    if(res.status===404)return null;
+    if(!res.ok)throw new Error("Predikčná história HTTP "+res.status);
+    const data=await res.json();
+    if(data.source!=="Flashscore"||data.mode!=="LIVE_PREDICTION_LEDGER")throw new Error("Neplatný formát trvalej histórie");
+    return data;
+  }
+  function render(data,ledger){
     const records=(data.records||[]).filter(r=>r.match?.source==="Flashscore"&&r.match.status==="live");
     const history=data.recent_history||[];
     const usable=records.map(r=>({record:r,fx:features(r.match,history,r.collected_at||data.collected_at)}));
     const withStats=usable.filter(x=>x.fx.hasCore).length;
     const fresh=usable.filter(x=>x.fx.ready).length;
-    updateShadowPredictions(usable,data);
+    renderPredictionLedger(ledger);
     $("ai-edge-metrics").innerHTML=[
       ["<b>"+fmt(records.length)+"</b>","LIVE zápasy"],
       ["<b>"+fmt(withStats)+"</b>","So štatistikami"],
@@ -260,12 +135,12 @@
       '<div class="ai-edge-note">'+esc(statText)+' · '+(fx.delta.ready?"nová aktivita za "+fx.delta.minutes.toFixed(1)+" min":"bez platného porovnania dvoch meraní")+' · štatistiky: '+(fx.age===null?"neznámy čas":Math.round(fx.age)+" min staré")+'</div></article>';
     }).join(""):'<p>Momentálne nie sú vo feede aktívne Flashscore zápasy.</p>';
     $("ai-edge-data-meta").innerHTML='<div><span>Zdroj</span><b>Flashscore LIVE · '+esc(data.data_status||"—")+'</b></div><div><span>História v LIVE feede</span><b>'+fmt(data.recent_history_count||history.length)+' snímok</b></div><div><span>Čerstvé štatistiky</span><b>'+fresh+' / '+records.length+'</b></div>';
-    $("ai-edge-warning").textContent="Tlakové skóre 0–100 je transparentný experimentálny index z aktuálnych štatistík a prírastkov medzi meraniami; NIE JE to pravdepodobnosť gólu ani potvrdený AI model. Päťminútové oneskorenie zatiaľ nie je individuálne zmerané. Predikcie a stávkové odporúčania zostávajú v shadow režime.";
+    $("ai-edge-warning").textContent="Predikcie sa vytvárajú z aktuálnych Flashscore štatistík a ukladajú sa trvalo na server. Index tlaku ani pravidlá predikcie zatiaľ nie sú kalibrované pravdepodobnosti; úspešnosť sa počíta len z vyhodnotených záznamov. Päťminútové oneskorenie je pracovný predpoklad, nie individuálne meranie.";
     $("ai-edge-updated").textContent="Feed: "+date(data.collected_at)+" · automatická obnova každých 60 s";
-    $("ai-edge-audit-status").textContent="LIVE shadow · bez kurzov";
+    $("ai-edge-audit-status").textContent="LIVE predikcie · trvalá história · bez kurzov";
   }
   async function refresh(){
-    try{const data=await load();if(data.source!=="Flashscore")throw new Error("Zdroj nie je Flashscore");render(data);}
+    try{const [data,ledger]=await Promise.all([load(),loadLedger()]);if(data.source!=="Flashscore")throw new Error("Zdroj nie je Flashscore");render(data,ledger);}
     catch(e){const s=$("ai-edge-state");if(s){s.className="ai-edge-state bad";s.textContent="LIVE DÁTA NEDOSTUPNÉ · "+e.message;}}
   }
   document.addEventListener("DOMContentLoaded",()=>{if(!$("ai-edge-selector-panel"))return;refresh();window.setInterval(refresh,60000);});
