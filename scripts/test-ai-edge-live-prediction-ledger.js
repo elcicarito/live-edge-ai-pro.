@@ -33,6 +33,8 @@ evaluate([p15,p25,next],later,{matches:{}},now+600000);
 assert.equal(p15.status,"HIT");
 assert.equal(p25.status,"HIT");
 assert.equal(next.status,"HIT");
+assert.equal(next.actualTeam,"Home");
+assert.equal(p15.startStats.sot.home,5,"prediction-time statistics are recorded");
 const tied={...match,home_score:1,away_score:1};
 const p1x2={...p15,target:"RESULT_1X2",predictedOutcome:"HOME",startMinute:65,startHome:1,startAway:0,status:"OPEN"};
 evaluate([p1x2],{...later,recent_history:[]},{matches:{"fixture-1":{status:"CONFIRMED",home_score:1,away_score:1,confirmed_at:new Date(now+900000).toISOString(),final_match:{status_text:"Finished"}}}},now+900000);
