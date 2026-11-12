@@ -1,6 +1,7 @@
 "use strict";
 const assert=require("node:assert/strict");
-const {addPredictions,evaluate}=require("./ai-edge-live-prediction-ledger");
+const fs=require("node:fs"),os=require("node:os"),path=require("node:path");
+const {addPredictions,evaluate,buildLedger}=require("./ai-edge-live-prediction-ledger");
 const now=Date.parse("2026-11-12T20:00:00Z");
 const stats=[
  {label:"Shots on target",home:5,away:2},
@@ -61,5 +62,18 @@ evaluate([delayedBtts],{source:"Flashscore",recent_history:[
  {time:now+180000,match:{...match,live_minute:53,home_score:1,away_score:1}}
 ]},{matches:{"fixture-1":{status:"CONFIRMED",home_score:1,away_score:1,confirmed_at:new Date(now+4000000).toISOString(),final_match:{status_text:"Finished"}}}},now+4000000);
 assert.equal(delayedBtts.status,"UNRESOLVED","BTTS completed within the data-delay buffer is not claimed as actionable");
+
+
+const temp=fs.mkdtempSync(path.join(os.tmpdir(),"ai-edge-ledger-test-"));
+try{
+ fs.writeFileSync(path.join(temp,"flashscore-primary-current.json"),JSON.stringify(feed));
+ fs.writeFileSync(path.join(temp,"flashscore-confirmed-outcomes.json"),JSON.stringify({matches:{}}));
+ const result=buildLedger(temp,new Date(now));
+ const saved=JSON.parse(fs.readFileSync(path.join(temp,"ai-edge-prediction-history.json"),"utf8"));
+ assert.equal(saved.mode,"LIVE_PREDICTION_LEDGER");
+ assert(saved.by_target["15"],"per-target summary saved");
+ assert.equal(result.total,saved.total_predictions);
+ assert(saved.predictions.every(p=>Array.isArray(p.snapshots)&&p.snapshots.length===1),"baseline match snapshots are persisted");
+}finally{fs.rmSync(temp,{recursive:true,force:true});}
 
 console.log("AI Edge live prediction ledger tests passed.");
