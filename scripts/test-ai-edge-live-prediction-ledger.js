@@ -66,6 +66,14 @@ evaluate([delayedBtts],{source:"Flashscore",recent_history:[
 assert.equal(delayedBtts.status,"UNRESOLVED","BTTS completed within the data-delay buffer is not claimed as actionable");
 
 
+
+const lateRows=[];
+addPredictions(lateRows,{...feed,records:[{collected_at:new Date(now).toISOString(),match:{...match,live_minute:96}}]},now);
+assert.equal(lateRows.length,0,"no new predictions are issued when less than the delay buffer remains");
+const lateFt={...p15,target:"FT",startMinute:96,status:"OPEN"};
+evaluate([lateFt],{source:"Flashscore",records:[],recent_history:[]},{matches:{}},now+1000);
+assert.equal(lateFt.status,"UNRESOLVED","late predictions are excluded from accuracy");
+
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),"ai-edge-ledger-test-"));
 try{
  fs.writeFileSync(path.join(temp,"flashscore-primary-current.json"),JSON.stringify(feed));
