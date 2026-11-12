@@ -104,6 +104,11 @@ jobs:
       - name: Normalize Flashscore primary feed
         run: node scripts/flashscore-primary-adapter.js
 
+      - name: Train forward-only AI Edge model from new LIVE captures
+        run: |
+          node scripts/test-ai-edge-live-online-trainer.js
+          node scripts/ai-edge-live-online-trainer.js
+
       - name: Build permanent AI Edge prediction history
         run: |
           node scripts/test-ai-edge-live-prediction-ledger.js
