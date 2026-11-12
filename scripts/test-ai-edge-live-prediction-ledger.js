@@ -31,7 +31,6 @@ const later={source:"Flashscore",collected_at:new Date(now+600000).toISOString()
 evaluate([p15,p25,next],later,{matches:{}},now+600000);
 assert.equal(p15.status,"HIT");
 assert.equal(p25.status,"HIT");
-console.log("NEXT_TEAM DEBUG",JSON.stringify({predictedTeam:next.predictedTeam,home:next.home,away:next.away,pressureHome:next.pressureHome,pressureAway:next.pressureAway,status:next.status,resultScore:next.resultScore}));
 assert.equal(next.status,"HIT");
 const tied={...match,home_score:1,away_score:1};
 const p1x2={...p15,target:"RESULT_1X2",predictedOutcome:"HOME",startMinute:65,startHome:1,startAway:0,status:"OPEN"};
