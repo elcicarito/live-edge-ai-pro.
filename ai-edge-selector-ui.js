@@ -135,7 +135,8 @@
     const usable=records.map(r=>({record:r,fx:features(r.match,history,r.collected_at||data.collected_at)}));
     const withStats=usable.filter(x=>x.fx.hasCore).length;
     const fresh=usable.filter(x=>x.fx.ready).length;
-    renderPredictionLedger(ledger);\n    renderModelStatus(model);
+    renderPredictionLedger(ledger);
+    renderModelStatus(model);
     $("ai-edge-metrics").innerHTML=[
       ["<b>"+fmt(records.length)+"</b>","LIVE zápasy"],
       ["<b>"+fmt(withStats)+"</b>","So štatistikami"],
