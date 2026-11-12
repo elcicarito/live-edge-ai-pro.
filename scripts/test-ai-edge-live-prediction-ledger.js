@@ -21,6 +21,9 @@ assert(rows.some(p=>p.target==="FT"),"FT prediction created");
 assert(rows.some(p=>p.target==="NEXT_TEAM"),"next-team prediction created");
 assert(rows.some(p=>p.target==="BTTS"),"BTTS prediction created");
 const p15=rows.find(p=>p.target===15),p25=rows.find(p=>p.target===25),next=rows.find(p=>p.target==="NEXT_TEAM");
+assert.equal(p15.actionableAfterMinute,55,"five-minute delay buffer applied");
+assert.equal(p15.deadlineMinute,70,"15-minute horizon starts after the delay buffer");
+assert.equal(p25.deadlineMinute,80,"25-minute horizon starts after the delay buffer");
 const later={source:"Flashscore",collected_at:new Date(now+600000).toISOString(),records:[],recent_history:[
  {time:now+300000,match:{...match,live_minute:55,home_score:1,away_score:0}},
  {time:now+600000,match:{...match,live_minute:60,home_score:2,away_score:0}}
@@ -44,5 +47,19 @@ const bttsFeed={source:"Flashscore",collected_at:new Date(now+900000).toISOStrin
 ]};
 evaluate([btts],bttsFeed,{matches:{}},now+900000);
 assert.equal(btts.status,"HIT","BTTS is hit when both teams score in separate snapshots");
+
+
+const delayedMiss={...p15,status:"OPEN"};
+const delayedTimeline={source:"Flashscore",collected_at:new Date(now+4000000).toISOString(),records:[],recent_history:[
+ {time:now+180000,match:{...match,live_minute:53,home_score:2,away_score:0}},
+ {time:now+2400000,match:{...match,live_minute:90,home_score:2,away_score:0}}
+]};
+evaluate([delayedMiss],delayedTimeline,{matches:{"fixture-1":{status:"CONFIRMED",home_score:2,away_score:0,confirmed_at:new Date(now+4000000).toISOString(),final_match:{status_text:"Finished"}}}},now+4000000);
+assert.equal(delayedMiss.status,"MISS","a goal inside the assumed data-delay buffer is not counted as a hit");
+const delayedBtts={...p15,target:"BTTS",status:"OPEN",startGoals:1};
+evaluate([delayedBtts],{source:"Flashscore",recent_history:[
+ {time:now+180000,match:{...match,live_minute:53,home_score:1,away_score:1}}
+]},{matches:{"fixture-1":{status:"CONFIRMED",home_score:1,away_score:1,confirmed_at:new Date(now+4000000).toISOString(),final_match:{status_text:"Finished"}}}},now+4000000);
+assert.equal(delayedBtts.status,"UNRESOLVED","BTTS completed within the data-delay buffer is not claimed as actionable");
 
 console.log("AI Edge live prediction ledger tests passed.");
