@@ -86,4 +86,15 @@ try{
  assert(saved.predictions.every(p=>Array.isArray(p.snapshots)&&p.snapshots.length===1),"baseline match snapshots are persisted");
 }finally{fs.rmSync(temp,{recursive:true,force:true});}
 
+
+const bttsAfter={...p15,target:"BTTS",status:"OPEN",startHome:1,startAway:0,startGoals:1,actionableAfterMinute:55,snapshots:[{time:now,minute:50,home_score:1,away_score:0,status:"live",status_text:"1st Half",stage:"1st Half"}]};
+evaluate([bttsAfter],{source:"Flashscore",recent_history:[{time:now+600000,match:{...match,live_minute:60,home_score:1,away_score:1}}]},{matches:{}},now+700000);
+assert.equal(bttsAfter.status,"HIT","BTTS is hit when the previously scoreless team scores after the delay buffer");
+const bttsInside={...p15,target:"BTTS",status:"OPEN",startHome:1,startAway:0,startGoals:1,actionableAfterMinute:55,snapshots:[{time:now,minute:50,home_score:1,away_score:0,status:"live",status_text:"1st Half",stage:"1st Half"}]};
+evaluate([bttsInside],{source:"Flashscore",recent_history:[
+ {time:now+180000,match:{...match,live_minute:53,home_score:1,away_score:1}},
+ {time:now+900000,match:{...match,live_minute:65,home_score:2,away_score:1}}
+]},{matches:{}},now+1000000);
+assert.equal(bttsInside.status,"OPEN","a BTTS goal inside the delay buffer is not treated as an actionable hit");
+
 console.log("AI Edge live prediction ledger tests passed.");
