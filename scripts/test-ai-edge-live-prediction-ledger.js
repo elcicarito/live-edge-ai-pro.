@@ -34,7 +34,7 @@ assert.equal(p25.status,"HIT");
 console.log("NEXT_TEAM DEBUG",JSON.stringify({predictedTeam:next.predictedTeam,home:next.home,away:next.away,pressureHome:next.pressureHome,pressureAway:next.pressureAway,status:next.status,resultScore:next.resultScore}));
 assert.equal(next.status,"HIT");
 const tied={...match,home_score:1,away_score:1};
-const p1x2={...p15,target:"RESULT_1X2",predictedOutcome:"HOME",startMinute:65,startHome:1,startAway:0};
+const p1x2={...p15,target:"RESULT_1X2",predictedOutcome:"HOME",startMinute:65,startHome:1,startAway:0,status:"OPEN"};
 evaluate([p1x2],{...later,recent_history:[]},{matches:{"fixture-1":{status:"CONFIRMED",home_score:1,away_score:1,confirmed_at:new Date(now+900000).toISOString(),final_match:{status_text:"Finished"}}}},now+900000);
 assert.equal(p1x2.status,"MISS");
 const extra={...p1x2,status:"OPEN"};
