@@ -82,7 +82,7 @@
       summary.innerHTML=cards+breakdown;
     }
     if(list){
-      const rows=(ledger.predictions||[]).slice(0,12);
+      const allRows=ledger.predictions||[];const rows=allRows.slice(0,30);
       list.innerHTML=rows.length?rows.map(p=>{
         const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":p.status==="UNRESOLVED"?"NEVYHODNOTITEĽNÉ":"OTVORENÉ";
         const target=p.target==="RESULT_1X2"?"1X2 · "+(p.predictedOutcome==="HOME"?p.home:p.predictedOutcome==="AWAY"?p.away:"remíza"):p.target==="NEXT_TEAM"?"ďalší skórujúci · "+esc(p.predictedTeam||"—"):p.target==="BTTS"?"oba tímy skórujú do FT":p.target==="FT"?"gól do konca zápasu":"gól do "+p.target+" min";
@@ -94,7 +94,7 @@
         const detail=p.status==="OPEN"?" · čaká na vyhodnotenie":p.status==="UNRESOLVED"?" · "+(p.unresolvedReason||"nedostatočné dôkazy na férové vyhodnotenie"):result+actual+actualTeam;
         return "<div class='ai-edge-prediction-item'><span class='ai-edge-prediction-status "+(p.status==="UNRESOLVED"?"unresolved":p.status==="HIT"?"hit":p.status==="MISS"?"miss":"open")+"'>"+status+"</span><strong>"+esc(p.home)+" – "+esc(p.away)+"</strong><br>"+esc(target)+" · "+fmt(p.startMinute)+"′ · skóre pri predikcii "+fmt(p.startHome)+":"+fmt(p.startAway)+pressure+"<br><span class='ai-edge-note'>"+esc(statline)+"</span>"+esc(detail)+"</div>";
       }).join(""):"<p>Zatiaľ nebola zachytená žiadna predikcia.</p>";
-      list.innerHTML+="<p class='ai-edge-note'>Trvalý záznam · aktualizácia "+esc(date(ledger.updated_at))+" · zdroj Flashscore</p>";
+      list.innerHTML+="<p class='ai-edge-note'>Zobrazených "+fmt(rows.length)+" z "+fmt(ledger.total_predictions||allRows.length)+" trvalých predikcií · aktualizácia "+esc(date(ledger.updated_at))+" · zdroj Flashscore</p>";
     }
   }
   async function loadLedger(){
