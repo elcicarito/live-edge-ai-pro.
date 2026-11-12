@@ -97,4 +97,17 @@ evaluate([bttsInside],{source:"Flashscore",recent_history:[
 ]},{matches:{}},now+1000000);
 assert.equal(bttsInside.status,"OPEN","a BTTS goal inside the delay buffer is not treated as an actionable hit");
 
+
+const btts00={...p15,target:"BTTS",status:"OPEN",startHome:0,startAway:0,startGoals:0,actionableAfterMinute:55,snapshots:[{time:now,minute:50,home_score:0,away_score:0,status:"live",status_text:"1st Half",stage:"1st Half"}]};
+evaluate([btts00],{source:"Flashscore",recent_history:[
+ {time:now+600000,match:{...match,live_minute:60,home_score:1,away_score:0}},
+ {time:now+900000,match:{...match,live_minute:65,home_score:1,away_score:1}}
+]},{matches:{}},now+1000000);
+assert.equal(btts00.status,"HIT","0-0 BTTS requires both teams to score after the delay buffer");
+const btts00One={...p15,target:"BTTS",status:"OPEN",startHome:0,startAway:0,startGoals:0,actionableAfterMinute:55,snapshots:[{time:now,minute:50,home_score:0,away_score:0,status:"live",status_text:"1st Half",stage:"1st Half"}]};
+evaluate([btts00One],{source:"Flashscore",recent_history:[
+ {time:now+600000,match:{...match,live_minute:60,home_score:1,away_score:0}}
+]},{matches:{}},now+1000000);
+assert.equal(btts00One.status,"OPEN","one goal after the buffer does not settle a 0-0 BTTS prediction");
+
 console.log("AI Edge live prediction ledger tests passed.");
