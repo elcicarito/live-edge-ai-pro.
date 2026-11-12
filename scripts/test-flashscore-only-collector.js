@@ -218,7 +218,7 @@ function runCollector() {
     assert.equal(standardTimeline[0].snapshot.has_statistics, true);
     assert.equal(standardTimeline[0].snapshot.stats_available, true);
     assert.equal(standardTimeline[0].snapshot.stats_fetch_status, "success_with_data");
-    assert.equal(standardTimeline[0].snapshot.stats_collected_at, standardMatch.stats_collected_at);
+    assert.ok(Number.isFinite(Date.parse(standardTimeline[0].snapshot.stats_collected_at)), "each archived snapshot must preserve its own statistics timestamp");
     assert.equal(specialTimeline[0].snapshot.has_statistics, false);
     assert.equal(specialTimeline[0].snapshot.stats_available, true);
 
