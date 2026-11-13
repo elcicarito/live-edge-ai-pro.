@@ -3,7 +3,7 @@
   "source": "Flashscore",
   "mode": "FORWARD_ONLY_LIVE_TRAINING",
   "started_at": "2026-11-12T21:44:46.455Z",
-  "updated_at": "2026-11-13T21:24:51.490Z",
+  "updated_at": "2026-11-13T21:26:58.487Z",
   "lag_minutes": 5,
   "horizons_minutes": [
     15,
@@ -11,51 +11,87 @@
   ],
   "training_policy": "Only Flashscore snapshots collected at or after started_at are eligible. No historical backfill.",
   "prediction_policy": "Validated weights remain shadow-only until separately reviewed; no calibrated live probability is exposed during warmup.",
-  "total_labeled_samples": 4110,
-  "validated_horizons": 0,
-  "status": "COLLECTING_LIVE_TRAINING_DATA",
+  "total_labeled_samples": 4356,
+  "validated_horizons": 2,
+  "status": "SHADOW_VALIDATION_AVAILABLE",
   "models": {
     "15": {
-      "status": "NOT_VALIDATED",
+      "status": "SHADOW_VALIDATED",
       "counts": {
-        "train": 1480,
-        "validation": 651,
-        "train_matches": 48,
-        "validation_matches": 20,
-        "train_positive": 586,
-        "train_negative": 894,
-        "validation_positive": 246,
-        "validation_negative": 405
+        "train": 1589,
+        "validation": 672,
+        "train_matches": 52,
+        "validation_matches": 21,
+        "train_positive": 641,
+        "train_negative": 948,
+        "validation_positive": 258,
+        "validation_negative": 414
       },
       "metrics": {
-        "count": 651,
-        "accuracy": 0.6114,
-        "brier": 0.2363,
-        "log_loss": 0.6654,
-        "baseline_log_loss": 0.663
+        "count": 672,
+        "accuracy": 0.6086,
+        "brier": 0.2359,
+        "log_loss": 0.6644,
+        "baseline_log_loss": 0.666
       },
-      "weights": null
+      "weights": [
+        -0.59684764,
+        0.21594027,
+        0.15061093,
+        0.00781714,
+        0.20655807,
+        0.04194855,
+        0.17323156,
+        0.07399404,
+        0.06618819,
+        0.19619797,
+        0.05756222,
+        -0.02920648,
+        0.16200806,
+        0.01906222,
+        -0.01424117,
+        -0.03124533,
+        -0.02404309
+      ]
     },
     "25": {
-      "status": "NOT_VALIDATED",
+      "status": "SHADOW_VALIDATED",
       "counts": {
-        "train": 1371,
-        "validation": 608,
-        "train_matches": 48,
-        "validation_matches": 20,
-        "train_positive": 814,
-        "train_negative": 557,
-        "validation_positive": 343,
-        "validation_negative": 265
+        "train": 1467,
+        "validation": 628,
+        "train_matches": 52,
+        "validation_matches": 21,
+        "train_positive": 884,
+        "train_negative": 583,
+        "validation_positive": 358,
+        "validation_negative": 270
       },
       "metrics": {
-        "count": 608,
-        "accuracy": 0.5609,
-        "brier": 0.2464,
-        "log_loss": 0.6859,
-        "baseline_log_loss": 0.6849
+        "count": 628,
+        "accuracy": 0.5701,
+        "brier": 0.2439,
+        "log_loss": 0.6807,
+        "baseline_log_loss": 0.6833
       },
-      "weights": null
+      "weights": [
+        0.08107369,
+        0.33212478,
+        0.28440494,
+        0.00783597,
+        0.15334352,
+        0.2048624,
+        0.18805009,
+        0.18468655,
+        0.03398556,
+        0.33768397,
+        0.07362409,
+        -0.01976152,
+        0.20676832,
+        -0.04650257,
+        -0.01543737,
+        -0.0142217,
+        -0.03019286
+      ]
     }
   }
 }
