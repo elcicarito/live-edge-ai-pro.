@@ -3,7 +3,7 @@
   "source": "Flashscore",
   "mode": "FORWARD_ONLY_LIVE_TRAINING",
   "started_at": "2026-11-12T21:44:46.455Z",
-  "updated_at": "2026-11-13T16:53:00.878Z",
+  "updated_at": "2026-11-13T16:54:49.343Z",
   "lag_minutes": 5,
   "horizons_minutes": [
     15,
@@ -11,38 +11,50 @@
   ],
   "training_policy": "Only Flashscore snapshots collected at or after started_at are eligible. No historical backfill.",
   "prediction_policy": "Validated weights remain shadow-only until separately reviewed; no calibrated live probability is exposed during warmup.",
-  "total_labeled_samples": 1880,
+  "total_labeled_samples": 1949,
   "validated_horizons": 0,
   "status": "COLLECTING_LIVE_TRAINING_DATA",
   "models": {
     "15": {
-      "status": "WARMUP",
+      "status": "NOT_VALIDATED",
       "counts": {
-        "train": 581,
+        "train": 618,
         "validation": 395,
-        "train_matches": 19,
+        "train_matches": 20,
         "validation_matches": 12,
         "train_positive": 208,
-        "train_negative": 373,
+        "train_negative": 410,
         "validation_positive": 132,
         "validation_negative": 263
       },
-      "metrics": null,
+      "metrics": {
+        "count": 395,
+        "accuracy": 0.6203,
+        "brier": 0.2233,
+        "log_loss": 0.6381,
+        "baseline_log_loss": 0.6371
+      },
       "weights": null
     },
     "25": {
-      "status": "WARMUP",
+      "status": "NOT_VALIDATED",
       "counts": {
-        "train": 539,
+        "train": 571,
         "validation": 365,
-        "train_matches": 19,
+        "train_matches": 20,
         "validation_matches": 12,
         "train_positive": 289,
-        "train_negative": 250,
+        "train_negative": 282,
         "validation_positive": 185,
         "validation_negative": 180
       },
-      "metrics": null,
+      "metrics": {
+        "count": 365,
+        "accuracy": 0.5205,
+        "brier": 0.2494,
+        "log_loss": 0.6932,
+        "baseline_log_loss": 0.6931
+      },
       "weights": null
     }
   }
