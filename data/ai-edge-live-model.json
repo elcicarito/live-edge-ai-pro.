@@ -3,7 +3,7 @@
   "source": "Flashscore",
   "mode": "FORWARD_ONLY_LIVE_TRAINING",
   "started_at": "2026-11-12T21:44:46.455Z",
-  "updated_at": "2026-11-13T20:04:56.717Z",
+  "updated_at": "2026-11-13T20:06:50.316Z",
   "lag_minutes": 5,
   "horizons_minutes": [
     15,
@@ -11,51 +11,69 @@
   ],
   "training_policy": "Only Flashscore snapshots collected at or after started_at are eligible. No historical backfill.",
   "prediction_policy": "Validated weights remain shadow-only until separately reviewed; no calibrated live probability is exposed during warmup.",
-  "total_labeled_samples": 3180,
-  "validated_horizons": 0,
-  "status": "COLLECTING_LIVE_TRAINING_DATA",
+  "total_labeled_samples": 3690,
+  "validated_horizons": 1,
+  "status": "SHADOW_VALIDATION_AVAILABLE",
   "models": {
     "15": {
       "status": "NOT_VALIDATED",
       "counts": {
-        "train": 1137,
-        "validation": 515,
-        "train_matches": 37,
-        "validation_matches": 16,
-        "train_positive": 411,
-        "train_negative": 726,
-        "validation_positive": 185,
-        "validation_negative": 330
+        "train": 1326,
+        "validation": 584,
+        "train_matches": 43,
+        "validation_matches": 18,
+        "train_positive": 505,
+        "train_negative": 821,
+        "validation_positive": 219,
+        "validation_negative": 365
       },
       "metrics": {
-        "count": 515,
-        "accuracy": 0.6311,
-        "brier": 0.2328,
-        "log_loss": 0.6581,
-        "baseline_log_loss": 0.653
+        "count": 584,
+        "accuracy": 0.6164,
+        "brier": 0.2358,
+        "log_loss": 0.6644,
+        "baseline_log_loss": 0.6616
       },
       "weights": null
     },
     "25": {
-      "status": "NOT_VALIDATED",
+      "status": "SHADOW_VALIDATED",
       "counts": {
-        "train": 1056,
-        "validation": 472,
-        "train_matches": 37,
-        "validation_matches": 16,
-        "train_positive": 587,
-        "train_negative": 469,
-        "validation_positive": 259,
-        "validation_negative": 213
+        "train": 1239,
+        "validation": 541,
+        "train_matches": 43,
+        "validation_matches": 18,
+        "train_positive": 714,
+        "train_negative": 525,
+        "validation_positive": 303,
+        "validation_negative": 238
       },
       "metrics": {
-        "count": 472,
-        "accuracy": 0.5784,
-        "brier": 0.2489,
-        "log_loss": 0.6917,
-        "baseline_log_loss": 0.6884
+        "count": 541,
+        "accuracy": 0.5767,
+        "brier": 0.2461,
+        "log_loss": 0.6855,
+        "baseline_log_loss": 0.6859
       },
-      "weights": null
+      "weights": [
+        -0.05301121,
+        0.40527759,
+        0.25484002,
+        -0.01093216,
+        0.09677699,
+        0.27416093,
+        0.23514234,
+        0.27614374,
+        0.09950368,
+        0.3743785,
+        0.07890509,
+        -0.00841767,
+        0.25065001,
+        -0.29847965,
+        -0.00824411,
+        -0.01442933,
+        -0.06334893
+      ]
     }
   }
 }
