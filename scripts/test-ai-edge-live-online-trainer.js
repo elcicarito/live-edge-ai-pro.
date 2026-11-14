@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const zlib = require("node:zlib");
-const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, run } = require("./ai-edge-live-online-trainer");
+const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, metrics, run } = require("./ai-edge-live-online-trainer");
 
 const started = Date.parse("2026-11-12T21:00:00.000Z");
 const stats = (minute, goal) => [
@@ -47,7 +47,16 @@ for (let i = 0; i < 100; i++) {
 const samples = buildSamples(allRows, { matches }, started);
 assert.ok(samples[15].length > 0 && samples[25].length > 0, "both horizons build from post-start live captures");
 assert.ok(samples[15].every(row => row.match_id.startsWith("flashscore:")));
-assert.ok(["WARMUP", "SHADOW_VALIDATED", "NOT_VALIDATED"].includes(trainHorizon(samples[15]).status));
+const earlyValidation = trainHorizon(samples[15]);
+assert.equal(earlyValidation.status, "WARMUP", "a small validation set must never be promoted");
+assert.ok(earlyValidation.counts.validation_matches < 50, "fixture intentionally has fewer than 50 independent validation matches");
+const weightedCheck = metrics([
+  { match_id: "match-a", x: Array(16).fill(0), y: 1 },
+  { match_id: "match-a", x: Array(16).fill(0), y: 1 },
+  { match_id: "match-b", x: Array(16).fill(0), y: 0 }
+], Array(17).fill(0));
+assert.equal(weightedCheck.matches, 2, "validation reports independent match count");
+assert.equal(weightedCheck.baseline_brier, 0.2222, "baseline Brier score is reported");
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "ai-edge-live-trainer-"));
 try {
