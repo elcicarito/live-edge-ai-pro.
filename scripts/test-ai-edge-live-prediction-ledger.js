@@ -21,6 +21,26 @@ assert(rows.some(p=>p.target===25),"25-minute prediction created");
 assert(rows.some(p=>p.target==="FT"),"FT prediction created");
 assert(rows.some(p=>p.target==="NEXT_TEAM"),"next-team prediction created");
 assert(rows.some(p=>p.target==="BTTS"),"BTTS prediction created");
+const validatedModel={
+ source:"Flashscore",mode:"FORWARD_ONLY_LIVE_TRAINING",
+ validation_policy:{min_train_matches:100,min_validation_matches:50,min_relative_log_loss_gain:0.01,min_relative_brier_gain:0.005},
+ models:{"25":{
+  status:"SHADOW_VALIDATED",
+  counts:{train_matches:120,validation_matches:58},
+  metrics:{relative_log_loss_gain:0.0197,relative_brier_gain:0.025},
+  weights:Array(17).fill(0)
+ }}
+};
+const modelRows=[];
+addPredictions(modelRows,feed,now,validatedModel);
+const model25=modelRows.find(p=>p.target==="MODEL_25");
+assert(model25,"validated 25-minute shadow model creates a prediction");
+assert.equal(model25.modelProbability,0.5,"model probability is calculated from stored weights");
+assert.equal(model25.actionableAfterMinute,55,"model uses the five-minute buffer");
+assert.equal(model25.deadlineMinute,80,"model horizon ends 25 minutes after the delay buffer");
+const blockedRows=[];
+addPredictions(blockedRows,feed,now,{...validatedModel,models:{"25":{...validatedModel.models["25"],status:"NOT_VALIDATED"}}});
+assert.equal(blockedRows.some(p=>p.target==="MODEL_25"),false,"unvalidated model must never issue a probability");
 const p15=rows.find(p=>p.target===15),p25=rows.find(p=>p.target===25),next=rows.find(p=>p.target==="NEXT_TEAM");
 assert.equal(p15.actionableAfterMinute,55,"five-minute delay buffer applied");
 assert.equal(p15.deadlineMinute,70,"15-minute horizon starts after the delay buffer");
@@ -32,6 +52,9 @@ const later={source:"Flashscore",collected_at:new Date(now+600000).toISOString()
 evaluate([p15,p25,next],later,{matches:{}},now+600000);
 assert.equal(p15.status,"HIT");
 assert.equal(p25.status,"HIT");
+const model25Hit={...model25,status:"OPEN",snapshots:[...model25.snapshots]};
+evaluate([model25Hit],later,{matches:{}},now+600000);
+assert.equal(model25Hit.status,"HIT","validated model prediction is automatically evaluated on the 25-minute horizon");
 assert.equal(next.status,"HIT");
 assert.equal(next.actualTeam,"Home");
 assert.equal(p15.startStats.sot.home,5,"prediction-time statistics are recorded");
