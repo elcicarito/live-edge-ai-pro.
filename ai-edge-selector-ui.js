@@ -78,17 +78,20 @@
   function renderModelStatus(model){
     const el=$("ai-edge-model-status");if(!el)return;
     if(!model){
-      el.textContent="Čakám na prvý zber po aktivácii tréningu. Model začne prijímať iba nové Flashscore LIVE snímky; staršie zápasy sa spätne nenačítavajú.";
+      el.textContent="Čakám na prvý zber po aktivácii tréningu. Model prijíma iba nové Flashscore LIVE snímky; staršie zápasy sa spätne nenačítavajú.";
       return;
     }
+    const policy=model.validation_policy||{};
     const line=[15,25].map(h=>{
-      const item=model.models?.[String(h)]||{},counts=item.counts||{};
-      const status=item.status==="SHADOW_VALIDATED"?"tieňovo overený":item.status==="NOT_VALIDATED"?"zatiaľ neprekonal základný model":"zbiera vzorky";
-      return h+" min: "+status+" · tréning "+fmt(counts.train||0)+" · nezávislé overenie "+fmt(counts.validation||0);
+      const item=model.models?.[String(h)]||{},counts=item.counts||{},m=item.metrics||{};
+      const status=item.status==="SHADOW_VALIDATED"?"tieňový kandidát":item.status==="NOT_VALIDATED"?"nesplnil validačné kritériá":"zbiera vzorky";
+      const progress=(counts.validation_matches||0)+"/"+(policy.min_validation_matches||50)+" nezávislých zápasov";
+      const quality=m.log_loss!==undefined?" · log-loss "+Number(m.log_loss).toFixed(3)+" / základ "+Number(m.baseline_log_loss).toFixed(3)+" · Brier "+Number(m.brier).toFixed(3)+" / základ "+Number(m.baseline_brier).toFixed(3):"";
+      return h+" min: "+status+" · tréning "+fmt(counts.train||0)+" vzoriek · overenie "+progress+quality;
     }).join(" | ");
-    const phase=model.status==="SHADOW_VALIDATION_AVAILABLE"?"K dispozícii je tieňovo overený model; ostré pravdepodobnosti zatiaľ nemeníme.":"Model je vo fáze zberu a tréningu; pravdepodobnosti zatiaľ nezverejňuje.";
-    el.textContent="Spustené "+date(model.started_at)+" · 5-minútový buffer · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+line+". "+phase+" Tréning používa iba nové snímky od spustenia.";
+    el.textContent="Spustené "+date(model.started_at)+" · oneskorenie započítané: 5 min · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+line+". Každý zápas má pri vyhodnotení rovnakú váhu. Model zatiaľ nevydáva ostré pravdepodobnosti.";
   }
+
   function renderPredictionLedger(ledger){
     const summary=$("ai-edge-prediction-summary"),list=$("ai-edge-prediction-log");
     if(!ledger){
