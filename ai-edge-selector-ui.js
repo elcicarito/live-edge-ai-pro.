@@ -154,8 +154,13 @@
       const m=record.match, h=band(fx.home,fx.ready),a=band(fx.away,fx.ready);
       const top=fx.home>fx.away?m.home:fx.away>fx.home?m.away:"Vyrovnaný tlak";
       const minute=m.live_minute??"—", score=(m.home_score??0)+":"+ (m.away_score??0);
-      const f15=fx.ready?(Math.max(fx.home,fx.away)>=48?"Silný tlak · sledovať gólový vývoj":Math.max(fx.home,fx.away)>=25?"Zvýšená aktivita · bez potvrdenej predikcie":"Bez výrazného tlaku"):"Nedostatok čerstvých dát";
-      const f25=fx.ready?(Math.max(fx.home,fx.away)>=38?"Tlak prítomný · dlhší horizont":Math.max(fx.home,fx.away)>=20?"Mierna aktivita · neistota vysoká":"Nízka zachytená aktivita"):"Nedostatok čerstvých dát";
+      const horizonState=h=>{
+        const item=model?.models?.[String(h)]||{},policy=model?.validation_policy||{},counts=item.counts||{};
+        if(item.status==="SHADOW_VALIDATED"&&Array.isArray(item.weights)&&item.weights.length) return "Model prešiel tieňovou validáciou; živý výpočet pravdepodobnosti ešte nie je zapojený";
+        if(item.status==="NOT_VALIDATED") return "Model nesplnil validačné kritériá · bez predikcie";
+        return "Tréning / overovanie · "+fmt(counts.validation_matches||0)+"/"+fmt(policy.min_validation_matches||50)+" nezávislých zápasov";
+      };
+      const f15=horizonState(15),f25=horizonState(25);
       const statText=["SOT "+(fx.values.sot?fx.values.sot.home+":"+fx.values.sot.away:"—"),"strely "+(fx.values.shots?fx.values.shots.home+":"+fx.values.shots.away:"—"),"rohy "+(fx.values.corners?fx.values.corners.home+":"+fx.values.corners.away:"—"),"xG "+(fx.values.xg?fx.values.xg.home.toFixed(2)+":"+fx.values.xg.away.toFixed(2):"—"),"xGOT "+(fx.values.xgot?fx.values.xgot.home.toFixed(2)+":"+fx.values.xgot.away.toFixed(2):"—"),"v šestnástke "+(fx.values.box?fx.values.box.home+":"+fx.values.box.away:"—")].join(" · ");
       return '<article class="ai-edge-match"><div class="ai-edge-match-head"><span>'+esc(m.home)+' – '+esc(m.away)+'</span><span>'+esc(minute)+'′ · '+esc(score)+'</span></div><div class="ai-edge-match-sub">'+esc(m.competition||"")+' · dominantný tlak: '+esc(top)+'</div>'+
       '<div class="ai-edge-teamrow"><span>'+esc(m.home)+' · '+h[0]+'</span><b>'+fx.home+'/100</b></div><div class="ai-edge-bar"><i style="width:'+fx.home+'%"></i></div>'+
@@ -166,7 +171,7 @@
     $("ai-edge-data-meta").innerHTML='<div><span>Zdroj</span><b>Flashscore LIVE · '+esc(data.data_status||"—")+'</b></div><div><span>História v LIVE feede</span><b>'+fmt(data.recent_history_count||history.length)+' snímok</b></div><div><span>Čerstvé štatistiky</span><b>'+fresh+' / '+records.length+'</b></div>';
     $("ai-edge-warning").textContent="Predikcie sa vytvárajú z aktuálnych Flashscore štatistík a ukladajú sa trvalo na server. Index tlaku ani pravidlá predikcie zatiaľ nie sú kalibrované pravdepodobnosti; úspešnosť sa počíta len z vyhodnotených záznamov. Päťminútové oneskorenie je pracovný predpoklad, nie individuálne meranie.";
     $("ai-edge-updated").textContent="Feed: "+date(data.collected_at)+" · automatická obnova každých 60 s";
-    $("ai-edge-audit-status").textContent="LIVE predikcie · trvalá história · bez kurzov";
+    $("ai-edge-audit-status").textContent="LIVE analytika · trvalá história · bez kurzov";
   }
   async function refresh(){
     try{const [data,ledger,model]=await Promise.all([load(),loadLedger(),loadModel()]);if(data.source!=="Flashscore")throw new Error("Zdroj nie je Flashscore");render(data,ledger,model);}
