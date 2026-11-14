@@ -318,6 +318,15 @@ function run(dataDir = DATA, nowDate = new Date()) {
     lag_minutes: LAG_MINUTES,
     horizons_minutes: HORIZONS,
     training_policy: "Only Flashscore snapshots collected at or after started_at are eligible. No historical backfill.",
+    validation_policy: {
+      min_train_samples: MIN_TRAIN,
+      min_validation_samples: MIN_VALIDATION,
+      min_train_matches: MIN_TRAIN_MATCHES,
+      min_validation_matches: MIN_VALIDATION_MATCHES,
+      min_relative_log_loss_gain: MIN_RELATIVE_LOG_LOSS_GAIN,
+      min_relative_brier_gain: MIN_RELATIVE_BRIER_GAIN,
+      metrics_weighted_per_match: true
+    },
     prediction_policy: "Weights stay shadow-only; validation requires at least 50 independent validation matches and improvement in both match-weighted log loss and Brier score.",
     total_labeled_samples: total,
     validated_horizons: ready,
