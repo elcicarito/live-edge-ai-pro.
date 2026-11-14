@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
+const readline = require("node:readline");
 
 const DATA = path.resolve(__dirname, "..", "data");
 const MODEL_FILE = "ai-edge-live-model.json";
@@ -44,7 +45,7 @@ function isoWeekKey(value) {
   const week = 1 + Math.round(((date - first) / 86400000 - 3 + ((first.getUTCDay() + 6) % 7)) / 7);
   return date.getUTCFullYear() + "-W" + String(week).padStart(2, "0");
 }
-function readTimeline(dataDir, startedAt = 0) {
+async function readTimeline(dataDir, startedAt = 0) {
   const index = readJson(path.join(dataDir, "flashscore-timeline-index.json"), null);
   if (!index || index.source !== "Flashscore" || !Array.isArray(index.weeks)) return [];
   const rows = [];
@@ -53,11 +54,12 @@ function readTimeline(dataDir, startedAt = 0) {
     const week = typeof item === "string" ? item : item?.week;
     if (typeof week === "string" && week < firstEligibleWeek) continue;
     const name = typeof item === "string" ? item : item?.file;
-    if (typeof name !== "string" || !/^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(name)) continue;
+    if (typeof name !== "string" || !/^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(name)) continue;
     const file = path.join(dataDir, name);
     if (!fs.existsSync(file)) continue;
-    const raw = zlib.gunzipSync(fs.readFileSync(file)).toString("utf8");
-    for (const line of raw.split(/\r?\n/)) {
+    const input = fs.createReadStream(file).pipe(zlib.createGunzip());
+    const lines = readline.createInterface({ input, crlfDelay: Infinity });
+    for await (const line of lines) {
       if (!line.trim()) continue;
       try { rows.push(JSON.parse(line)); } catch { /* skip malformed archive line */ }
     }
@@ -294,7 +296,7 @@ function trainHorizon(samples) {
     weights: validated ? weights : null
   };
 }
-function run(dataDir = DATA, nowDate = new Date()) {
+async function run(dataDir = DATA, nowDate = new Date()) {
   const modelPath = path.join(dataDir, MODEL_FILE);
   const existing = readJson(modelPath, null);
   if (existing && (existing.source !== "Flashscore" || existing.mode !== "FORWARD_ONLY_LIVE_TRAINING")) {
@@ -302,7 +304,7 @@ function run(dataDir = DATA, nowDate = new Date()) {
   }
   const startedAt = existing ? Date.parse(existing.started_at) : nowDate.getTime();
   if (!Number.isFinite(startedAt)) throw new Error("Neplatný čas spustenia LIVE tréningu.");
-  const timeline = readTimeline(dataDir, startedAt);
+  const timeline = await readTimeline(dataDir, startedAt);
   const outcomes = readJson(path.join(dataDir, "flashscore-confirmed-outcomes.json"), { matches: {} });
   const samples = buildSamples(timeline, outcomes, startedAt);
   const models = {};
@@ -337,7 +339,7 @@ function run(dataDir = DATA, nowDate = new Date()) {
   return { started_at: output.started_at, total_labeled_samples: total, status: output.status, models };
 }
 if (require.main === module) {
-  try { console.log("AI EDGE FORWARD-ONLY LIVE TRAINER", JSON.stringify(run())); }
-  catch (error) { console.error("AI EDGE LIVE TRAINER FAILED:", error.message); process.exit(1); }
+  run().then(result => console.log("AI EDGE FORWARD-ONLY LIVE TRAINER", JSON.stringify(result)))
+    .catch(error => { console.error("AI EDGE LIVE TRAINER FAILED:", error.message); process.exit(1); });
 }
 module.exports = { finite, isoWeekKey, readTimeline, statValue, featureVector, goalTransitions, labelFor, stableValidationMatch, buildSamples, fit, metrics, trainHorizon, run };
