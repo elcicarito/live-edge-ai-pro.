@@ -8,8 +8,12 @@ const DATA = path.resolve(__dirname, "..", "data");
 const MODEL_FILE = "ai-edge-live-model.json";
 const LAG_MINUTES = 5;
 const HORIZONS = [15, 25];
-const MIN_TRAIN = 200;
-const MIN_VALIDATION = 50;
+const MIN_TRAIN = 500;
+const MIN_VALIDATION = 300;
+const MIN_TRAIN_MATCHES = 100;
+const MIN_VALIDATION_MATCHES = 50;
+const MIN_RELATIVE_LOG_LOSS_GAIN = 0.01;
+const MIN_RELATIVE_BRIER_GAIN = 0.005;
 const FEATURE_NAMES = [
   "minute", "total_goals", "xg_total", "xg_difference", "sot_total",
   "sot_difference", "shots_total", "shots_difference", "corners_total",
@@ -163,13 +167,23 @@ function labelFor(sampleRow, rows, transitions, outcome, horizon) {
   return null;
 }
 function sigmoid(z) { const x = Math.max(-20, Math.min(20, z)); return 1 / (1 + Math.exp(-x)); }
-function logLoss(rows, weights) {
-  if (!rows.length) return null;
-  return rows.reduce((sum, row) => {
-    const p = Math.max(1e-8, Math.min(1 - 1e-8, sigmoid(weights[0] + row.x.reduce((s, v, i) => s + v * weights[i + 1], 0))));
-    return sum - (row.y * Math.log(p) + (1 - row.y) * Math.log(1 - p));
-  }, 0) / rows.length;
+function rowWeights(rows) {
+  const counts = new Map();
+  for (const row of rows) counts.set(row.match_id, (counts.get(row.match_id) || 0) + 1);
+  return rows.map(row => 1 / (counts.get(row.match_id) || 1));
 }
+function logLoss(rows, weights, sampleWeights = rowWeights(rows)) {
+  if (!rows.length) return null;
+  let total = 0, weightTotal = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i], weight = sampleWeights[i];
+    const p = Math.max(1e-8, Math.min(1 - 1e-8, sigmoid(weights[0] + row.x.reduce((s, v, j) => s + v * weights[j + 1], 0))));
+    total -= weight * (row.y * Math.log(p) + (1 - row.y) * Math.log(1 - p));
+    weightTotal += weight;
+  }
+  return weightTotal ? total / weightTotal : null;
+}
+
 function fit(rows) {
   const weights = Array(FEATURE_NAMES.length + 1).fill(0);
   const prevalence = rows.reduce((sum, row) => sum + row.y, 0) / rows.length;
@@ -192,18 +206,33 @@ function fit(rows) {
 }
 function metrics(rows, weights) {
   if (!rows.length) return null;
-  let correct = 0, brier = 0;
-  for (const row of rows) {
-    const p = sigmoid(weights[0] + row.x.reduce((sum, v, i) => sum + v * weights[i + 1], 0));
-    if ((p >= 0.5 ? 1 : 0) === row.y) correct++;
-    brier += (p - row.y) ** 2;
+  const sampleWeights = rowWeights(rows);
+  let correct = 0, brier = 0, weightTotal = 0, positiveWeight = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i], weight = sampleWeights[i];
+    const p = sigmoid(weights[0] + row.x.reduce((sum, v, j) => sum + v * weights[j + 1], 0));
+    if ((p >= 0.5 ? 1 : 0) === row.y) correct += weight;
+    brier += weight * (p - row.y) ** 2;
+    weightTotal += weight;
+    positiveWeight += weight * row.y;
   }
-  const prevalence = rows.reduce((sum, row) => sum + row.y, 0) / rows.length;
+  const prevalence = positiveWeight / weightTotal;
   const baseline = Math.max(1e-8, Math.min(1 - 1e-8, prevalence));
-  const baselineLoss = rows.reduce((sum, row) => sum - (row.y * Math.log(baseline) + (1 - row.y) * Math.log(1 - baseline)), 0) / rows.length;
-  const modelLoss = logLoss(rows, weights);
-  return { count: rows.length, accuracy: Number((correct / rows.length).toFixed(4)), brier: Number((brier / rows.length).toFixed(4)), log_loss: Number(modelLoss.toFixed(4)), baseline_log_loss: Number(baselineLoss.toFixed(4)) };
+  const baselineLogLoss = -(prevalence * Math.log(baseline) + (1 - prevalence) * Math.log(1 - baseline));
+  const baselineBrier = prevalence * (1 - prevalence);
+  const modelLoss = logLoss(rows, weights, sampleWeights);
+  const modelBrier = brier / weightTotal;
+  return {
+    count: rows.length,
+    matches: new Set(rows.map(row => row.match_id)).size,
+    accuracy: Number((correct / weightTotal).toFixed(4)),
+    brier: Number(modelBrier.toFixed(4)),
+    baseline_brier: Number(baselineBrier.toFixed(4)),
+    log_loss: Number(modelLoss.toFixed(4)),
+    baseline_log_loss: Number(baselineLogLoss.toFixed(4))
+  };
 }
+
 function buildSamples(rows, outcomes, startedAt) {
   const grouped = new Map();
   for (const row of rows) {
@@ -247,13 +276,23 @@ function trainHorizon(samples) {
   const trainMatches = new Set(train.map(row => row.match_id)).size;
   const validationMatches = new Set(validation.map(row => row.match_id)).size;
   const counts = { train: train.length, validation: validation.length, train_matches: trainMatches, validation_matches: validationMatches, train_positive: trainPos, train_negative: trainNeg, validation_positive: valPos, validation_negative: valNeg };
-  if (train.length < MIN_TRAIN || validation.length < MIN_VALIDATION || trainMatches < 20 || validationMatches < 5 || trainPos < 15 || trainNeg < 15 || valPos < 10 || valNeg < 10) {
+  if (train.length < MIN_TRAIN || validation.length < MIN_VALIDATION ||
+      trainMatches < MIN_TRAIN_MATCHES || validationMatches < MIN_VALIDATION_MATCHES ||
+      trainPos < 15 || trainNeg < 15 || valPos < 10 || valNeg < 10) {
     return { status: "WARMUP", counts, metrics: null, weights: null };
   }
   const weights = fit(train);
   const validationMetrics = metrics(validation, weights);
-  const validated = validationMetrics.log_loss < validationMetrics.baseline_log_loss;
-  return { status: validated ? "SHADOW_VALIDATED" : "NOT_VALIDATED", counts, metrics: validationMetrics, weights: validated ? weights : null };
+  const lossGain = 1 - validationMetrics.log_loss / validationMetrics.baseline_log_loss;
+  const brierGain = 1 - validationMetrics.brier / validationMetrics.baseline_brier;
+  const validated = lossGain >= MIN_RELATIVE_LOG_LOSS_GAIN && brierGain >= MIN_RELATIVE_BRIER_GAIN;
+  return {
+    status: validated ? "SHADOW_VALIDATED" : "NOT_VALIDATED",
+    counts,
+    metrics: { ...validationMetrics, relative_log_loss_gain: Number(lossGain.toFixed(4)), relative_brier_gain: Number(brierGain.toFixed(4)) },
+    validation_policy: { min_train_matches: MIN_TRAIN_MATCHES, min_validation_matches: MIN_VALIDATION_MATCHES, min_relative_log_loss_gain: MIN_RELATIVE_LOG_LOSS_GAIN, min_relative_brier_gain: MIN_RELATIVE_BRIER_GAIN, metrics_weighted_per_match: true },
+    weights: validated ? weights : null
+  };
 }
 function run(dataDir = DATA, nowDate = new Date()) {
   const modelPath = path.join(dataDir, MODEL_FILE);
@@ -279,7 +318,7 @@ function run(dataDir = DATA, nowDate = new Date()) {
     lag_minutes: LAG_MINUTES,
     horizons_minutes: HORIZONS,
     training_policy: "Only Flashscore snapshots collected at or after started_at are eligible. No historical backfill.",
-    prediction_policy: "Validated weights remain shadow-only until separately reviewed; no calibrated live probability is exposed during warmup.",
+    prediction_policy: "Weights stay shadow-only; validation requires at least 50 independent validation matches and improvement in both match-weighted log loss and Brier score.",
     total_labeled_samples: total,
     validated_horizons: ready,
     status: ready ? "SHADOW_VALIDATION_AVAILABLE" : "COLLECTING_LIVE_TRAINING_DATA",
