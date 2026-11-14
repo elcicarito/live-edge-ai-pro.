@@ -1,0 +1,35 @@
+name: AI Edge LIVE trainer tests
+
+on:
+  push:
+    paths:
+      - "scripts/ai-edge-live-online-trainer.js"
+      - "scripts/test-ai-edge-live-online-trainer.js"
+      - ".github/workflows/ai-edge-live-trainer-tests.yml"
+  pull_request:
+    paths:
+      - "scripts/ai-edge-live-online-trainer.js"
+      - "scripts/test-ai-edge-live-online-trainer.js"
+      - ".github/workflows/ai-edge-live-trainer-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-edge-live-trainer-tests
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Test forward-only LIVE trainer
+        run: |
+          node scripts/test-ai-edge-live-online-trainer.js
