@@ -296,7 +296,7 @@ function trainHorizon(samples) {
     weights: validated ? weights : null
   };
 }
-async async function run(dataDir = DATA, nowDate = new Date()) {
+async function run(dataDir = DATA, nowDate = new Date()) {
   const modelPath = path.join(dataDir, MODEL_FILE);
   const existing = readJson(modelPath, null);
   if (existing && (existing.source !== "Flashscore" || existing.mode !== "FORWARD_ONLY_LIVE_TRAINING")) {
