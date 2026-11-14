@@ -1,5 +1,6 @@
 "use strict";
 const assert = require("node:assert/strict");
+async function run() {
 const { classify, buildEvaluation } = require("./flashscore-btts-archive-evaluation");
 
 const qualifyingSnapshot = {
@@ -25,7 +26,7 @@ const timelineRecords = [
   {match_id:"late",snapshot:{live_minute:76,home_score:1,away_score:1,collected_at:"2026-11-10T11:08:00.000Z"}},
   {match_id:"loss",snapshot:{live_minute:78,home_score:0,away_score:1,collected_at:"2026-11-10T11:15:00.000Z"}}
 ];
-const built=buildEvaluation({
+const built=await buildEvaluation({
   index:{source:"Flashscore",weeks:[]},
   outcomes:{matches:{
     early:{status:"CONFIRMED",home_score:2,away_score:1},
@@ -60,3 +61,5 @@ assert.equal(loss.completionStatus,"NOT_COMPLETED");
 assert.equal(loss.status,"LOSS");
 
 console.log("Flashscore captured BTTS completion-time retrospective tests passed.");
+}
+run().catch(error => { console.error(error); process.exit(1); });
