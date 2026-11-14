@@ -3,20 +3,29 @@
   "source": "Flashscore",
   "mode": "FORWARD_ONLY_LIVE_TRAINING",
   "started_at": "2026-11-12T21:44:46.455Z",
-  "updated_at": "2026-11-14T07:36:51.118Z",
+  "updated_at": "2026-11-14T07:38:48.688Z",
   "lag_minutes": 5,
   "horizons_minutes": [
     15,
     25
   ],
   "training_policy": "Only Flashscore snapshots collected at or after started_at are eligible. No historical backfill.",
-  "prediction_policy": "Validated weights remain shadow-only until separately reviewed; no calibrated live probability is exposed during warmup.",
+  "validation_policy": {
+    "min_train_samples": 500,
+    "min_validation_samples": 300,
+    "min_train_matches": 100,
+    "min_validation_matches": 50,
+    "min_relative_log_loss_gain": 0.01,
+    "min_relative_brier_gain": 0.005,
+    "metrics_weighted_per_match": true
+  },
+  "prediction_policy": "Weights stay shadow-only; validation requires at least 50 independent validation matches and improvement in both match-weighted log loss and Brier score.",
   "total_labeled_samples": 7397,
-  "validated_horizons": 1,
-  "status": "SHADOW_VALIDATION_AVAILABLE",
+  "validated_horizons": 0,
+  "status": "COLLECTING_LIVE_TRAINING_DATA",
   "models": {
     "15": {
-      "status": "NOT_VALIDATED",
+      "status": "WARMUP",
       "counts": {
         "train": 2987,
         "validation": 856,
@@ -27,17 +36,11 @@
         "validation_positive": 333,
         "validation_negative": 523
       },
-      "metrics": {
-        "count": 856,
-        "accuracy": 0.6005,
-        "brier": 0.2383,
-        "log_loss": 0.6692,
-        "baseline_log_loss": 0.6683
-      },
+      "metrics": null,
       "weights": null
     },
     "25": {
-      "status": "SHADOW_VALIDATED",
+      "status": "WARMUP",
       "counts": {
         "train": 2751,
         "validation": 803,
@@ -48,32 +51,8 @@
         "validation_positive": 460,
         "validation_negative": 343
       },
-      "metrics": {
-        "count": 803,
-        "accuracy": 0.5729,
-        "brier": 0.244,
-        "log_loss": 0.6814,
-        "baseline_log_loss": 0.6825
-      },
-      "weights": [
-        0.17429384,
-        0.10449601,
-        0.04167573,
-        0.12516427,
-        0.13087096,
-        0.03437892,
-        0.43529731,
-        0.12297056,
-        0.15615424,
-        0.23781296,
-        0.15846021,
-        0.08338084,
-        0.24017237,
-        0.16515062,
-        0.02925798,
-        0.03273295,
-        0.03575258
-      ]
+      "metrics": null,
+      "weights": null
     }
   }
 }
