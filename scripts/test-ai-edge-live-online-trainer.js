@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const zlib = require("node:zlib");
-const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, metrics, run } = require("./ai-edge-live-online-trainer");
+const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, metrics, run, readTimeline } = require("./ai-edge-live-online-trainer");
 
 (async () => {\nconst started = Date.parse("2026-11-12T21:00:00.000Z");
 const stats = (minute, goal) => [
@@ -59,6 +59,7 @@ assert.equal(weightedCheck.matches, 2, "validation reports independent match cou
 assert.equal(weightedCheck.baseline_brier, 0.25, "baseline Brier score is match-weighted");
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "ai-edge-live-trainer-"));
+async function main() {
 try {
   const week = "2026-W46";
   const timelinePath = path.join(temp, "flashscore-match-timeline-" + week + ".jsonl.gz");
@@ -83,7 +84,11 @@ try {
   assert.equal(model.lag_minutes, 5);
   assert.equal(model.started_at, new Date(activation).toISOString());
   assert.ok(model.training_policy.includes("No historical backfill"));
+  const streamed = await readTimeline(temp, activation);
+  assert.ok(streamed.length >= allRows.length + futureRows.length, "gzip JSONL timeline is streamed and parsed line by line");
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
 }
-console.log("AI Edge forward-only LIVE trainer tests passed.");\n})().catch(error => { console.error(error); process.exit(1); });
+console.log("AI Edge forward-only LIVE trainer tests passed.");
+}
+main().catch(error => { console.error(error); process.exit(1); });\n})().catch(error => { console.error(error); process.exit(1); });
