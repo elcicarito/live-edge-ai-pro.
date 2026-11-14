@@ -45,7 +45,7 @@ function isoWeekKey(value) {
   const week = 1 + Math.round(((date - first) / 86400000 - 3 + ((first.getUTCDay() + 6) % 7)) / 7);
   return date.getUTCFullYear() + "-W" + String(week).padStart(2, "0");
 }
-async async function readTimeline(dataDir, startedAt = 0) {
+async function readTimeline(dataDir, startedAt = 0) {
   const index = readJson(path.join(dataDir, "flashscore-timeline-index.json"), null);
   if (!index || index.source !== "Flashscore" || !Array.isArray(index.weeks)) return [];
   const rows = [];
@@ -54,7 +54,7 @@ async async function readTimeline(dataDir, startedAt = 0) {
     const week = typeof item === "string" ? item : item?.week;
     if (typeof week === "string" && week < firstEligibleWeek) continue;
     const name = typeof item === "string" ? item : item?.file;
-    if (typeof name !== "string" || !/^flashscore-match-timeline-\\d{4}-W\\d{2}\\.jsonl\\.gz$/.test(name)) continue;
+    if (typeof name !== "string" || !/^flashscore-match-timeline-\d{4}-W\d{2}\.jsonl\.gz$/.test(name)) continue;
     const file = path.join(dataDir, name);
     if (!fs.existsSync(file)) continue;
     const input = fs.createReadStream(file).pipe(zlib.createGunzip());
