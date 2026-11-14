@@ -4,7 +4,6 @@ const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
 const readline = require("node:readline");
-const readline = require("node:readline");
 
 const DATA = path.resolve(__dirname, "..", "data");
 const MODEL_FILE = "ai-edge-live-model.json";
