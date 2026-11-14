@@ -56,7 +56,7 @@ const weightedCheck = metrics([
   { match_id: "match-b", x: Array(16).fill(0), y: 0 }
 ], Array(17).fill(0));
 assert.equal(weightedCheck.matches, 2, "validation reports independent match count");
-assert.equal(weightedCheck.baseline_brier, 0.2222, "baseline Brier score is reported");
+assert.equal(weightedCheck.baseline_brier, 0.25, "baseline Brier score is match-weighted");
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "ai-edge-live-trainer-"));
 try {
