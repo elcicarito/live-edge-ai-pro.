@@ -6,7 +6,7 @@ const path = require("node:path");
 const zlib = require("node:zlib");
 const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, metrics, run } = require("./ai-edge-live-online-trainer");
 
-const started = Date.parse("2026-11-12T21:00:00.000Z");
+(async () => {\nconst started = Date.parse("2026-11-12T21:00:00.000Z");
 const stats = (minute, goal) => [
   { label: "Expected goals (xG)", period: "Match", home: 0.3 + minute / 100, away: 0.2, home_numeric: 0.3 + minute / 100, away_numeric: 0.2 },
   { label: "Shots on target", period: "Match", home: Math.floor(minute / 12) + (goal ? 1 : 0), away: Math.floor(minute / 18), home_numeric: Math.floor(minute / 12) + (goal ? 1 : 0), away_numeric: Math.floor(minute / 18) },
@@ -66,7 +66,7 @@ try {
   fs.writeFileSync(path.join(temp, "flashscore-timeline-index.json"), JSON.stringify({ source: "Flashscore", weeks: [{ week, file: path.basename(timelinePath) }] }));
   fs.writeFileSync(path.join(temp, "flashscore-confirmed-outcomes.json"), JSON.stringify({ matches }));
   const activation = started + 2 * 60 * 60 * 1000;
-  const first = run(temp, new Date(activation));
+  const first = await run(temp, new Date(activation));
   assert.equal(first.total_labeled_samples, 0, "first run excludes snapshots captured before activation");
   const futureRows = [];
   for (let i = 100; i < 200; i++) {
@@ -76,7 +76,7 @@ try {
   }
   fs.writeFileSync(timelinePath, zlib.gzipSync(allRows.concat(futureRows).map(row => JSON.stringify(row)).join("\n") + "\n"));
   fs.writeFileSync(path.join(temp, "flashscore-confirmed-outcomes.json"), JSON.stringify({ matches }));
-  const second = run(temp, new Date(activation + 1));
+  const second = await run(temp, new Date(activation + 1));
   assert.ok(second.total_labeled_samples > 0, "later run trains only from captures after activation");
   const model = JSON.parse(fs.readFileSync(path.join(temp, "ai-edge-live-model.json"), "utf8"));
   assert.equal(model.mode, "FORWARD_ONLY_LIVE_TRAINING");
@@ -86,4 +86,4 @@ try {
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
 }
-console.log("AI Edge forward-only LIVE trainer tests passed.");
+console.log("AI Edge forward-only LIVE trainer tests passed.");\n})().catch(error => { console.error(error); process.exit(1); });
