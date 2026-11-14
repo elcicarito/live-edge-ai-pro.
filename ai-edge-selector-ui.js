@@ -84,7 +84,7 @@
     const policy=model.validation_policy||{};
     const line=[15,25].map(h=>{
       const item=model.models?.[String(h)]||{},counts=item.counts||{},m=item.metrics||{};
-      const status=item.status==="SHADOW_VALIDATED"?(policy.min_validation_matches?"tieňový kandidát":"čaká na prísnejšie overenie"):item.status==="NOT_VALIDATED"?"nesplnil validačné kritériá":"zbiera vzorky";
+      const status=item.status==="SHADOW_VALIDATED"?(policy.min_validation_matches?"tieňovo validovaný":"čaká na prísnejšie overenie"):item.status==="NOT_VALIDATED"?"nesplnil validačné kritériá":"zbiera vzorky";
       const progress=(counts.validation_matches||0)+"/"+(policy.min_validation_matches||50)+" nezávislých zápasov";
       const quality=m.log_loss!==undefined?" · log-loss "+Number(m.log_loss).toFixed(3)+" / základ "+Number(m.baseline_log_loss).toFixed(3)+" · Brier "+Number(m.brier).toFixed(3)+" / základ "+Number(m.baseline_brier).toFixed(3):"";
       return h+" min: "+status+" · tréning "+fmt(counts.train||0)+" vzoriek · overenie "+progress+quality;
@@ -111,7 +111,7 @@
       const allRows=ledger.predictions||[];const rows=allRows.slice(0,30);
       list.innerHTML=rows.length?rows.map(p=>{
         const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":p.status==="UNRESOLVED"?"NEVYHODNOTITEĽNÉ":"OTVORENÉ";
-        const target=p.target==="RESULT_1X2"?"1X2 · "+(p.predictedOutcome==="HOME"?p.home:p.predictedOutcome==="AWAY"?p.away:"remíza"):p.target==="NEXT_TEAM"?"ďalší skórujúci · "+esc(p.predictedTeam||"—"):p.target==="BTTS"?"oba tímy skórujú do FT":p.target==="FT"?"gól do konca zápasu":"gól do "+p.target+" min";
+        const target=p.target==="RESULT_1X2"?"1X2 · "+(p.predictedOutcome==="HOME"?p.home:p.predictedOutcome==="AWAY"?p.away:"remíza"):p.target==="NEXT_TEAM"?"ďalší skórujúci · "+esc(p.predictedTeam||"—"):p.target==="BTTS"?"oba tímy skórujú do FT":p.target==="MODEL_25"?"AI EDGE · gól do 25 min · "+(Number.isFinite(Number(p.modelProbability))?(Number(p.modelProbability)*100).toFixed(1)+"% SHADOW":"bez pravdepodobnosti"):p.target==="FT"?"gól do konca zápasu":"gól do "+p.target+" min";
         const result=p.resultScore?" · výsledok "+p.resultScore:"";
         const actual=p.actualOutcome?" · skutočný výsledok "+(p.actualOutcome==="HOME"?p.home:p.actualOutcome==="AWAY"?p.away:"remíza"):"";
         const pressure=p.target==="BTTS"?" · tlak tímu bez gólu "+fmt(p.scorelessPressure)+"/100":" · tlak "+fmt(p.pressure)+"/100";
@@ -160,7 +160,7 @@
         if(item.status==="NOT_VALIDATED") return "Model nesplnil validačné kritériá · bez predikcie";
         return "Tréning / overovanie · "+fmt(counts.validation_matches||0)+"/"+fmt(policy.min_validation_matches||50)+" nezávislých zápasov";
       };
-      const f15=horizonState(15),f25=horizonState(25);
+      const f15=horizonState(15);const modelRow=(ledger?.predictions||[]).find(p=>p.matchId===String(m.id)&&p.target==="MODEL_25");const f25=modelRow&&Number.isFinite(Number(modelRow.modelProbability)?"AI EDGE SHADOW · "+(Number(modelRow.modelProbability)*100).toFixed(1)+"% · "+(modelRow.status==="OPEN"?"čaká na výsledok":modelRow.status):horizonState(25);
       const statText=["SOT "+(fx.values.sot?fx.values.sot.home+":"+fx.values.sot.away:"—"),"strely "+(fx.values.shots?fx.values.shots.home+":"+fx.values.shots.away:"—"),"rohy "+(fx.values.corners?fx.values.corners.home+":"+fx.values.corners.away:"—"),"xG "+(fx.values.xg?fx.values.xg.home.toFixed(2)+":"+fx.values.xg.away.toFixed(2):"—"),"xGOT "+(fx.values.xgot?fx.values.xgot.home.toFixed(2)+":"+fx.values.xgot.away.toFixed(2):"—"),"v šestnástke "+(fx.values.box?fx.values.box.home+":"+fx.values.box.away:"—")].join(" · ");
       return '<article class="ai-edge-match"><div class="ai-edge-match-head"><span>'+esc(m.home)+' – '+esc(m.away)+'</span><span>'+esc(minute)+'′ · '+esc(score)+'</span></div><div class="ai-edge-match-sub">'+esc(m.competition||"")+' · dominantný tlak: '+esc(top)+'</div>'+
       '<div class="ai-edge-teamrow"><span>'+esc(m.home)+' · '+h[0]+'</span><b>'+fx.home+'/100</b></div><div class="ai-edge-bar"><i style="width:'+fx.home+'%"></i></div>'+
@@ -169,7 +169,7 @@
       '<div class="ai-edge-note">'+esc(statText)+' · '+(fx.delta.ready?"nová aktivita za "+fx.delta.minutes.toFixed(1)+" min":"bez platného porovnania dvoch meraní")+' · štatistiky: '+(fx.age===null?"neznámy čas":Math.round(fx.age)+" min staré")+'</div></article>';
     }).join(""):'<p>Momentálne nie sú vo feede aktívne Flashscore zápasy.</p>';
     $("ai-edge-data-meta").innerHTML='<div><span>Zdroj</span><b>Flashscore LIVE · '+esc(data.data_status||"—")+'</b></div><div><span>História v LIVE feede</span><b>'+fmt(data.recent_history_count||history.length)+' snímok</b></div><div><span>Čerstvé štatistiky</span><b>'+fresh+' / '+records.length+'</b></div>';
-    $("ai-edge-warning").textContent="Predikcie sa vytvárajú z aktuálnych Flashscore štatistík a ukladajú sa trvalo na server. Index tlaku ani pravidlá predikcie zatiaľ nie sú kalibrované pravdepodobnosti; úspešnosť sa počíta len z vyhodnotených záznamov. Päťminútové oneskorenie je pracovný predpoklad, nie individuálne meranie.";
+    $("ai-edge-warning").textContent="Index tlaku je iba opis aktivity, nie pravdepodobnosť. Samostatný 25-minútový AI Edge model prešiel tieňovou validáciou a jeho pravdepodobnosti sa ukladajú aj automaticky vyhodnocujú. Nie je to produkčne overený ani ziskový systém; 15-minútový model zatiaľ validáciou neprešiel. Päťminútový buffer je pracovný predpoklad oneskorenia dát.";
     $("ai-edge-updated").textContent="Feed: "+date(data.collected_at)+" · automatická obnova každých 60 s";
     $("ai-edge-audit-status").textContent="LIVE analytika · trvalá história · bez kurzov";
   }
