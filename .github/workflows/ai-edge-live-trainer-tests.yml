@@ -5,6 +5,8 @@ on:
     paths:
       - "scripts/ai-edge-live-online-trainer.js"
       - "scripts/test-ai-edge-live-online-trainer.js"
+      - "scripts/ai-edge-live-prediction-ledger.js"
+      - "scripts/test-ai-edge-live-prediction-ledger.js"
       - ".github/workflows/ai-edge-live-trainer-tests.yml"
   pull_request:
     paths:
@@ -33,3 +35,4 @@ jobs:
       - name: Test forward-only LIVE trainer
         run: |
           node scripts/test-ai-edge-live-online-trainer.js
+          node scripts/test-ai-edge-live-prediction-ledger.js
