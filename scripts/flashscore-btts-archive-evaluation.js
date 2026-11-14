@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
+const readline = require("node:readline");
 
 const DATA = path.resolve(__dirname, "..", "data");
 const INDEX_PATH = path.join(DATA, "flashscore-timeline-index.json");
@@ -53,7 +54,7 @@ function classify(snapshot) {
   }
   return null;
 }
-function buildCapturedSignalAfter70Analysis({ signals, outcomes, timelineRecords, index, now }) {
+async function buildCapturedSignalAfter70Analysis({ signals, outcomes, timelineRecords, index, now }) {
   const captured = (Array.isArray(signals) ? signals : []).filter(signal =>
     signal?.source === "Flashscore" && signal?.model === "BTTS" &&
     Number(signal.startMinute) >= 46 && Number(signal.startMinute) <= 50 &&
@@ -66,33 +67,34 @@ function buildCapturedSignalAfter70Analysis({ signals, outcomes, timelineRecords
     signalMatches.get(id).push(signal);
   }
 
-  const records = [];
-  if (Array.isArray(timelineRecords)) records.push(...timelineRecords);
-  else {
-    for (const week of index.weeks || []) {
-      const file = path.join(DATA, path.basename(week.file || ""));
-      if (!fs.existsSync(file)) continue;
-      const content = zlib.gunzipSync(fs.readFileSync(file), { finishFlush: zlib.constants.Z_SYNC_FLUSH }).toString("utf8");
-      for (const line of content.split("\n")) {
-        if (!line.trim()) continue;
-        try { records.push(JSON.parse(line)); } catch {}
-      }
-    }
-  }
-
-  // Retrospektíva sleduje iba okamih, keď po zachytení signálu oba tímy
-  // už majú aspoň jeden gól. Strelecké prahy patria výhradne k pôvodnému signálu.
+  // Stream gzip JSONL po riadkoch, aby sa celý rozbalený archív
+  // nikdy nedržal v jednom Bufferi/stringu (limit V8 pri veľkých archívoch).
   const timelineByMatch = new Map();
-  for (const record of records) {
+  const consumeRecord = record => {
     const id = String(record?.match_id || "");
-    if (!signalMatches.has(id)) continue;
+    if (!signalMatches.has(id)) return;
     const snapshot = record?.snapshot;
     const minute = num(snapshot?.live_minute ?? snapshot?.minute);
     const home = num(snapshot?.home_score), away = num(snapshot?.away_score);
-    if (!Number.isInteger(minute) || home === null || away === null) continue;
+    if (!Number.isInteger(minute) || home === null || away === null) return;
     const collectedAt = snapshot?.collected_at || record?.collected_at || null;
     if (!timelineByMatch.has(id)) timelineByMatch.set(id, []);
     timelineByMatch.get(id).push({ minute, home, away, collectedAt });
+  };
+  if (Array.isArray(timelineRecords)) {
+    for (const record of timelineRecords) consumeRecord(record);
+  } else {
+    for (const week of index.weeks || []) {
+      const filename = typeof week === "string" ? week : week?.file;
+      const file = path.join(DATA, path.basename(filename || ""));
+      if (!fs.existsSync(file)) continue;
+      const input = fs.createReadStream(file).pipe(zlib.createGunzip());
+      const lines = readline.createInterface({ input, crlfDelay: Infinity });
+      for await (const line of lines) {
+        if (!line.trim()) continue;
+        try { consumeRecord(JSON.parse(line)); } catch {}
+      }
+    }
   }
   for (const rows of timelineByMatch.values()) {
     rows.sort((a,b) => a.minute - b.minute ||
@@ -175,7 +177,7 @@ function buildCapturedSignalAfter70Analysis({ signals, outcomes, timelineRecords
     entries
   };
 }
-function buildEvaluation({ index, outcomes, bttsArchive, timelineRecords = null, now = new Date().toISOString() }) {
+async function buildEvaluation({ index, outcomes, bttsArchive, timelineRecords = null, now = new Date().toISOString() }) {
   if (index?.source !== "Flashscore" || !Array.isArray(index.weeks)) throw new Error("Invalid Flashscore timeline index.");
   const output = bttsArchive && bttsArchive.source === "Flashscore"
     ? bttsArchive
@@ -185,13 +187,13 @@ function buildEvaluation({ index, outcomes, bttsArchive, timelineRecords = null,
   delete output.after70_analysis;
 
   // Jediná retrospektíva: iba reálne zachytené BTTS signály z 46.–50. minúty.
-  output.captured_signals_after70_analysis = buildCapturedSignalAfter70Analysis({
+  output.captured_signals_after70_analysis = await buildCapturedSignalAfter70Analysis({
     signals:output.signals, outcomes, timelineRecords, index, now
   });
   return output;
 }
-function main() {
-  const result = buildEvaluation({
+async function main() {
+  const result = await buildEvaluation({
     index:readJson(INDEX_PATH),
     outcomes:readJson(OUTCOMES_PATH),
     bttsArchive:readJson(BTTS_PATH)
@@ -206,5 +208,5 @@ function main() {
     generated_at:result.captured_signals_after70_analysis.generated_at
   }));
 }
-if (require.main === module) main();
+if (require.main === module) main().catch(error => { console.error(error); process.exit(1); });
 module.exports = { classify, buildEvaluation, buildCapturedSignalAfter70Analysis };
