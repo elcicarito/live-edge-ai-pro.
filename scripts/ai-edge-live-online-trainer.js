@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
 const readline = require("node:readline");
+const readline = require("node:readline");
 
 const DATA = path.resolve(__dirname, "..", "data");
 const MODEL_FILE = "ai-edge-live-model.json";
@@ -45,7 +46,7 @@ function isoWeekKey(value) {
   const week = 1 + Math.round(((date - first) / 86400000 - 3 + ((first.getUTCDay() + 6) % 7)) / 7);
   return date.getUTCFullYear() + "-W" + String(week).padStart(2, "0");
 }
-async function readTimeline(dataDir, startedAt = 0) {
+async async function readTimeline(dataDir, startedAt = 0) {
   const index = readJson(path.join(dataDir, "flashscore-timeline-index.json"), null);
   if (!index || index.source !== "Flashscore" || !Array.isArray(index.weeks)) return [];
   const rows = [];
@@ -296,7 +297,7 @@ function trainHorizon(samples) {
     weights: validated ? weights : null
   };
 }
-async function run(dataDir = DATA, nowDate = new Date()) {
+async async function run(dataDir = DATA, nowDate = new Date()) {
   const modelPath = path.join(dataDir, MODEL_FILE);
   const existing = readJson(modelPath, null);
   if (existing && (existing.source !== "Flashscore" || existing.mode !== "FORWARD_ONLY_LIVE_TRAINING")) {
