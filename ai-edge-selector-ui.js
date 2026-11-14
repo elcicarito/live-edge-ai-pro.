@@ -84,12 +84,12 @@
     const policy=model.validation_policy||{};
     const line=[15,25].map(h=>{
       const item=model.models?.[String(h)]||{},counts=item.counts||{},m=item.metrics||{};
-      const status=item.status==="SHADOW_VALIDATED"?"tieňový kandidát":item.status==="NOT_VALIDATED"?"nesplnil validačné kritériá":"zbiera vzorky";
+      const status=item.status==="SHADOW_VALIDATED"?(policy.min_validation_matches?"tieňový kandidát":"čaká na prísnejšie overenie"):item.status==="NOT_VALIDATED"?"nesplnil validačné kritériá":"zbiera vzorky";
       const progress=(counts.validation_matches||0)+"/"+(policy.min_validation_matches||50)+" nezávislých zápasov";
       const quality=m.log_loss!==undefined?" · log-loss "+Number(m.log_loss).toFixed(3)+" / základ "+Number(m.baseline_log_loss).toFixed(3)+" · Brier "+Number(m.brier).toFixed(3)+" / základ "+Number(m.baseline_brier).toFixed(3):"";
       return h+" min: "+status+" · tréning "+fmt(counts.train||0)+" vzoriek · overenie "+progress+quality;
     }).join(" | ");
-    el.textContent="Spustené "+date(model.started_at)+" · oneskorenie započítané: 5 min · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+line+". Každý zápas má pri vyhodnotení rovnakú váhu. Model zatiaľ nevydáva ostré pravdepodobnosti.";
+    el.textContent="Spustené "+date(model.started_at)+" · oneskorenie započítané: 5 min · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+line+". Každý zápas má pri vyhodnotení rovnakú váhu. Staršie výsledky bez nových validačných pravidiel sa nepovažujú za potvrdenie modelu. Ostré pravdepodobnosti sa nezobrazujú.";
   }
 
   function renderPredictionLedger(ledger){
