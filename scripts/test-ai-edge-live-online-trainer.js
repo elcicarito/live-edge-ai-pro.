@@ -6,7 +6,6 @@ const path = require("node:path");
 const zlib = require("node:zlib");
 const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, metrics, run, readTimeline } = require("./ai-edge-live-online-trainer");
 
-(async () => {
 const started = Date.parse("2026-11-12T21:00:00.000Z");
 const stats = (minute, goal) => [
   { label: "Expected goals (xG)", period: "Match", home: 0.3 + minute / 100, away: 0.2, home_numeric: 0.3 + minute / 100, away_numeric: 0.2 },
