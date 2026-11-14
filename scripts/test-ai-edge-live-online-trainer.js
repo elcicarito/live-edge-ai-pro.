@@ -91,4 +91,4 @@ try {
 }
 console.log("AI Edge forward-only LIVE trainer tests passed.");
 }
-main().catch(error => { console.error(error);
+main().catch(error => { console.error(error); process.exit(1); });
