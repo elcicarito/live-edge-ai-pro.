@@ -36,7 +36,7 @@ addPredictions(modelRows,feed,now,validatedModel);
 assert.equal(modelCalibrationGate({metrics:{calibration:{bins:[{range:"50-60",matches_weight:4,absolute_error:0.01}]}}},0.55,{}).allowed,false,"low-support bins force abstention");
 assert.equal(modelCalibrationGate({metrics:{calibration:{bins:[{range:"50-60",matches_weight:12,absolute_error:0.12}]}}},0.55,{}).allowed,false,"poor calibration forces abstention");
 assert.equal(modelCalibrationGate({metrics:{calibration:{bins:[{range:"50-60",matches_weight:12,absolute_error:0.02}]}}},0.55,{}).allowed,true,"reliable bins allow prediction");
-assert.equal(minimumOddsThreshold(0.55,0.02,0.05),1.98,"minimum odds use a conservative probability and five-percent edge");
+assert.equal(minimumOddsThreshold(0.55,0.02,0.05),1.99,"minimum odds use a conservative probability and five-percent edge");
 assert.equal(minimumOddsThreshold(0.55,0.12,0.05),2.45,"threshold helper remains conservative even with a large calibration error");
 assert.equal(minimumOddsThreshold(0.55,0.02,0),1.89,"zero safety margin returns conservative fair odds");
 assert.equal(minimumOddsThreshold(0.55,0.02,1),null,"invalid safety margin is rejected");
