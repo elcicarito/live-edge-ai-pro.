@@ -5595,17 +5595,17 @@
     ]));
     const getPriority = item => priorityByItem.get(item) || { rank: 0, score: 0 };
 
-    // Prehľad TOP LIVE tlaku je iba navigačný panel; nemení signály ani ich podmienky.
+    // Doplnkový prehľad kumulatívneho tlaku; nejde o stávkový signál ani pravdepodobnosť.
     const pressureOverview = document.getElementById("live-pressure-overview");
     if (pressureOverview) {
       pressureOverview.innerHTML = "";
       pressureOverview.style.cssText = "padding:13px 14px;border:1px solid #29475c;border-left:3px solid #39bfa2;border-radius:13px;background:linear-gradient(135deg,#14263a 0%,#101b2a 100%);box-shadow:0 7px 20px #0003;";
       const title = document.createElement("div");
-      title.textContent = "🔥 TOP LIVE TLAK";
+      title.textContent = "📊 LIVE TLAK · DOPLNKOVÁ ANALÝZA";
       title.style.cssText = "font-size:12px;font-weight:900;letter-spacing:.8px;color:#c8e7ff;margin-bottom:4px;";
       pressureOverview.appendChild(title);
       const subtitle = document.createElement("div");
-      subtitle.textContent = "Číslo = kumulatívna prevaha podľa rovnakého výpočtu ako v LIVE MOMENTUM. Trend je samostatné intervalové zrýchlenie; farba označuje stav signálu. Nie je to pravdepodobnosť gólu ani stávkový signál.";
+      subtitle.textContent = "Kumulatívna prevaha a trend z LIVE MOMENTUM. Ide iba o opis diania na ihrisku, nie o predikciu ani stávkový tip.";
       subtitle.style.cssText = "font-size:10px;color:#8fa6bf;margin-bottom:9px;line-height:1.4;";
       pressureOverview.appendChild(subtitle);
 
