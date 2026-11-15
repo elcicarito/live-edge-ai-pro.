@@ -110,10 +110,15 @@ try{
  fs.writeFileSync(path.join(temp,"flashscore-confirmed-outcomes.json"),JSON.stringify({matches:{}}));
  const result=buildLedger(temp,new Date(now));
  const saved=JSON.parse(fs.readFileSync(path.join(temp,"ai-edge-prediction-history.json"),"utf8"));
+ const view=JSON.parse(fs.readFileSync(path.join(temp,"ai-edge-prediction-live.json"),"utf8"));
  assert.equal(saved.mode,"LIVE_PREDICTION_LEDGER");
  assert(saved.by_target["15"],"per-target summary saved");
  assert.equal(result.total,saved.total_predictions);
  assert(saved.predictions.every(p=>Array.isArray(p.snapshots)&&p.snapshots.length===1),"baseline match snapshots are persisted");
+ assert.equal(view.mode,"LIVE_PREDICTION_LEDGER_VIEW");
+ assert.equal(view.total_predictions,saved.total_predictions);
+ assert(view.predictions.length>0,"compact live view includes recent predictions");
+ assert(view.predictions.every(p=>!Object.prototype.hasOwnProperty.call(p,"snapshots")),"compact live view excludes large evaluation timelines");
 }finally{fs.rmSync(temp,{recursive:true,force:true});}
 
 
