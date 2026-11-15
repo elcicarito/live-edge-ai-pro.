@@ -72,28 +72,31 @@
     const tone = item.status === "SHADOW_VALIDATED" ? "#60a5fa" :
       item.status === "NOT_VALIDATED" ? "#fbbf24" : "#cbd5e1";
     const policy = model.validation_policy || {};
+    const calibration = metrics.calibration || {};
     const detail = "Tréning: " + number(counts.train) + " vzoriek / " + number(counts.train_matches) + " zápasov · validácia: " +
       number(counts.validation) + " vzoriek / " + number(counts.validation_matches) + " zápasov. " +
       "Presnosť: " + percent(metrics.accuracy) + " · Brier: " + number(metrics.brier) +
       " (základ " + number(metrics.baseline_brier) + ") · log-loss: " + number(metrics.log_loss) +
       " (základ " + number(metrics.baseline_log_loss) + "). " +
       "Zlepšenie: log-loss " + percent(metrics.relative_log_loss_gain) + " · Brier " + percent(metrics.relative_brier_gain) +
+      ". Kalibrácia: ECE " + number(calibration.expected_calibration_error) + " · obsadené pásma " + number(calibration.populated_bins) +
+      " · najväčšia odchýlka " + number(calibration.maximum_calibration_error) +
       ". Požiadavka: min. " + number(policy.min_validation_matches || 50) + " validačných zápasov.";
     addCard(grid, "AI EDGE · " + horizon + " MIN", status, detail, tone);
   }
-  function renderLedger(grid, ledger, horizon) {
-    const item = ledger?.by_target?.["MODEL_" + horizon];
+  function renderLedgerTarget(grid, ledger, key) {
+    const item = ledger?.by_target?.[key];
     if (!item) {
-      addCard(grid, "AI EDGE " + horizon + " MIN · PREDIKČNÝ DENNÍK", "ZÁZNAMY NEDOSTUPNÉ", "Samostatné vyhodnotenie predikcií sa nepodarilo načítať.", "#fbbf24");
+      addCard(grid, "PREDIKCIA · " + key, "ZÁZNAMY NEDOSTUPNÉ", "Pre tento typ predikcie nie sú dostupné súhrnné výsledky.", "#fbbf24");
       return;
     }
     const decided = Number(item.decided || 0);
     const rate = decided ? percent(item.accuracy) : "—";
-    addCard(grid, "AI EDGE " + horizon + " MIN · PREDIKČNÝ DENNÍK", rate,
+    addCard(grid, item.label || ("PREDIKCIA · " + key), rate,
       "HIT " + number(item.HIT) + " / MISS " + number(item.MISS) +
       " · OPEN " + number(item.OPEN) + " · nevyhodnotiteľné " + number(item.UNRESOLVED) +
-      " · vyhodnotené predikcie " + number(decided) + " / spolu " + number(item.total) +
-      ". Ide o výsledky predikčných záznamov; opakované merania nemusia byť nezávislé zápasy.",
+      " · vyhodnotené " + number(decided) + " / spolu " + number(item.total) +
+      ". Súhrn predikčných záznamov; opakované merania nemusia byť nezávislé zápasy.",
       "#60a5fa");
   }
   function renderLate(grid, late) {
@@ -134,8 +137,7 @@
     const model = data.model;
     renderModel(grid, model, 15);
     renderModel(grid, model, 25);
-    renderLedger(grid, data.ledger, 15);
-    renderLedger(grid, data.ledger, 25);
+    ["15", "25", "FT", "NEXT_TEAM", "BTTS", "RESULT_1X2"].forEach(key => renderLedgerTarget(grid, data.ledger, key));
     renderLate(grid, data.late);
 
     addCard(grid, "ZELENÝ SIGNÁL · STARŠÍ ENGINE", "VYPNUTÝ",
