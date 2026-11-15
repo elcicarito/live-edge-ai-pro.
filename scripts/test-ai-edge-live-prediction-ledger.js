@@ -177,4 +177,20 @@ assert.equal(sim.flat.bets,2,"at most one bet is counted per match");
 assert.equal(sim.flat.wins,1);assert.equal(sim.flat.losses,1);assert.equal(sim.flat.skipped,2);assert.equal(sim.flat.skippedDuplicateMatches,1);assert.equal(sim.flat.net,0.6);
 assert.equal(sim.progressive.bets,2);assert.equal(sim.progressive.net,1.9,"progression raises next stake after loss");assert.equal(sim.progressive.maxLosingStreak,1);
 assert.throws(()=>simulateStrategy(simRows,{odds:1,bankroll:100,baseStake:1}),/Neplatné/);
+const {matchLevelSummary}=require("./ai-edge-live-prediction-ledger");
+const matchLevel=matchLevelSummary([
+ {id:"m1-first",matchId:"m1",target:"MODEL_25",createdAt:100,status:"MISS"},
+ {id:"m1-later",matchId:"m1",target:"MODEL_25",createdAt:200,status:"HIT"},
+ {id:"m2-first",matchId:"m2",target:"MODEL_25",createdAt:150,status:"HIT"},
+ {id:"m3-first",matchId:"m3",target:"MODEL_25",createdAt:250,status:"OPEN"},
+ {id:"m1-15",matchId:"m1",target:"MODEL_15",createdAt:90,status:"HIT"},
+ {id:"missing-id",target:"MODEL_25",createdAt:50,status:"HIT"}
+],"MODEL_25");
+assert.equal(matchLevel.method,"first_prediction_per_match_and_target");
+assert.equal(matchLevel.total,3,"one earliest prediction per unique match and target is counted");
+assert.equal(matchLevel.HIT,1);
+assert.equal(matchLevel.MISS,1,"the earliest result wins; a later repeated hit cannot overwrite it");
+assert.equal(matchLevel.OPEN,1);
+assert.equal(matchLevel.decided,2);
+assert.equal(matchLevel.accuracy,0.5);
 console.log("AI Edge live prediction ledger tests passed.");

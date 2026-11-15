@@ -92,11 +92,18 @@
     }
     const decided = Number(item.decided || 0);
     const rate = decided ? percent(item.accuracy) : "—";
-    addCard(grid, item.label || ("PREDIKCIA · " + key), rate,
-      "HIT " + number(item.HIT) + " / MISS " + number(item.MISS) +
-      " · OPEN " + number(item.OPEN) + " · nevyhodnotiteľné " + number(item.UNRESOLVED) +
-      " · vyhodnotené " + number(decided) + " / spolu " + number(item.total) +
-      ". Súhrn predikčných záznamov; opakované merania nemusia byť nezávislé zápasy.",
+    const match = item.match_level || {};
+    const matchDecided = Number(match.decided || 0);
+    const matchRate = matchDecided ? percent(match.accuracy) : "—";
+    addCard(grid, item.label || ("PREDIKCIA · " + key),
+      "ZÁPASY " + matchRate,
+      "Unikátne zápasy: " + number(match.total) + " · HIT " + number(match.HIT) +
+      " / MISS " + number(match.MISS) + " · OPEN " + number(match.OPEN) +
+      " · nevyhodnotiteľné " + number(match.UNRESOLVED) +
+      ". Predikčné záznamy: " + rate + " · HIT " + number(item.HIT) +
+      " / MISS " + number(item.MISS) + " · vyhodnotené " + number(decided) +
+      " / spolu " + number(item.total) +
+      ". Zápasová metrika používa iba prvú predikciu každého zápasu pre daný cieľ.",
       "#60a5fa");
   }
   function renderLate(grid, late) {
@@ -137,7 +144,7 @@
     const model = data.model;
     renderModel(grid, model, 15);
     renderModel(grid, model, 25);
-    ["15", "25", "FT", "NEXT_TEAM", "BTTS", "RESULT_1X2"].forEach(key => renderLedgerTarget(grid, data.ledger, key));
+    ["15", "25", "MODEL_15", "MODEL_25", "FT", "NEXT_TEAM", "BTTS", "RESULT_1X2"].forEach(key => renderLedgerTarget(grid, data.ledger, key));
     renderLate(grid, data.late);
 
     addCard(grid, "ZELENÝ SIGNÁL · STARŠÍ ENGINE", "VYPNUTÝ",
