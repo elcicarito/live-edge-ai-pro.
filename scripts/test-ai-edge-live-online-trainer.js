@@ -94,6 +94,8 @@ try {
   assert.equal(model.lag_minutes, 5);
   assert.equal(model.started_at, new Date(activation).toISOString());
   assert.ok(model.training_policy.includes("No historical backfill"));
+  assert.equal(model.calibration_policy.min_effective_match_weight, 8);
+  assert.equal(model.calibration_policy.max_absolute_error, 0.08);
   for (const horizon of [15, 25]) {
     const result = model.models[String(horizon)];
     if (result.metrics) {
