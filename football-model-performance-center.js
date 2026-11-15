@@ -4,7 +4,8 @@
   const URLS = {
     btts: ROOT + "live-data/data/btts-signal-archive.json",
     model: ROOT + "live-data-v2/data/ai-edge-live-model.json",
-    late: ROOT + "live-data-v2/data/ai-edge-live-late-ft-model.json"
+    late: ROOT + "live-data-v2/data/ai-edge-live-late-ft-model.json",
+    ledger: ROOT + "live-data-v2/data/ai-edge-prediction-live.json"
   };
   const target = document.getElementById("football-model-performance-center-content");
   if (!target) return;
@@ -80,6 +81,21 @@
       ". Požiadavka: min. " + number(policy.min_validation_matches || 50) + " validačných zápasov.";
     addCard(grid, "AI EDGE · " + horizon + " MIN", status, detail, tone);
   }
+  function renderLedger(grid, ledger, horizon) {
+    const item = ledger?.by_target?.["MODEL_" + horizon];
+    if (!item) {
+      addCard(grid, "AI EDGE " + horizon + " MIN · PREDIKČNÝ DENNÍK", "ZÁZNAMY NEDOSTUPNÉ", "Samostatné vyhodnotenie predikcií sa nepodarilo načítať.", "#fbbf24");
+      return;
+    }
+    const decided = Number(item.decided || 0);
+    const rate = decided ? percent(item.accuracy) : "—";
+    addCard(grid, "AI EDGE " + horizon + " MIN · PREDIKČNÝ DENNÍK", rate,
+      "HIT " + number(item.HIT) + " / MISS " + number(item.MISS) +
+      " · OPEN " + number(item.OPEN) + " · nevyhodnotiteľné " + number(item.UNRESOLVED) +
+      " · vyhodnotené predikcie " + number(decided) + " / spolu " + number(item.total) +
+      ". Ide o výsledky predikčných záznamov; opakované merania nemusia byť nezávislé zápasy.",
+      "#60a5fa");
+  }
   function renderLate(grid, late) {
     if (!late) {
       addCard(grid, "GÓL 70–85′ → KONIEC", "DÁTA NEDOSTUPNÉ", "Samostatný tréningový súbor sa nepodarilo načítať.", "#fbbf24");
@@ -118,6 +134,8 @@
     const model = data.model;
     renderModel(grid, model, 15);
     renderModel(grid, model, 25);
+    renderLedger(grid, data.ledger, 15);
+    renderLedger(grid, data.ledger, 25);
     renderLate(grid, data.late);
 
     addCard(grid, "ZELENÝ SIGNÁL · STARŠÍ ENGINE", "VYPNUTÝ",
@@ -135,14 +153,15 @@
     target.appendChild(note);
   }
   async function refresh() {
-    const results = await Promise.allSettled([read(URLS.btts), read(URLS.model), read(URLS.late)]);
+    const results = await Promise.allSettled([read(URLS.btts), read(URLS.model), read(URLS.late), read(URLS.ledger)]);
     const data = {
       btts: results[0].status === "fulfilled" ? results[0].value : null,
       model: results[1].status === "fulfilled" ? results[1].value : null,
-      late: results[2].status === "fulfilled" ? results[2].value : null
+      late: results[2].status === "fulfilled" ? results[2].value : null,
+      ledger: results[3].status === "fulfilled" ? results[3].value : null
     };
     render(data);
-    const errors = results.map((result, index) => result.status === "rejected" ? ["BTTS", "AI EDGE", "neskorý gól"][index] + ": " + (result.reason?.message || "chyba") : null).filter(Boolean);
+    const errors = results.map((result, index) => result.status === "rejected" ? ["BTTS", "AI EDGE", "neskorý gól", "predikčný denník"][index] + ": " + (result.reason?.message || "chyba") : null).filter(Boolean);
     if (errors.length) {
       const warning = document.createElement("p");
       warning.textContent = "Niektoré zdroje sú dočasne nedostupné: " + errors.join(" · ");
