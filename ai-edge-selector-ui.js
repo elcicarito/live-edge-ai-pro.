@@ -1,6 +1,7 @@
 "use strict";
 (() => {
   const FEED = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/flashscore-primary-current.json";
+  const SIMULATION = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-strategy-simulation.json";
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? "—").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const fmt = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString("sk-SK") : "—";
@@ -134,6 +135,8 @@
       list.innerHTML+="<p class='ai-edge-note'>Zobrazených "+fmt(rows.length)+" z "+fmt(ledger.total_predictions||allRows.length)+" trvalých predikcií · aktualizácia "+esc(date(ledger.updated_at))+" · zdroj Flashscore</p>";
     }
   }
+  async function loadStrategy(){const res=await fetch(SIMULATION+"?t="+Date.now(),{cache:"no-store",headers:{Accept:"application/json"}});if(!res.ok)throw new Error("Simulátor HTTP "+res.status);const data=await res.json();if(data.source!=="Flashscore"||data.mode!=="AI_EDGE_STRATEGY_SIMULATION_DATA"||!Array.isArray(data.predictions))throw new Error("Neplatné dáta simulátora");return data;}
+  function runStrategySimulation(data){const out=$("ai-edge-strategy-results");if(!out)return;const odds=Number($("ai-edge-sim-odds")?.value),bankroll=Number($("ai-edge-sim-bankroll")?.value),baseStake=Number($("ai-edge-sim-stake")?.value);if(![odds,bankroll,baseStake].every(Number.isFinite)||odds<=1||bankroll<=0||baseStake<=0){out.textContent="Zadaj kurz vyšší ako 1, kladný bankroll a kladný vklad.";return;}const rows=data.predictions||[];const run=progressive=>{let balance=bankroll,peak=bankroll,drawdown=0,stake=baseStake,wins=0,losses=0,skipped=0,streak=0,maxStreak=0,staked=0;for(const row of rows){if(odds+1e-9<Number(row.minimumOdds)){skipped++;continue;}const wager=Math.min(balance,progressive?Math.min(stake,baseStake*5):baseStake);if(wager<=0)break;staked+=wager;if(row.status==="HIT"){balance+=wager*(odds-1);wins++;streak=0;stake=baseStake;}else{balance-=wager;losses++;streak++;maxStreak=Math.max(maxStreak,streak);if(progressive)stake=Math.min(baseStake*5,stake*1.5);}peak=Math.max(peak,balance);drawdown=Math.max(drawdown,peak-balance);}return{bets:wins+losses,wins,losses,skipped,net:balance-bankroll,end:balance,drawdown,maxStreak,staked};};const flat=run(false),step=run(true),money=x=>x.toLocaleString("sk-SK",{minimumFractionDigits:2,maximumFractionDigits:2});const card=(name,x)=>"<div class='ai-edge-sim-result'><strong>"+name+"</strong><b>"+(x.net>=0?"+":"")+money(x.net)+" jednotiek</b><span>Konečný bankroll: "+money(x.end)+" · stávky: "+x.bets+" (HIT "+x.wins+" / MISS "+x.losses+")</span><span>Max. prepad od maxima: "+money(x.drawdown)+" · najdlhšia séria prehier: "+x.maxStreak+" · vsadené spolu: "+money(x.staked)+"</span></div>";out.innerHTML="<div class='ai-edge-sim-meta'>Vyhodnotené modelové predikcie: "+fmt(rows.length)+" · kurzom vyhovujúce: "+fmt(flat.bets)+" · vynechané pod minimálnym kurzom: "+fmt(flat.skipped)+" · dáta: "+esc(date(data.updated_at))+"</div>"+card("ROVNÝ VKLAD",flat)+card("NAVÝŠENIE PO PREHRE · ×1,5 · LIMIT 5×",step)+"<p class='ai-edge-note'>Hypotetická simulácia pri rovnakom zadanom kurze. Predikcie pod individuálnym minimálnym kurzom sa vynechávajú. Bez skutočných historických kurzov, poplatkov a sklzu; nejde o reálne ROI ani odporúčanie. OPEN a UNRESOLVED sú vylúčené.</p>";}
   async function loadLedger(){
     const url="https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-prediction-live.json?t="+Date.now();
     const res=await fetch(url,{cache:"no-store",headers:{Accept:"application/json"}});
@@ -185,8 +188,8 @@
     $("ai-edge-audit-status").textContent="LIVE analytika · trvalá história · bez kurzov";
   }
   async function refresh(){
-    try{const [data,ledger,model]=await Promise.all([load(),loadLedger(),loadModel()]);if(data.source!=="Flashscore")throw new Error("Zdroj nie je Flashscore");render(data,ledger,model);}
+    try{const [data,ledger,model,simulation]=await Promise.all([load(),loadLedger(),loadModel(),loadStrategy()]);if(data.source!=="Flashscore")throw new Error("Zdroj nie je Flashscore");render(data,ledger,model);runStrategySimulation(simulation);}
     catch(e){const s=$("ai-edge-state");if(s){s.className="ai-edge-state bad";s.textContent="LIVE DÁTA NEDOSTUPNÉ · "+e.message;}}
   }
-  document.addEventListener("DOMContentLoaded",()=>{if(!$("ai-edge-selector-panel"))return;refresh();window.setInterval(refresh,60000);});
+  document.addEventListener("DOMContentLoaded",()=>{if(!$("ai-edge-selector-panel"))return;$("ai-edge-sim-run")?.addEventListener("click",async()=>{try{runStrategySimulation(await loadStrategy());}catch(e){const out=$("ai-edge-strategy-results");if(out)out.textContent=e.message;}});refresh();window.setInterval(refresh,60000);});
 })();

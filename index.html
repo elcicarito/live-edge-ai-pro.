@@ -784,7 +784,9 @@ details>summary{outline-offset:4px}
 .ai-edge-note{font-size:10px;color:#94a3b8;margin-top:7px;line-height:1.45}
 
 \n.ai-edge-prediction-group{grid-column:1/-1;padding:8px 10px;border:1px solid #334155;border-radius:9px;background:#0d1b2c;display:grid;gap:4px;font-size:10px;color:#b8cbe0}.ai-edge-prediction-group strong{font-size:11px;color:#f8fafc}.ai-edge-prediction-group b{font-size:10px;color:#7dd3fc}
-.ai-edge-prediction-item{padding:9px 10px;border:1px solid #334155;border-radius:9px;background:#101e30;font-size:10px;color:#cbd5e1}\n.ai-edge-prediction-item strong{color:#f8fafc;font-size:11px}\n.ai-edge-prediction-status{float:right;font-weight:900;letter-spacing:.3px}\n.ai-edge-prediction-status.hit{color:#4ade80}.ai-edge-prediction-status.miss{color:#fb7185}.ai-edge-prediction-status.open{color:#fbbf24}.ai-edge-prediction-status.unresolved{color:#a78bfa}.ai-edge-prediction-status.unresolved{color:#94a3b8}\n</style>
+.ai-edge-prediction-item{padding:9px 10px;border:1px solid #334155;border-radius:9px;background:#101e30;font-size:10px;color:#cbd5e1}\n.ai-edge-prediction-item strong{color:#f8fafc;font-size:11px}\n.ai-edge-prediction-status{float:right;font-weight:900;letter-spacing:.3px}\n.ai-edge-prediction-status.hit{color:#4ade80}.ai-edge-prediction-status.miss{color:#fb7185}.ai-edge-prediction-status.open{color:#fbbf24}.ai-edge-prediction-status.unresolved{color:#a78bfa}.ai-edge-prediction-status.unresolved{color:#94a3b8}\n
+.ai-edge-sim-panel{margin-top:14px;padding:11px;border:1px solid #36536b;border-radius:11px;background:#0b1929}.ai-edge-sim-inputs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.ai-edge-sim-inputs label{display:grid;gap:5px;color:#9fb5ca;font-size:9px}.ai-edge-sim-inputs input{width:100%;min-width:0;box-sizing:border-box;padding:9px 7px;border:1px solid #3a536b;border-radius:7px;background:#101f31;color:#f1f5f9;font-size:12px}.ai-edge-sim-button{margin-top:9px;padding:9px 12px;border:1px solid #34789b;border-radius:8px;background:#123149;color:#8bdcff;font-size:10px;font-weight:900}.ai-edge-sim-results{display:grid;gap:7px;margin-top:10px}.ai-edge-sim-meta{color:#9bb1c7;font-size:9px;line-height:1.5}.ai-edge-sim-result{display:grid;gap:4px;padding:10px;border:1px solid #30465d;border-radius:8px;background:#122238;color:#b8cbe0;font-size:9px}.ai-edge-sim-result strong{color:#e2effb;font-size:10px}.ai-edge-sim-result b{color:#7dd3fc;font-size:15px}@media(max-width:480px){.ai-edge-sim-inputs{grid-template-columns:1fr 1fr}.ai-edge-sim-inputs label:first-child{grid-column:1/-1}}
+</style>
 </head>
 
 <body>
@@ -837,6 +839,17 @@ details>summary{outline-offset:4px}
   <div class="ai-edge-section-title">PREDIKČNÁ HISTÓRIA · AUTOMATICKÉ VYHODNOTENIE</div>
   <div id="ai-edge-prediction-summary" class="ai-edge-data-meta"><div>Predikčné záznamy sa pripravujú…</div></div>
   <div id="ai-edge-prediction-log" class="ai-edge-live-list"><p>Zatiaľ bez predikčných záznamov.</p></div>
+  <section id="ai-edge-strategy-simulator" class="ai-edge-sim-panel">
+    <div class="ai-edge-section-title">STRATEGY SIMULATOR · HYPOTETICKÝ BACKTEST</div>
+    <p class="ai-edge-note">Porovnanie dvoch spôsobov vkladov na vyhodnotených AI EDGE predikciách. Zadaj hypotetický desatinný kurz, počiatočný bankroll a základný vklad.</p>
+    <div class="ai-edge-sim-inputs">
+      <label>Hypotetický kurz<input id="ai-edge-sim-odds" type="number" min="1.01" step="0.01" value="2.50"></label>
+      <label>Počiatočný bankroll<input id="ai-edge-sim-bankroll" type="number" min="1" step="1" value="100"></label>
+      <label>Základný vklad<input id="ai-edge-sim-stake" type="number" min="0.01" step="0.01" value="1"></label>
+    </div>
+    <button id="ai-edge-sim-run" type="button" class="ai-edge-sim-button">PREPOČÍTAŤ SIMULÁCIU</button>
+    <div id="ai-edge-strategy-results" class="ai-edge-sim-results">Načítavam vyhodnotené modelové predikcie…</div>
+  </section>
   <p class="ai-edge-note">Predikcie sa ukladajú trvalo do Flashscore dátovej vetvy a automaticky sa vyhodnocujú. Predikčné okná počítajú s pracovným 5-minútovým bufferom na oneskorenie dát. Staršie shadow záznamy uložené iba v jednotlivých prehliadačoch sa do serverovej histórie nedajú automaticky preniesť.</p>
   <p id="ai-edge-warning" class="ai-edge-warning">Index tlaku je experimentálny signál z dostupných štatistík, nie overená pravdepodobnosť gólu. Model sa nesmie zamieňať s potvrdenou úspešnosťou.</p>
   <div class="ai-edge-footer"><span id="ai-edge-updated">Čakám na LIVE feed…</span><span id="ai-edge-audit-status">Režim: LIVE predikcie</span></div>
@@ -996,7 +1009,7 @@ OBNOVIŤ SKENER
 <script src="./scanner.js?v=184"></script>
 <script src="./basketball.js?v=12"></script>
 <script src="./hockey.js?v=1"></script>
-<script src="./ai-edge-selector-ui.js?v=16"></script>
+<script src="./ai-edge-selector-ui.js?v=17"></script>
 
 </body>
 </html>

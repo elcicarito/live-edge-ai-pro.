@@ -1,7 +1,7 @@
 "use strict";
 const assert=require("node:assert/strict");
 const fs=require("node:fs"),os=require("node:os"),path=require("node:path");
-const {addPredictions,evaluate,buildLedger,modelCalibrationGate,minimumOddsThreshold}=require("./ai-edge-live-prediction-ledger");
+const {addPredictions,evaluate,buildLedger,modelCalibrationGate,minimumOddsThreshold,buildStrategyDataset,simulateStrategy}=require("./ai-edge-live-prediction-ledger");
 const now=Date.parse("2026-11-12T20:00:00Z");
 const stats=[
  {label:"Shots on target",home:5,away:2},
@@ -153,4 +153,17 @@ evaluate([btts00One],{source:"Flashscore",recent_history:[
 ]},{matches:{}},now+1000000);
 assert.equal(btts00One.status,"OPEN","one goal after the buffer does not settle a 0-0 BTTS prediction");
 
+const simRows=buildStrategyDataset([
+ {target:"MODEL_15",status:"MISS",createdAt:1,modelMinimumOdds:2.1,modelProbability:.5},
+ {target:"MODEL_15",status:"HIT",createdAt:2,modelMinimumOdds:2.2,modelProbability:.45},
+ {target:"MODEL_25",status:"OPEN",createdAt:3,modelMinimumOdds:2.3,modelProbability:.4},
+ {target:15,status:"HIT",createdAt:4,modelMinimumOdds:2.0,modelProbability:.6},
+ {target:"MODEL_25",status:"HIT",createdAt:5,modelMinimumOdds:2.4,modelProbability:.55}
+]);
+assert.equal(simRows.length,3,"only resolved model predictions enter the simulator");
+assert.deepEqual(simRows.map(x=>x.createdAt),[1,2,5],"simulation data is chronological");
+const sim=simulateStrategy(simRows,{odds:2.3,bankroll:100,baseStake:2,multiplier:1.5,maxStakeMultiple:5});
+assert.equal(sim.flat.bets,2);assert.equal(sim.flat.wins,1);assert.equal(sim.flat.losses,1);assert.equal(sim.flat.skipped,1);assert.equal(sim.flat.net,0.6);
+assert.equal(sim.progressive.bets,2);assert.equal(sim.progressive.net,1.9,"progression raises next stake after loss");assert.equal(sim.progressive.maxLosingStreak,1);
+assert.throws(()=>simulateStrategy(simRows,{odds:1,bankroll:100,baseStake:1}),/Neplatné/);
 console.log("AI Edge live prediction ledger tests passed.");
