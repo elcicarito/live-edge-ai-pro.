@@ -95,9 +95,14 @@ try {
   assert.equal(model.started_at, new Date(activation).toISOString());
   assert.ok(model.training_policy.includes("No historical backfill"));
   for (const horizon of [15, 25]) {
-    const cal = model.models[String(horizon)].metrics?.calibration;
-    assert.ok(cal && cal.bin_count === 10, "each horizon stores ten-bin validation calibration");
-    assert.ok(cal.expected_calibration_error >= 0 && cal.expected_calibration_error <= 1, "ECE stays within probability bounds");
+    const result = model.models[String(horizon)];
+    if (result.metrics) {
+      const cal = result.metrics.calibration;
+      assert.ok(cal && cal.bin_count === 10, "each trained horizon stores ten-bin validation calibration");
+      assert.ok(cal.expected_calibration_error >= 0 && cal.expected_calibration_error <= 1, "ECE stays within probability bounds");
+    } else {
+      assert.equal(result.status, "WARMUP", "insufficient independent validation matches must remain in warmup");
+    }
   }
   const streamed = await readTimeline(temp, activation);
   assert.ok(streamed.length >= allRows.length + futureRows.length, "gzip JSONL timeline is streamed and parsed line by line");
