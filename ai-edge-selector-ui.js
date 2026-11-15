@@ -87,7 +87,9 @@
       const status=item.status==="SHADOW_VALIDATED"?(policy.min_validation_matches?"tieňovo validovaný":"čaká na prísnejšie overenie"):item.status==="NOT_VALIDATED"?"nesplnil validačné kritériá":"zbiera vzorky";
       const progress=(counts.validation_matches||0)+"/"+(policy.min_validation_matches||50)+" nezávislých zápasov";
       const quality=m.log_loss!==undefined?" · log-loss "+Number(m.log_loss).toFixed(3)+" / základ "+Number(m.baseline_log_loss).toFixed(3)+" · Brier "+Number(m.brier).toFixed(3)+" / základ "+Number(m.baseline_brier).toFixed(3):"";
-      return h+" min: "+status+" · tréning "+fmt(counts.train||0)+" vzoriek · overenie "+progress+quality;
+      const cal=m.calibration;
+      const calibrationText=cal?" · kalibrácia ECE "+(Number(cal.expected_calibration_error)*100).toFixed(1)+" % · MCE "+(Number(cal.maximum_calibration_error)*100).toFixed(1)+" % · intervaly "+(cal.populated_bins||0)+"/"+(cal.bin_count||10):" · kalibrácia čaká na nové vyhodnotenie";
+      return h+" min: "+status+" · tréning "+fmt(counts.train||0)+" vzoriek · overenie "+progress+quality+calibrationText;
     }).join(" | ");
     el.textContent="Spustené "+date(model.started_at)+" · oneskorenie započítané: 5 min · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+line+". Každý zápas má pri vyhodnotení rovnakú váhu. Staršie výsledky bez nových validačných pravidiel sa nepovažujú za potvrdenie modelu. Pravdepodobnosti sú tieňové a automaticky vyhodnocované; nejde o potvrdenú produkčnú ani stávkovú výhodu.";
   }
