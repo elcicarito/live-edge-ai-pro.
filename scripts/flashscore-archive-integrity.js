@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const zlib = require("node:zlib");
+const readline = require("node:readline");
 
 const DATA = path.resolve(process.argv[2] || path.join(__dirname, "..", "data"));
 const MANIFEST = path.join(DATA, "flashscore-archive-integrity.json");
@@ -16,14 +17,26 @@ function sha256(buffer) {
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
-function inspectTimeline(file) {
-  const raw = fs.readFileSync(file);
-  const decoded = zlib.gunzipSync(raw).toString("utf8");
-  const lines = decoded.split(/\r?\n/).filter(Boolean);
-  for (const line of lines) JSON.parse(line);
-  return { bytes: raw.length, sha256: sha256(raw), snapshots: lines.length };
+async function inspectTimeline(file) {
+  const hash = crypto.createHash("sha256");
+  const hashStream = fs.createReadStream(file);
+  hashStream.on("data", chunk => hash.update(chunk));
+  const rawStats = fs.statSync(file);
+  let snapshots = 0;
+  const input = fs.createReadStream(file).pipe(zlib.createGunzip());
+  const lines = readline.createInterface({ input, crlfDelay: Infinity });
+  for await (const line of lines) {
+    if (!line.trim()) continue;
+    JSON.parse(line);
+    snapshots++;
+  }
+  await new Promise((resolve, reject) => {
+    hashStream.on("end", resolve);
+    hashStream.on("error", reject);
+  });
+  return { bytes: rawStats.size, sha256: hash.digest("hex"), snapshots };
 }
-function buildManifest() {
+async function buildManifest() {
   if (!fs.existsSync(ARCHIVE) || !fs.existsSync(INDEX)) {
     throw new Error("Chýba match archive alebo timeline index; manifest sa nevytvorí.");
   }
@@ -55,7 +68,7 @@ function buildManifest() {
     }
     const fullPath = path.join(DATA, entry.file);
     if (!fs.existsSync(fullPath)) throw new Error("Chýba indexovaný timeline súbor: " + entry.file);
-    const stats = inspectTimeline(fullPath);
+    const stats = await inspectTimeline(fullPath);
     files[entry.file] = stats;
     timelineSnapshots += stats.snapshots;
     timelineFiles += 1;
@@ -73,8 +86,8 @@ function buildManifest() {
   };
 }
 
-function main() {
-  const next = buildManifest();
+async function main() {
+  const next = await buildManifest();
   if (process.argv.includes("--verify")) {
     if (!fs.existsSync(MANIFEST)) throw new Error("Chýba integrity manifest.");
     const previous = readJson(MANIFEST);
@@ -100,9 +113,7 @@ function main() {
   }));
 }
 
-try {
-  main();
-} catch (error) {
+main().catch(error => {
   console.error("FLASHSCORE ARCHIVE INTEGRITY FAILED:", error.message);
   process.exit(1);
-}
+});
