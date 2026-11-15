@@ -17,6 +17,8 @@ assert.equal(labelLateFT(sample,positiveRows,positiveTransitions,outcome),1,"goa
 const ambiguousRows=[row(70),sample,row(82,1),row(90,1)];
 const ambiguousTransitions=base.goalTransitions(ambiguousRows).transitions;
 assert.equal(labelLateFT(sample,ambiguousRows,ambiguousTransitions,outcome),null,"goal interval crossing the 5-minute lag boundary is excluded");
+const extraTime={...outcome,final_match:{status_text:"Extra time"}};
+assert.equal(labelLateFT(sample,rows,[],extraTime),null,"extra-time matches are excluded from the regular-time target");
 const abandoned={...outcome,final_match:{status_text:"Abandoned"}};
 assert.equal(labelLateFT(sample,rows,[],abandoned),null,"abandoned match is never a negative");
 const many=[];
