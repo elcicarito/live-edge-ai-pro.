@@ -162,16 +162,19 @@ evaluate([btts00One],{source:"Flashscore",recent_history:[
 assert.equal(btts00One.status,"OPEN","one goal after the buffer does not settle a 0-0 BTTS prediction");
 
 const simRows=buildStrategyDataset([
- {target:"MODEL_15",status:"MISS",createdAt:1,modelMinimumOdds:2.1,modelProbability:.5},
- {target:"MODEL_15",status:"HIT",createdAt:2,modelMinimumOdds:2.2,modelProbability:.45},
- {target:"MODEL_25",status:"OPEN",createdAt:3,modelMinimumOdds:2.3,modelProbability:.4},
- {target:15,status:"HIT",createdAt:4,modelMinimumOdds:2.0,modelProbability:.6},
- {target:"MODEL_25",status:"HIT",createdAt:5,modelMinimumOdds:2.4,modelProbability:.55}
+ {matchId:"match-a",target:"MODEL_15",status:"MISS",createdAt:1,modelMinimumOdds:2.1,modelProbability:.5},
+ {matchId:"match-a",target:"MODEL_15",status:"HIT",createdAt:2,modelMinimumOdds:2.2,modelProbability:.45},
+ {matchId:"match-open",target:"MODEL_25",status:"OPEN",createdAt:3,modelMinimumOdds:2.3,modelProbability:.4},
+ {matchId:"match-ignored",target:15,status:"HIT",createdAt:4,modelMinimumOdds:2.0,modelProbability:.6},
+ {matchId:"match-b",target:"MODEL_25",status:"HIT",createdAt:5,modelMinimumOdds:2.2,modelProbability:.55},
+ {matchId:"match-c",target:"MODEL_25",status:"MISS",createdAt:6,modelMinimumOdds:2.5,modelProbability:.45}
 ]);
-assert.equal(simRows.length,3,"only resolved model predictions enter the simulator");
-assert.deepEqual(simRows.map(x=>x.createdAt),[1,2,5],"simulation data is chronological");
+assert.equal(simRows.length,4,"only resolved model predictions enter the simulator");
+assert.deepEqual(simRows.map(x=>x.createdAt),[1,2,5,6],"simulation data is chronological");
+assert.equal(simRows[0].matchId,"match-a","match identity is retained for deduplication");
 const sim=simulateStrategy(simRows,{odds:2.3,bankroll:100,baseStake:2,multiplier:1.5,maxStakeMultiple:5});
-assert.equal(sim.flat.bets,2);assert.equal(sim.flat.wins,1);assert.equal(sim.flat.losses,1);assert.equal(sim.flat.skipped,1);assert.equal(sim.flat.net,0.6);
+assert.equal(sim.flat.bets,2,"at most one bet is counted per match");
+assert.equal(sim.flat.wins,1);assert.equal(sim.flat.losses,1);assert.equal(sim.flat.skipped,2);assert.equal(sim.flat.skippedDuplicateMatches,1);assert.equal(sim.flat.net,0.6);
 assert.equal(sim.progressive.bets,2);assert.equal(sim.progressive.net,1.9,"progression raises next stake after loss");assert.equal(sim.progressive.maxLosingStreak,1);
 assert.throws(()=>simulateStrategy(simRows,{odds:1,bankroll:100,baseStake:1}),/Neplatné/);
 console.log("AI Edge live prediction ledger tests passed.");
