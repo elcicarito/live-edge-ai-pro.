@@ -91,7 +91,16 @@
       const calibrationText=cal?" · kalibrácia ECE "+(Number(cal.expected_calibration_error)*100).toFixed(1)+" % · MCE "+(Number(cal.maximum_calibration_error)*100).toFixed(1)+" % · intervaly "+(cal.populated_bins||0)+"/"+(cal.bin_count||10):" · kalibrácia čaká na nové vyhodnotenie";
       return h+" min: "+status+" · tréning "+fmt(counts.train||0)+" vzoriek · overenie "+progress+quality+calibrationText;
     }).join(" | ");
-    el.textContent="Spustené "+date(model.started_at)+" · oneskorenie započítané: 5 min · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+line+". Každý zápas má pri vyhodnotení rovnakú váhu. Staršie výsledky bez nových validačných pravidiel sa nepovažujú za potvrdenie modelu. Pravdepodobnosti sú tieňové a automaticky vyhodnocované; nejde o potvrdenú produkčnú ani stávkovú výhodu.";
+    const calibrationTables=[15,25].map(h=>{
+      const item=model.models?.[String(h)]||{},cal=item.metrics?.calibration;
+      if(!cal||!Array.isArray(cal.bins)||!cal.bins.length)return "";
+      const rows=cal.bins.map(b=>{
+        const sparse=Number(b.matches_weight||0)<5;
+        return "<tr><td>"+esc(b.range)+" %</td><td>"+fmt(b.count)+"</td><td>"+Number(b.matches_weight||0).toFixed(1)+"</td><td>"+(Number(b.mean_predicted)*100).toFixed(1)+" %</td><td>"+(Number(b.observed_rate)*100).toFixed(1)+" %</td><td>"+(Number(b.absolute_error)*100).toFixed(1)+" %"+(sparse?" · malá vzorka":"")+"</td></tr>";
+      }).join("");
+      return "<div style='overflow-x:auto;margin:8px 0 12px'><b>Kalibrácia "+h+" min · "+(cal.populated_bins||0)+"/"+(cal.bin_count||10)+" obsadených intervalov</b><table style='width:100%;border-collapse:collapse;font-size:12px;margin-top:5px'><thead><tr><th>Rozsah</th><th>Počet</th><th>Váha zápasov</th><th>Predikcia</th><th>Realita</th><th>Odchýlka</th></tr></thead><tbody>"+rows+"</tbody></table></div>";
+    }).join("");
+    el.innerHTML="<div>Spustené "+esc(date(model.started_at))+" · oneskorenie započítané: 5 min · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+esc(line)+". Každý zápas má pri vyhodnotení rovnakú váhu. Staršie výsledky bez nových validačných pravidiel sa nepovažujú za potvrdenie modelu. Pravdepodobnosti sú tieňové a automaticky vyhodnocované; nejde o potvrdenú produkčnú ani stávkovú výhodu.</div>"+calibrationTables;
   }
 
   function renderPredictionLedger(ledger){
