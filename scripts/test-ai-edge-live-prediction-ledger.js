@@ -117,7 +117,11 @@ try{
  fs.writeFileSync(path.join(temp,"flashscore-primary-current.json"),JSON.stringify(feed));
  fs.writeFileSync(path.join(temp,"flashscore-confirmed-outcomes.json"),JSON.stringify({matches:{}}));
  const result=buildLedger(temp,new Date(now));
- const historyPath=path.join(temp,"ai-edge-prediction-history.json");\n const compressedPath=historyPath+".gz";\n assert.equal(fs.existsSync(historyPath),false,"uncompressed permanent history is removed after compression");\n assert.equal(fs.existsSync(compressedPath),true,"permanent history is stored as gzip");\n const saved=JSON.parse(zlib.gunzipSync(fs.readFileSync(compressedPath)).toString("utf8"));
+ const historyPath=path.join(temp,"ai-edge-prediction-history.json");
+ const compressedPath=historyPath+".gz";
+ assert.equal(fs.existsSync(historyPath),false,"uncompressed permanent history is removed after compression");
+ assert.equal(fs.existsSync(compressedPath),true,"permanent history is stored as gzip");
+ const saved=JSON.parse(zlib.gunzipSync(fs.readFileSync(compressedPath)).toString("utf8"));
  const view=JSON.parse(fs.readFileSync(path.join(temp,"ai-edge-prediction-live.json"),"utf8"));
  assert.equal(saved.mode,"LIVE_PREDICTION_LEDGER");
  assert(saved.by_target["15"],"per-target summary saved");
@@ -126,7 +130,11 @@ try{
  assert.equal(view.mode,"LIVE_PREDICTION_LEDGER_VIEW");
  assert.equal(view.total_predictions,saved.total_predictions);
  assert(view.predictions.length>0,"compact live view includes recent predictions");
- assert(view.predictions.every(p=>!Object.prototype.hasOwnProperty.call(p,"snapshots")),"compact live view excludes large evaluation timelines");\n const second=buildLedger(temp,new Date(now+60000));\n const savedAgain=JSON.parse(zlib.gunzipSync(fs.readFileSync(compressedPath)).toString("utf8"));\n assert.equal(savedAgain.total_predictions,saved.total_predictions,"gzip history is reloaded without losing existing prediction rows");\n assert.equal(second.total,saved.total_predictions,"subsequent runs continue from compressed permanent history");
+ assert(view.predictions.every(p=>!Object.prototype.hasOwnProperty.call(p,"snapshots")),"compact live view excludes large evaluation timelines");
+ const second=buildLedger(temp,new Date(now+60000));
+ const savedAgain=JSON.parse(zlib.gunzipSync(fs.readFileSync(compressedPath)).toString("utf8"));
+ assert.equal(savedAgain.total_predictions,saved.total_predictions,"gzip history is reloaded without losing existing prediction rows");
+ assert.equal(second.total,saved.total_predictions,"subsequent runs continue from compressed permanent history");
 }finally{fs.rmSync(temp,{recursive:true,force:true});}
 
 
