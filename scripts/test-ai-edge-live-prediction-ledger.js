@@ -1,7 +1,7 @@
 "use strict";
 const assert=require("node:assert/strict");
 const fs=require("node:fs"),os=require("node:os"),path=require("node:path");
-const {addPredictions,evaluate,buildLedger,modelCalibrationGate}=require("./ai-edge-live-prediction-ledger");
+const {addPredictions,evaluate,buildLedger,modelCalibrationGate,minimumOddsThreshold}=require("./ai-edge-live-prediction-ledger");
 const now=Date.parse("2026-11-12T20:00:00Z");
 const stats=[
  {label:"Shots on target",home:5,away:2},
@@ -36,10 +36,15 @@ addPredictions(modelRows,feed,now,validatedModel);
 assert.equal(modelCalibrationGate({metrics:{calibration:{bins:[{range:"50-60",matches_weight:4,absolute_error:0.01}]}}},0.55,{}).allowed,false,"low-support bins force abstention");
 assert.equal(modelCalibrationGate({metrics:{calibration:{bins:[{range:"50-60",matches_weight:12,absolute_error:0.12}]}}},0.55,{}).allowed,false,"poor calibration forces abstention");
 assert.equal(modelCalibrationGate({metrics:{calibration:{bins:[{range:"50-60",matches_weight:12,absolute_error:0.02}]}}},0.55,{}).allowed,true,"reliable bins allow prediction");
+assert.equal(minimumOddsThreshold(0.55,0.02,0.05),1.98,"minimum odds use a conservative probability and five-percent edge");
+assert.equal(minimumOddsThreshold(0.55,0.12,0.05),1.98,"threshold helper remains conservative even with a large calibration error");
+assert.equal(minimumOddsThreshold(0.55,0.02,0),1.89,"zero safety margin returns conservative fair odds");
+assert.equal(minimumOddsThreshold(0.55,0.02,1),null,"invalid safety margin is rejected");
 const model15=modelRows.find(p=>p.target==="MODEL_15");
 const model25=modelRows.find(p=>p.target==="MODEL_25");
 assert(model15,"validated 15-minute shadow model creates a prediction");
 assert.equal(model15.modelProbability,0.5,"15-minute model probability is calculated from stored weights");
+assert.equal(model15.modelMinimumOdds,2.19,"model prediction stores conservative minimum odds with five-percent edge");
 assert.equal(model15.deadlineMinute,70,"15-minute model uses the five-minute delay buffer");
 assert(model25,"validated 25-minute shadow model creates a prediction");
 assert.equal(model25.modelProbability,0.5,"model probability is calculated from stored weights");
