@@ -124,12 +124,12 @@
     }
   }
   async function loadLedger(){
-    const url="https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-prediction-history.json?t="+Date.now();
+    const url="https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-prediction-live.json?t="+Date.now();
     const res=await fetch(url,{cache:"no-store",headers:{Accept:"application/json"}});
     if(res.status===404)return null;
     if(!res.ok)throw new Error("Predikčná história HTTP "+res.status);
     const data=await res.json();
-    if(data.source!=="Flashscore"||data.mode!=="LIVE_PREDICTION_LEDGER")throw new Error("Neplatný formát trvalej histórie");
+    if(data.source!=="Flashscore"||data.mode!=="LIVE_PREDICTION_LEDGER_VIEW")throw new Error("Neplatný formát trvalej histórie");
     return data;
   }
   function render(data,ledger,model){
@@ -169,7 +169,7 @@
       '<div class="ai-edge-note">'+esc(statText)+' · '+(fx.delta.ready?"nová aktivita za "+fx.delta.minutes.toFixed(1)+" min":"bez platného porovnania dvoch meraní")+' · štatistiky: '+(fx.age===null?"neznámy čas":Math.round(fx.age)+" min staré")+'</div></article>';
     }).join(""):'<p>Momentálne nie sú vo feede aktívne Flashscore zápasy.</p>';
     $("ai-edge-data-meta").innerHTML='<div><span>Zdroj</span><b>Flashscore LIVE · '+esc(data.data_status||"—")+'</b></div><div><span>História v LIVE feede</span><b>'+fmt(data.recent_history_count||history.length)+' snímok</b></div><div><span>Čerstvé štatistiky</span><b>'+fresh+' / '+records.length+'</b></div>';
-    $("ai-edge-warning").textContent="Index tlaku je iba opis aktivity, nie pravdepodobnosť. Samostatný 25-minútový AI Edge model prešiel tieňovou validáciou a jeho pravdepodobnosti sa ukladajú aj automaticky vyhodnocujú. Nie je to produkčne overený ani ziskový systém; 15-minútový model zatiaľ validáciou neprešiel. Päťminútový buffer je pracovný predpoklad oneskorenia dát.";
+    $("ai-edge-warning").textContent="Index tlaku je iba opis aktivity, nie pravdepodobnosť. Samostatné 15- a 25-minútové AI Edge modely prešli tieňovou validáciou a ich pravdepodobnosti sa ukladajú aj automaticky vyhodnocujú. Nie je to produkčne overený ani ziskový systém. Päťminútový buffer je pracovný predpoklad oneskorenia dát.";
     $("ai-edge-updated").textContent="Feed: "+date(data.collected_at)+" · automatická obnova každých 60 s";
     $("ai-edge-audit-status").textContent="LIVE analytika · trvalá história · bez kurzov";
   }
