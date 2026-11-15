@@ -49,8 +49,8 @@ function modelProbability(weights,x){
  let z=weights[0];for(let i=0;i<x.length;i++)z+=x[i]*weights[i+1];
  return 1/(1+Math.exp(-Math.max(-20,Math.min(20,z))));
 }
-function modelIsValidated(model){
- const item=model?.models?.["25"],policy=model?.validation_policy||{},counts=item?.counts||{},metrics=item?.metrics||{};
+function modelIsValidated(model,horizon=25){
+ const item=model?.models?.[String(horizon)],policy=model?.validation_policy||{},counts=item?.counts||{},metrics=item?.metrics||{};
  return model?.source==="Flashscore"&&model?.mode==="FORWARD_ONLY_LIVE_TRAINING"&&
  item?.status==="SHADOW_VALIDATED"&&Array.isArray(item.weights)&&item.weights.length===17&&
  Number(counts.validation_matches)>=Math.max(50,Number(policy.min_validation_matches)||50)&&
@@ -67,12 +67,17 @@ const isEnded=m=>/finished|ended|after penalties|abandoned|cancelled|postponed|s
 function nonReg(m){const t=String(m?.status_text||"")+" "+String(m?.stage||""),min=Number(m?.live_minute);return /after penalties|penalt(?:y|ies)|after extra time|\baet\b|abandoned|cancelled|postponed|suspended/i.test(t)||(Number.isFinite(min)&&min>100);}
 function make(m,target,min,now,fx,extra={}){const hs=Number(m.home_score)||0,as=Number(m.away_score)||0,b=target==="FT"?"FT":target==="BTTS"?hs+":"+as:target==="RESULT_1X2"?Math.floor(min/10)+":"+hs+":"+as:Math.floor(min/5)+":"+hs+":"+as;const horizon=target==="MODEL_15"?15:target==="MODEL_25"?25:Number(target);const deadline=["FT","NEXT_TEAM","BTTS","RESULT_1X2"].includes(target)?120:min+DISPLAY_DELAY_MINUTES+(Number.isFinite(horizon)?horizon:0);return{id:[String(m.id),target,b].join("|"),matchId:String(m.id),source:"Flashscore",home:m.home,away:m.away,competition:m.competition||"",target,targetLabel:TARGETS.find(x=>x.id===target)?.label||String(target),startMinute:min,deadlineMinute:deadline,actionableAfterMinute:min+DISPLAY_DELAY_MINUTES,createdAt:now,startHome:hs,startAway:as,startGoals:hs+as,startStats:fx.values,startDelta:fx.delta,pressureHome:fx.home,pressureAway:fx.away,pressure:Math.max(fx.home,fx.away),pressureSide:fx.home>fx.away?m.home:fx.away>fx.home?m.away:"Vyrovnaný",status:"OPEN",snapshots:[{time:now,minute:min,home_score:hs,away_score:as,status:m.status,status_text:m.status_text||"",stage:m.stage||""}],...extra};}
 function addPredictions(items,feed,now,model=null){const hist=feed.recent_history||[],collected=feed.collected_at||new Date(now).toISOString();for(const r of feed.records||[]){const m=r?.match;if(!m||m.source!=="Flashscore"||m.status!=="live")continue;const min=minute(m);if(!Number.isFinite(min))continue;const fx=features(m,hist,r.collected_at||collected,now);if(!fx.ready)continue;const predictionTime=Date.parse(r.collected_at||collected)||now;const pressure=Math.max(fx.home,fx.away);
-if(modelIsValidated(model)&&min>=1&&min<=90&&!/(half.?time|\bht\b|after extra time|penalt|abandoned|cancelled|postponed|suspended)/i.test(String(m.stage||""))){
+if(min>=1&&min<=90&&!/(half.?time|\bht\b|after extra time|penalt|abandoned|cancelled|postponed|suspended)/i.test(String(m.stage||""))){
  const vector=modelFeatureVector(m,hist,r.collected_at||collected);
- const probability=vector?modelProbability(model.models["25"].weights,vector):null;
- if(probability!==null){
-  const p=make(m,"MODEL_25",min,predictionTime,fx,{modelProbability:Number(probability.toFixed(6)),modelStatus:"SHADOW_VALIDATED",modelUpdatedAt:model.updated_at,modelValidationMatches:model.models["25"].counts.validation_matches,modelRelativeLogLossGain:model.models["25"].metrics.relative_log_loss_gain,modelRelativeBrierGain:model.models["25"].metrics.relative_brier_gain});
-  if(!items.some(x=>x.id===p.id))items.push(p);
+ for(const horizon of [15,25]){
+  if(!modelIsValidated(model,horizon))continue;
+  const item=model.models[String(horizon)];
+  const probability=vector?modelProbability(item.weights,vector):null;
+  if(probability!==null){
+   const target="MODEL_"+horizon;
+   const p=make(m,target,min,predictionTime,fx,{modelProbability:Number(probability.toFixed(6)),modelStatus:"SHADOW_VALIDATED",modelUpdatedAt:model.updated_at,modelValidationMatches:item.counts.validation_matches,modelRelativeLogLossGain:item.metrics.relative_log_loss_gain,modelRelativeBrierGain:item.metrics.relative_brier_gain});
+   if(!items.some(x=>x.id===p.id))items.push(p);
+  }
  }
 }
 for(const t of TARGETS.filter(x=>[15,25,"FT"].includes(x.id))){if(pressure<t.threshold||(t.id!=="FT"&&min>90-t.id)||(t.id==="FT"&&min>85))continue;const p=make(m,t.id,min,predictionTime,fx);if(!items.some(x=>x.id===p.id))items.push(p);}
