@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
+const readline = require("node:readline");
 
 const DATA = path.resolve(process.argv[2] || path.join(__dirname, "..", "data"));
 const ARCHIVE = path.join(DATA, "flashscore-match-archive.json");
@@ -26,7 +27,7 @@ function percentile(values, p) {
 function ratio(count, total) {
   return total ? Number((count / total).toFixed(4)) : 0;
 }
-function buildQualityReport(dataDir = DATA) {
+async function buildQualityReport(dataDir = DATA) {
   const archivePath = path.join(dataDir, "flashscore-match-archive.json");
   const indexPath = path.join(dataDir, "flashscore-timeline-index.json");
   const archive = readJson(archivePath);
@@ -60,9 +61,11 @@ function buildQualityReport(dataDir = DATA) {
     }
     const file = path.join(dataDir, week.file);
     if (!fs.existsSync(file)) throw new Error("Chýba timeline súbor: " + week.file);
-    const text = zlib.gunzipSync(fs.readFileSync(file)).toString("utf8");
     let fileRows = 0;
-    for (const line of text.split(/\r?\n/).filter(Boolean)) {
+    const input = fs.createReadStream(file).pipe(zlib.createGunzip());
+    const lines = readline.createInterface({ input, crlfDelay: Infinity });
+    for await (const line of lines) {
+      if (!line.trim()) continue;
       let row;
       try { row = JSON.parse(line); } catch { malformedRows++; continue; }
       fileRows++;
@@ -273,18 +276,17 @@ function buildQualityReport(dataDir = DATA) {
   return report;
 }
 
-function main() {
-  const report = buildQualityReport(DATA);
+async function main() {
+  const report = await buildQualityReport(DATA);
   fs.writeFileSync(OUTPUT, JSON.stringify(report, null, 2) + "\n");
   console.log("Flashscore archive quality report created:", JSON.stringify(report.summary));
   console.log("Flashscore archive cadence:", JSON.stringify(report.cadence_minutes));
   console.log("Flashscore archive temporal coverage:", JSON.stringify(report.temporal_coverage));
 }
 if (require.main === module) {
-  try { main(); }
-  catch (error) {
+  main().catch(error => {
     console.error("FLASHSCORE ARCHIVE QUALITY FAILED:", error.message);
     process.exit(1);
-  }
+  });
 }
 module.exports = { buildQualityReport };
