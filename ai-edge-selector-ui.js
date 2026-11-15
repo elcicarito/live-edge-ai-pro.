@@ -89,7 +89,7 @@
       const quality=m.log_loss!==undefined?" · log-loss "+Number(m.log_loss).toFixed(3)+" / základ "+Number(m.baseline_log_loss).toFixed(3)+" · Brier "+Number(m.brier).toFixed(3)+" / základ "+Number(m.baseline_brier).toFixed(3):"";
       return h+" min: "+status+" · tréning "+fmt(counts.train||0)+" vzoriek · overenie "+progress+quality;
     }).join(" | ");
-    el.textContent="Spustené "+date(model.started_at)+" · oneskorenie započítané: 5 min · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+line+". Každý zápas má pri vyhodnotení rovnakú váhu. Staršie výsledky bez nových validačných pravidiel sa nepovažujú za potvrdenie modelu. Ostré pravdepodobnosti sa nezobrazujú.";
+    el.textContent="Spustené "+date(model.started_at)+" · oneskorenie započítané: 5 min · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+line+". Každý zápas má pri vyhodnotení rovnakú váhu. Staršie výsledky bez nových validačných pravidiel sa nepovažujú za potvrdenie modelu. Pravdepodobnosti sú tieňové a automaticky vyhodnocované; nejde o potvrdenú produkčnú ani stávkovú výhodu.";
   }
 
   function renderPredictionLedger(ledger){
@@ -111,7 +111,7 @@
       const allRows=ledger.predictions||[];const rows=allRows.slice(0,30);
       list.innerHTML=rows.length?rows.map(p=>{
         const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":p.status==="UNRESOLVED"?"NEVYHODNOTITEĽNÉ":"OTVORENÉ";
-        const target=p.target==="RESULT_1X2"?"1X2 · "+(p.predictedOutcome==="HOME"?p.home:p.predictedOutcome==="AWAY"?p.away:"remíza"):p.target==="NEXT_TEAM"?"ďalší skórujúci · "+esc(p.predictedTeam||"—"):p.target==="BTTS"?"oba tímy skórujú do FT":p.target==="MODEL_25"?"AI EDGE · gól do 25 min · "+(Number.isFinite(Number(p.modelProbability))?(Number(p.modelProbability)*100).toFixed(1)+"% SHADOW":"bez pravdepodobnosti"):p.target==="FT"?"gól do konca zápasu":"gól do "+p.target+" min";
+        const target=p.target==="RESULT_1X2"?"1X2 · "+(p.predictedOutcome==="HOME"?p.home:p.predictedOutcome==="AWAY"?p.away:"remíza"):p.target==="NEXT_TEAM"?"ďalší skórujúci · "+esc(p.predictedTeam||"—"):p.target==="BTTS"?"oba tímy skórujú do FT":(p.target==="MODEL_15"||p.target==="MODEL_25")?"AI EDGE · gól do "+(p.target==="MODEL_15"?15:25)+" min · "+(Number.isFinite(Number(p.modelProbability))?(Number(p.modelProbability)*100).toFixed(1)+"% SHADOW":"bez pravdepodobnosti"):p.target==="FT"?"gól do konca zápasu":"gól do "+p.target+" min";
         const result=p.resultScore?" · výsledok "+p.resultScore:"";
         const actual=p.actualOutcome?" · skutočný výsledok "+(p.actualOutcome==="HOME"?p.home:p.actualOutcome==="AWAY"?p.away:"remíza"):"";
         const pressure=p.target==="BTTS"?" · tlak tímu bez gólu "+fmt(p.scorelessPressure)+"/100":" · tlak "+fmt(p.pressure)+"/100";
@@ -156,11 +156,11 @@
       const minute=m.live_minute??"—", score=(m.home_score??0)+":"+ (m.away_score??0);
       const horizonState=h=>{
         const item=model?.models?.[String(h)]||{},policy=model?.validation_policy||{},counts=item.counts||{};
-        if(item.status==="SHADOW_VALIDATED"&&Array.isArray(item.weights)&&item.weights.length) return "Model prešiel tieňovou validáciou; živý výpočet pravdepodobnosti ešte nie je zapojený";
+        if(item.status==="SHADOW_VALIDATED"&&Array.isArray(item.weights)&&item.weights.length) return "Model tieňovo validovaný · pravdepodobnosť sa zapisuje pri vhodných LIVE dátach";
         if(item.status==="NOT_VALIDATED") return "Model nesplnil validačné kritériá · bez predikcie";
         return "Tréning / overovanie · "+fmt(counts.validation_matches||0)+"/"+fmt(policy.min_validation_matches||50)+" nezávislých zápasov";
       };
-      const f15=horizonState(15);const modelRow=(ledger?.predictions||[]).find(p=>p.matchId===String(m.id)&&p.target==="MODEL_25");const f25=modelRow&&Number.isFinite(Number(modelRow.modelProbability))?"AI EDGE SHADOW · "+(Number(modelRow.modelProbability)*100).toFixed(1)+"% · "+(modelRow.status==="OPEN"?"čaká na výsledok":modelRow.status):horizonState(25);
+      const modelRow15=(ledger?.predictions||[]).find(p=>p.matchId===String(m.id)&&p.target==="MODEL_15");const modelRow25=(ledger?.predictions||[]).find(p=>p.matchId===String(m.id)&&p.target==="MODEL_25");const modelLine=(row,h)=>row&&Number.isFinite(Number(row.modelProbability))?"AI EDGE SHADOW · "+(Number(row.modelProbability)*100).toFixed(1)+"% · "+(row.status==="OPEN"?"čaká na výsledok":row.status):horizonState(h);const f15=modelLine(modelRow15,15);const f25=modelLine(modelRow25,25);
       const statText=["SOT "+(fx.values.sot?fx.values.sot.home+":"+fx.values.sot.away:"—"),"strely "+(fx.values.shots?fx.values.shots.home+":"+fx.values.shots.away:"—"),"rohy "+(fx.values.corners?fx.values.corners.home+":"+fx.values.corners.away:"—"),"xG "+(fx.values.xg?fx.values.xg.home.toFixed(2)+":"+fx.values.xg.away.toFixed(2):"—"),"xGOT "+(fx.values.xgot?fx.values.xgot.home.toFixed(2)+":"+fx.values.xgot.away.toFixed(2):"—"),"v šestnástke "+(fx.values.box?fx.values.box.home+":"+fx.values.box.away:"—")].join(" · ");
       return '<article class="ai-edge-match"><div class="ai-edge-match-head"><span>'+esc(m.home)+' – '+esc(m.away)+'</span><span>'+esc(minute)+'′ · '+esc(score)+'</span></div><div class="ai-edge-match-sub">'+esc(m.competition||"")+' · dominantný tlak: '+esc(top)+'</div>'+
       '<div class="ai-edge-teamrow"><span>'+esc(m.home)+' · '+h[0]+'</span><b>'+fx.home+'/100</b></div><div class="ai-edge-bar"><i style="width:'+fx.home+'%"></i></div>'+
