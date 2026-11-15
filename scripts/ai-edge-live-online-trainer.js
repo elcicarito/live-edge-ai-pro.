@@ -375,6 +375,7 @@ async function run(dataDir = DATA, nowDate = new Date()) {
       metrics_weighted_per_match: true
     },
     prediction_policy: "Weights stay shadow-only; validation requires at least 50 independent validation matches and improvement in both match-weighted log loss and Brier score.",
+    calibration_policy: { min_effective_match_weight: 8, max_absolute_error: 0.08, abstain_outside_reliable_bins: true },
     total_labeled_samples: total,
     validated_horizons: ready,
     status: ready ? "SHADOW_VALIDATION_AVAILABLE" : "COLLECTING_LIVE_TRAINING_DATA",
