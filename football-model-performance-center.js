@@ -2,7 +2,7 @@
 (() => {
   const ROOT = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./";
   const URLS = {
-    btts: ROOT + "live-data/data/btts-signal-archive.json",
+    btts: ROOT + "live-data-v2/data/flashscore-btts-signal-archive.json",
     model: ROOT + "live-data-v2/data/ai-edge-live-model.json",
     late: ROOT + "live-data-v2/data/ai-edge-live-late-ft-model.json",
     ledger: ROOT + "live-data-v2/data/ai-edge-prediction-live.json"
