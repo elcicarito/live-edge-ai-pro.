@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "source": "Flashscore",
+  "mode": "FORWARD_ONLY_LIVE_TRAINING_LATE_FT",
+  "target": "At least one goal after the 5-minute effective decision lag until confirmed regular-time full-time",
+  "started_at": "2026-11-15T19:35:08.077Z",
+  "updated_at": "2026-11-15T19:35:08.077Z",
+  "lag_minutes": 5,
+  "observation_minute_range": [
+    70,
+    85
+  ],
+  "sample_policy": "One latest eligible snapshot per match, captured after activation. No historical backfill. Ambiguous goals crossing the lag boundary and non-regular-time/abandoned matches are excluded.",
+  "validation_policy": {
+    "min_train_samples": 500,
+    "min_validation_samples": 300,
+    "min_train_matches": 100,
+    "min_validation_matches": 50,
+    "min_relative_log_loss_gain": 0.01,
+    "min_relative_brier_gain": 0.005,
+    "metrics_weighted_per_match": true
+  },
+  "calibration_policy": {
+    "min_effective_match_weight": 8,
+    "max_absolute_error": 0.08,
+    "abstain_outside_reliable_bins": true
+  },
+  "total_labeled_matches": 0,
+  "model": {
+    "status": "WARMUP",
+    "counts": {
+      "train": 0,
+      "validation": 0,
+      "train_matches": 0,
+      "validation_matches": 0,
+      "train_positive": 0,
+      "train_negative": 0,
+      "validation_positive": 0,
+      "validation_negative": 0
+    },
+    "metrics": null,
+    "weights": null
+  },
+  "status": "COLLECTING_OR_NOT_VALIDATED"
+}
