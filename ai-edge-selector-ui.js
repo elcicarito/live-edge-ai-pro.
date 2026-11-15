@@ -173,7 +173,8 @@
       const m=current.record.match||{},minute=Number.parseInt(m.live_minute,10);
       if(!Number.isFinite(minute)||minute<1||minute>90)continue;
       const deadline=Number(row.deadlineMinute),after=Number(row.actionableAfterMinute);
-      if(!Number.isFinite(deadline)||minute>deadline)continue;
+      // Po započítaní päťminútového oneskorenia nesmie kandidát vstúpiť do rozhodovacieho okna až od 90. minúty; reálny čas na 25-minútové rozhodnutie by už nebol k dispozícii.
+      if(!Number.isFinite(after)||after>=90||!Number.isFinite(deadline)||deadline<=after||minute>deadline)continue;
       const p=Number(row.modelProbability),error=Number(row.modelCalibrationError??0);
       candidates.push({row,current,minute,conservative:p-error,after,deadline});
     }
