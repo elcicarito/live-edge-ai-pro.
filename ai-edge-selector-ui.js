@@ -232,8 +232,27 @@
     $("ai-edge-audit-status").textContent="LIVE analytika · trvalá história · bez kurzov";
   }
   async function refresh(){
-    try{const [data,ledger,model,simulation]=await Promise.all([load(),loadLedger(),loadModel(),loadStrategy()]);if(data.source!=="Flashscore")throw new Error("Zdroj nie je Flashscore");render(data,ledger,model);runStrategySimulation(simulation);}
-    catch(e){const s=$("ai-edge-state");if(s){s.className="ai-edge-state bad";s.textContent="LIVE DÁTA NEDOSTUPNÉ · "+e.message;}}
+    const [feedResult,ledgerResult,modelResult,simulationResult]=await Promise.allSettled([load(),loadLedger(),loadModel(),loadStrategy()]);
+    if(feedResult.status!=="fulfilled"){
+      const s=$("ai-edge-state");if(s){s.className="ai-edge-state bad";s.textContent="LIVE DÁTA NEDOSTUPNÉ · "+(feedResult.reason?.message||"chyba LIVE feedu");}
+      const panel=$("ai-edge-top-opportunities");if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>LIVE feed sa nepodarilo načítať. Výber kandidátov je pozastavený, aby sa nezobrazovali neaktuálne údaje.</div>";
+      return;
+    }
+    if(feedResult.value.source!=="Flashscore"){
+      const s=$("ai-edge-state");if(s){s.className="ai-edge-state bad";s.textContent="LIVE DÁTA NEDOSTUPNÉ · Zdroj nie je Flashscore";}
+      return;
+    }
+    const ledger=ledgerResult.status==="fulfilled"?ledgerResult.value:null;
+    const model=modelResult.status==="fulfilled"?modelResult.value:null;
+    try{render(feedResult.value,ledger,model);}catch(e){
+      const panel=$("ai-edge-top-opportunities");if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>Výber kandidátov sa nepodarilo spracovať: "+esc(e?.message||"neznáma chyba")+". Ostatné LIVE údaje zostávajú oddelené.</div>";
+    }
+    if(simulationResult.status==="fulfilled")runStrategySimulation(simulationResult.value);
+    else {const out=$("ai-edge-strategy-results");if(out)out.textContent="Simulátor je momentálne nedostupný: "+(simulationResult.reason?.message||"chyba načítania")+". LIVE výber kandidátov funguje nezávisle.";}
+    const warnings=[];
+    if(ledgerResult.status!=="fulfilled")warnings.push("história predikcií: "+(ledgerResult.reason?.message||"nedostupná"));
+    if(modelResult.status!=="fulfilled")warnings.push("model: "+(modelResult.reason?.message||"nedostupný"));
+    if(warnings.length){const meta=$("ai-edge-updated");if(meta)meta.textContent+=" · "+warnings.join(" · ");}
   }
   document.addEventListener("DOMContentLoaded",()=>{document.addEventListener("input",event=>{const input=event.target.closest("[data-ai-edge-odds]");if(!input)return;const key=input.dataset.aiEdgeOdds;foundOdds.set(key,input.value);const result=input.parentElement?.querySelector(".ai-edge-odds-result");if(!result)return;const value=Number(input.value.replace(',','.')),minimum=Number(input.dataset.minOdds);if(!input.value.trim()){result.className="ai-edge-odds-result neutral";result.textContent="Zadaj kurz, ktorý si našiel";}else if(!Number.isFinite(value)||value<=1){result.className="ai-edge-odds-result neutral";result.textContent="Neplatný kurz";}else if(!Number.isFinite(minimum)||minimum<=1){result.className="ai-edge-odds-result neutral";result.textContent="Minimálny kurz nie je dostupný";}else if(value+1e-9>=minimum){result.className="ai-edge-odds-result good";result.textContent="LIMIT SPLNENÝ · SHADOW";}else{result.className="ai-edge-odds-result bad";result.textContent="POD MINIMÁLNYM KURZOM";}});$("ai-edge-sim-run")?.addEventListener("click",async()=>{try{runStrategySimulation(await loadStrategy());}catch(e){const out=$("ai-edge-strategy-results");if(out)out.textContent=e.message;}});refresh();window.setInterval(refresh,60000);});
 })();
