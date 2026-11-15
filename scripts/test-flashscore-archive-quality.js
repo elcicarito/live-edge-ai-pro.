@@ -8,6 +8,7 @@ const zlib = require("node:zlib");
 const { buildQualityReport } = require("./flashscore-archive-quality");
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flashscore-quality-"));
+async function main() {
 try {
   const archive = {
     retention_policy: "permanent",
@@ -39,7 +40,7 @@ try {
   fs.writeFileSync(path.join(dir, "flashscore-timeline-index.json"), JSON.stringify(index));
   fs.writeFileSync(path.join(dir, index.weeks[0].file), zlib.gzipSync(Buffer.from(rows.map(JSON.stringify).join("\n") + "\n")));
 
-  const report = buildQualityReport(dir);
+  const report = await buildQualityReport(dir);
   assert.equal(report.summary.archived_matches, 3);
   assert.equal(report.summary.timeline_snapshots, 4);
   assert.equal(report.temporal_coverage.matches_with_5plus_snapshots, 0);
@@ -67,3 +68,5 @@ try {
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
 }
+}
+main().catch(error => { console.error(error); process.exit(1); });
