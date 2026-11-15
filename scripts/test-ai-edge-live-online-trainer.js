@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const zlib = require("node:zlib");
-const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, metrics, run, readTimeline } = require("./ai-edge-live-online-trainer");
+const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, calibration, metrics, run, readTimeline } = require("./ai-edge-live-online-trainer");
 
 const started = Date.parse("2026-11-12T21:00:00.000Z");
 const stats = (minute, goal) => [
@@ -57,6 +57,16 @@ const weightedCheck = metrics([
 ], Array(17).fill(0));
 assert.equal(weightedCheck.matches, 2, "validation reports independent match count");
 assert.equal(weightedCheck.baseline_brier, 0.25, "baseline Brier score is match-weighted");
+assert.equal(weightedCheck.calibration.expected_calibration_error, 0, "perfectly matched 50% predictions have zero ECE");
+assert.equal(weightedCheck.calibration.populated_bins, 1, "calibration groups predictions into probability bins");
+assert.equal(weightedCheck.calibration.bins[0].observed_rate, 0.5, "calibration observed rate uses equal match weighting");
+const calibrated = calibration([
+  { match_id: "cal-a", x: Array(16).fill(0), y: 1 },
+  { match_id: "cal-b", x: Array(16).fill(0), y: 0 }
+], Array(17).fill(0));
+assert.equal(calibrated.expected_calibration_error, 0, "calibration handles a balanced validation set");
+assert.equal(calibrated.bins[0].mean_predicted, 0.5);
+
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "ai-edge-live-trainer-"));
 async function main() {
@@ -84,6 +94,11 @@ try {
   assert.equal(model.lag_minutes, 5);
   assert.equal(model.started_at, new Date(activation).toISOString());
   assert.ok(model.training_policy.includes("No historical backfill"));
+  for (const horizon of [15, 25]) {
+    const cal = model.models[String(horizon)].metrics?.calibration;
+    assert.ok(cal && cal.bin_count === 10, "each horizon stores ten-bin validation calibration");
+    assert.ok(cal.expected_calibration_error >= 0 && cal.expected_calibration_error <= 1, "ECE stays within probability bounds");
+  }
   const streamed = await readTimeline(temp, activation);
   assert.ok(streamed.length >= allRows.length + futureRows.length, "gzip JSONL timeline is streamed and parsed line by line");
 } finally {
