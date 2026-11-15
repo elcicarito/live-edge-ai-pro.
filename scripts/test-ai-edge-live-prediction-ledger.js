@@ -1,7 +1,7 @@
 "use strict";
 const assert=require("node:assert/strict");
 const fs=require("node:fs"),os=require("node:os"),path=require("node:path");
-const {addPredictions,evaluate,buildLedger}=require("./ai-edge-live-prediction-ledger");
+const {addPredictions,evaluate,buildLedger,modelCalibrationGate}=require("./ai-edge-live-prediction-ledger");
 const now=Date.parse("2026-11-12T20:00:00Z");
 const stats=[
  {label:"Shots on target",home:5,away:2},
@@ -24,15 +24,18 @@ assert(rows.some(p=>p.target==="BTTS"),"BTTS prediction created");
 const validatedModel={
  source:"Flashscore",mode:"FORWARD_ONLY_LIVE_TRAINING",
  validation_policy:{min_train_matches:100,min_validation_matches:50,min_relative_log_loss_gain:0.01,min_relative_brier_gain:0.005},
- models:{"15":{status:"SHADOW_VALIDATED",counts:{train_matches:120,validation_matches:58},metrics:{relative_log_loss_gain:0.0109,relative_brier_gain:0.0154},weights:Array(17).fill(0)},"25":{
+ models:{"15":{status:"SHADOW_VALIDATED",counts:{train_matches:120,validation_matches:58},metrics:{relative_log_loss_gain:0.0109,relative_brier_gain:0.0154,calibration:{bins:[{range:"50-60",matches_weight:12,absolute_error:0.02}]}},weights:Array(17).fill(0)},"25":{
   status:"SHADOW_VALIDATED",
   counts:{train_matches:120,validation_matches:58},
-  metrics:{relative_log_loss_gain:0.0197,relative_brier_gain:0.025},
+  metrics:{relative_log_loss_gain:0.0197,relative_brier_gain:0.025,calibration:{bins:[{range:"50-60",matches_weight:12,absolute_error:0.02}]}},
   weights:Array(17).fill(0)
  }}
 };
 const modelRows=[];
 addPredictions(modelRows,feed,now,validatedModel);
+assert.equal(modelCalibrationGate({metrics:{calibration:{bins:[{range:"50-60",matches_weight:4,absolute_error:0.01}]}}},0.55,{}).allowed,false,"low-support bins force abstention");
+assert.equal(modelCalibrationGate({metrics:{calibration:{bins:[{range:"50-60",matches_weight:12,absolute_error:0.12}]}}},0.55,{}).allowed,false,"poor calibration forces abstention");
+assert.equal(modelCalibrationGate({metrics:{calibration:{bins:[{range:"50-60",matches_weight:12,absolute_error:0.02}]}}},0.55,{}).allowed,true,"reliable bins allow prediction");
 const model15=modelRows.find(p=>p.target==="MODEL_15");
 const model25=modelRows.find(p=>p.target==="MODEL_25");
 assert(model15,"validated 15-minute shadow model creates a prediction");
