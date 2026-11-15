@@ -24,7 +24,7 @@ assert(rows.some(p=>p.target==="BTTS"),"BTTS prediction created");
 const validatedModel={
  source:"Flashscore",mode:"FORWARD_ONLY_LIVE_TRAINING",
  validation_policy:{min_train_matches:100,min_validation_matches:50,min_relative_log_loss_gain:0.01,min_relative_brier_gain:0.005},
- models:{"25":{
+ models:{"15":{status:"SHADOW_VALIDATED",counts:{train_matches:120,validation_matches:58},metrics:{relative_log_loss_gain:0.0109,relative_brier_gain:0.0154},weights:Array(17).fill(0)},"25":{
   status:"SHADOW_VALIDATED",
   counts:{train_matches:120,validation_matches:58},
   metrics:{relative_log_loss_gain:0.0197,relative_brier_gain:0.025},
