@@ -21,6 +21,10 @@ async function inspectTimeline(file) {
   const hash = crypto.createHash("sha256");
   const hashStream = fs.createReadStream(file);
   hashStream.on("data", chunk => hash.update(chunk));
+  const hashDone = new Promise((resolve, reject) => {
+    hashStream.on("end", resolve);
+    hashStream.on("error", reject);
+  });
   const rawStats = fs.statSync(file);
   let snapshots = 0;
   const input = fs.createReadStream(file).pipe(zlib.createGunzip());
@@ -30,10 +34,7 @@ async function inspectTimeline(file) {
     JSON.parse(line);
     snapshots++;
   }
-  await new Promise((resolve, reject) => {
-    hashStream.on("end", resolve);
-    hashStream.on("error", reject);
-  });
+  await hashDone;
   return { bytes: rawStats.size, sha256: hash.digest("hex"), snapshots };
 }
 async function buildManifest() {
