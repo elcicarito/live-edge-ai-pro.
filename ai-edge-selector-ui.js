@@ -100,7 +100,7 @@
       }).join("");
       return "<div style='overflow-x:auto;margin:8px 0 12px'><b>Kalibrácia "+h+" min · "+(cal.populated_bins||0)+"/"+(cal.bin_count||10)+" obsadených intervalov</b><table style='width:100%;border-collapse:collapse;font-size:12px;margin-top:5px'><thead><tr><th>Rozsah</th><th>Počet</th><th>Váha zápasov</th><th>Predikcia</th><th>Realita</th><th>Odchýlka</th></tr></thead><tbody>"+rows+"</tbody></table></div>";
     }).join("");
-    el.innerHTML="<div>Spustené "+esc(date(model.started_at))+" · oneskorenie započítané: 5 min · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+esc(line)+". Každý zápas má pri vyhodnotení rovnakú váhu. Staršie výsledky bez nových validačných pravidiel sa nepovažujú za potvrdenie modelu. Pravdepodobnosti sú tieňové a automaticky vyhodnocované; nejde o potvrdenú produkčnú ani stávkovú výhodu.</div>"+calibrationTables;
+    el.innerHTML="<div>Spustené "+esc(date(model.started_at))+" · oneskorenie započítané: 5 min · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+esc(line)+". Každý zápas má pri vyhodnotení rovnakú váhu. Predikciu model vynechá, ak kalibračný interval nemá aspoň "+fmt(model.calibration_policy?.min_effective_match_weight||8)+" efektívnych zápasov alebo odchýlka presahuje "+(Number(model.calibration_policy?.max_absolute_error??0.08)*100).toFixed(0)+" %. Staršie výsledky bez nových validačných pravidiel sa nepovažujú za potvrdenie modelu. Pravdepodobnosti sú tieňové a automaticky vyhodnocované; nejde o potvrdenú produkčnú ani stávkovú výhodu.</div>"+calibrationTables;
   }
 
   function renderPredictionLedger(ledger){
