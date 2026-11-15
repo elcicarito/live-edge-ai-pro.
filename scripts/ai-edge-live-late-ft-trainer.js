@@ -8,6 +8,7 @@ const FILE="ai-edge-live-late-ft-model.json";
 const LAG=5,MINUTE_FROM=70,MINUTE_TO=85;
 function read(file,fallback){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code==="ENOENT")return fallback;throw e;}}
 function write(file,value){const tmp=file+".tmp";fs.writeFileSync(tmp,JSON.stringify(value,null,2)+"\n");fs.renameSync(tmp,file);}
+function validStage(stage){return !/(half.?time|\bht\b|finished|full.?time|\bft\b|after extra time|penalt|abandoned|cancelled|postponed|suspended)/i.test(String(stage||""));}
 function confirmedRegular(outcome){
  const t=String(outcome?.final_match?.status_text||"");
  return outcome?.source==="Flashscore"&&outcome?.status==="CONFIRMED"&&
@@ -33,7 +34,7 @@ function buildLateFTSamples(rows,outcomes,startedAt){
  const grouped=new Map();
  for(const row of rows){
   const id=String(row?.match_id||""),time=Date.parse(row?.snapshot?.collected_at||"");
-  if(!id||!Number.isFinite(time)||time<startedAt||!base.validStage(row?.snapshot?.stage))continue;
+  if(!id||!Number.isFinite(time)||time<startedAt||!validStage(row?.snapshot?.stage))continue;
   if(!grouped.has(id))grouped.set(id,[]);
   grouped.get(id).push(row);
  }
