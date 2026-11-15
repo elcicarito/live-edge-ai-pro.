@@ -206,6 +206,50 @@ function fit(rows) {
   }
   return weights.map(value => Number(value.toFixed(8)));
 }
+function calibration(rows, weights, binCount = 10) {
+  if (!rows.length) return null;
+  const sampleWeights = rowWeights(rows);
+  const bins = Array.from({ length: binCount }, (_, index) => ({
+    index, lower: index / binCount, upper: (index + 1) / binCount,
+    count: 0, weight: 0, predicted_sum: 0, observed_sum: 0
+  }));
+  let totalWeight = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const p = sigmoid(weights[0] + row.x.reduce((sum, value, j) => sum + value * weights[j + 1], 0));
+    const weight = sampleWeights[i];
+    const bin = bins[Math.min(binCount - 1, Math.floor(p * binCount))];
+    bin.count++;
+    bin.weight += weight;
+    bin.predicted_sum += weight * p;
+    bin.observed_sum += weight * row.y;
+    totalWeight += weight;
+  }
+  let ece = 0, maxError = 0;
+  const populated = bins.filter(bin => bin.weight > 0).map(bin => {
+    const meanPredicted = bin.predicted_sum / bin.weight;
+    const observedRate = bin.observed_sum / bin.weight;
+    const error = Math.abs(meanPredicted - observedRate);
+    ece += (bin.weight / totalWeight) * error;
+    maxError = Math.max(maxError, error);
+    return {
+      range: String(Math.round(bin.lower * 100)) + "-" + String(Math.round(bin.upper * 100)),
+      count: bin.count,
+      matches_weight: Number(bin.weight.toFixed(4)),
+      mean_predicted: Number(meanPredicted.toFixed(4)),
+      observed_rate: Number(observedRate.toFixed(4)),
+      absolute_error: Number(error.toFixed(4))
+    };
+  });
+  return {
+    method: "equal_width_probability_bins_match_weighted",
+    bin_count: binCount,
+    populated_bins: populated.length,
+    expected_calibration_error: Number(ece.toFixed(4)),
+    maximum_calibration_error: Number(maxError.toFixed(4)),
+    bins: populated
+  };
+}
 function metrics(rows, weights) {
   if (!rows.length) return null;
   const sampleWeights = rowWeights(rows);
@@ -231,7 +275,8 @@ function metrics(rows, weights) {
     brier: Number(modelBrier.toFixed(4)),
     baseline_brier: Number(baselineBrier.toFixed(4)),
     log_loss: Number(modelLoss.toFixed(4)),
-    baseline_log_loss: Number(baselineLogLoss.toFixed(4))
+    baseline_log_loss: Number(baselineLogLoss.toFixed(4)),
+    calibration: calibration(rows, weights)
   };
 }
 
@@ -342,4 +387,4 @@ if (require.main === module) {
   run().then(result => console.log("AI EDGE FORWARD-ONLY LIVE TRAINER", JSON.stringify(result)))
     .catch(error => { console.error("AI EDGE LIVE TRAINER FAILED:", error.message); process.exit(1); });
 }
-module.exports = { finite, isoWeekKey, readTimeline, statValue, featureVector, goalTransitions, labelFor, stableValidationMatch, buildSamples, fit, metrics, trainHorizon, run };
+module.exports = { finite, isoWeekKey, readTimeline, statValue, featureVector, goalTransitions, labelFor, stableValidationMatch, buildSamples, fit, calibration, metrics, trainHorizon, run };
