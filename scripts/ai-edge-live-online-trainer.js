@@ -186,26 +186,30 @@ function logLoss(rows, weights, sampleWeights = rowWeights(rows)) {
   return weightTotal ? total / weightTotal : null;
 }
 
-function fit(rows) {
+function fit(rows, sampleWeights = rowWeights(rows)) {
   const weights = Array(FEATURE_NAMES.length + 1).fill(0);
-  const prevalence = rows.reduce((sum, row) => sum + row.y, 0) / rows.length;
+  const weightTotal = sampleWeights.reduce((sum, value) => sum + value, 0);
+  if (!rows.length || !weightTotal) return weights;
+  const prevalence = rows.reduce((sum, row, index) => sum + sampleWeights[index] * row.y, 0) / weightTotal;
   weights[0] = Math.log(Math.max(0.01, prevalence) / Math.max(0.01, 1 - prevalence));
   const rate = 0.08, l2 = 0.002, epochs = 450;
   for (let epoch = 0; epoch < epochs; epoch++) {
     const gradients = Array(weights.length).fill(0);
-    for (const row of rows) {
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[r], sampleWeight = sampleWeights[r];
       const p = sigmoid(weights[0] + row.x.reduce((sum, v, i) => sum + v * weights[i + 1], 0));
-      const error = p - row.y;
+      const error = (p - row.y) * sampleWeight;
       gradients[0] += error;
       for (let i = 0; i < row.x.length; i++) gradients[i + 1] += error * row.x[i];
     }
     for (let i = 0; i < weights.length; i++) {
-      const gradient = gradients[i] / rows.length + (i ? l2 * weights[i] : 0);
+      const gradient = gradients[i] / weightTotal + (i ? l2 * weights[i] : 0);
       weights[i] -= rate * gradient;
     }
   }
   return weights.map(value => Number(value.toFixed(8)));
 }
+
 function calibration(rows, weights, binCount = 10) {
   if (!rows.length) return null;
   const sampleWeights = rowWeights(rows);

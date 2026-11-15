@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const zlib = require("node:zlib");
-const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, calibration, metrics, run, readTimeline } = require("./ai-edge-live-online-trainer");
+const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, calibration, metrics, fit, run, readTimeline } = require("./ai-edge-live-online-trainer");
 
 const started = Date.parse("2026-11-12T21:00:00.000Z");
 const stats = (minute, goal) => [
@@ -60,6 +60,18 @@ assert.equal(weightedCheck.baseline_brier, 0.25, "baseline Brier score is match-
 assert.equal(weightedCheck.calibration.expected_calibration_error, 0, "perfectly matched 50% predictions have zero ECE");
 assert.equal(weightedCheck.calibration.populated_bins, 1, "calibration groups predictions into probability bins");
 assert.equal(weightedCheck.calibration.bins[0].observed_rate, 0.5, "calibration observed rate uses equal match weighting");
+const duplicatedMatchRows = [
+  { match_id: "same-a", x: [1, ...Array(15).fill(0)], y: 1 },
+  { match_id: "same-a", x: [1, ...Array(15).fill(0)], y: 1 },
+  { match_id: "same-a", x: [1, ...Array(15).fill(0)], y: 1 },
+  { match_id: "same-b", x: [0, ...Array(15).fill(0)], y: 0 }
+];
+const uniqueMatchRows = [
+  { match_id: "same-a", x: [1, ...Array(15).fill(0)], y: 1 },
+  { match_id: "same-b", x: [0, ...Array(15).fill(0)], y: 0 }
+];
+assert.deepEqual(fit(duplicatedMatchRows), fit(uniqueMatchRows),
+  "training gives each match equal total weight regardless of snapshot count");
 const calibrated = calibration([
   { match_id: "cal-a", x: Array(16).fill(0), y: 1 },
   { match_id: "cal-b", x: Array(16).fill(0), y: 0 }
