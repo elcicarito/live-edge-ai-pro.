@@ -110,7 +110,7 @@ if(min>=1&&min<=90&&!/(half.?time|\bht\b|after extra time|penalt|abandoned|cance
    if(!items.some(x=>x.id===p.id))items.push(p);
   }
  }
- if(min>=70&&min<=85&&lateFTModelIsValidated(lateFtModel)){
+ if(min>=65&&min<=85&&lateFTModelIsValidated(lateFtModel)){
   const item=lateFtModel.model,vector=modelFeatureVector(m,hist,r.collected_at||collected),probability=vector?modelProbability(item.weights,vector):null;
   const gate=probability===null?{allowed:false,reason:"features_unavailable"}:modelCalibrationGate(item,probability,lateFtModel);
   if(probability!==null&&gate.allowed){
