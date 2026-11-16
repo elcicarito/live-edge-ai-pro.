@@ -1,0 +1,47 @@
+"use strict";
+const fs=require("node:fs"),path=require("node:path"),zlib=require("node:zlib");
+const {features}=require("./ai-edge-live-prediction-ledger");
+const DATA=path.resolve(__dirname,"..","data");
+function read(file,fallback){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code==="ENOENT")return fallback;throw e;}}
+function readHistory(file){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code!=="ENOENT")throw e;}try{return JSON.parse(zlib.gunzipSync(fs.readFileSync(file+".gz")).toString("utf8"));}catch(e){if(e.code==="ENOENT")return null;throw e;}}
+function stamp(v){const n=Number(v);if(Number.isFinite(n))return n;const p=Date.parse(v||"");return Number.isFinite(p)?p:NaN;}
+function summarize(rows,target){
+ const list=rows.filter(x=>x.target===target),counts={HIT:0,MISS:0,OPEN:0,UNRESOLVED:0};for(const x of list)if(counts[x.status]!==undefined)counts[x.status]++;
+ const settled=list.filter(x=>x.status==="HIT"||x.status==="MISS").sort((a,b)=>stamp(a.capturedAt)-stamp(b.capturedAt));
+ let balance=0,peak=0,maxDrawdown=0,staked=0,net=0;
+ for(const x of settled){const odds=Number(x.minimumOdds);if(!Number.isFinite(odds)||odds<=1)continue;const change=x.status==="HIT"?odds-1:-1;balance+=change;net+=change;staked++;peak=Math.max(peak,balance);maxDrawdown=Math.max(maxDrawdown,peak-balance);}
+ return{target,total:list.length,...counts,decided:counts.HIT+counts.MISS,accuracy:counts.HIT+counts.MISS?counts.HIT/(counts.HIT+counts.MISS):null,stakePerPick:1,totalStaked:staked,netProfit:Number(net.toFixed(4)),roi:staked?Number((net/staked*100).toFixed(2)):null,maxDrawdown:Number(maxDrawdown.toFixed(4)),oddsBasis:"locked_individual_minimum_hypothetical_not_actual_bookmaker_odds"};
+}
+function buildTopLedger(dataDir=DATA,nowDate=new Date()){
+ const feed=read(path.join(dataDir,"flashscore-primary-current.json"),null),prediction=readHistory(path.join(dataDir,"ai-edge-prediction-history.json"));
+ if(!feed||feed.source!=="Flashscore"||!Array.isArray(feed.records)||!prediction||prediction.source!=="Flashscore"||!Array.isArray(prediction.predictions))throw Error("Chýbajú platné Flashscore LIVE dáta alebo trvalá predikčná história; TOP história sa nemení.");
+ const now=nowDate.getTime(),feedAt=stamp(feed.collected_at),ledgerAt=stamp(prediction.updated_at);
+ const file=path.join(dataDir,"ai-edge-top-opportunity-ledger.json"),old=read(file,{schema_version:1,source:"Flashscore",mode:"TOP_OPPORTUNITY_LEDGER",retention_policy:"permanent",entries:[]});
+ if(old.source!=="Flashscore"||!Array.isArray(old.entries))throw Error("Neplatná TOP história; odmietam prepísať.");
+ const entries=old.entries,byKey=new Map(entries.map(x=>[x.key,x]));
+ const live=new Map(feed.records.filter(r=>r?.match?.source==="Flashscore"&&r.match.status==="live").map(r=>[String(r.match.id),r]));
+ const latest=new Map();
+ for(const row of prediction.predictions){
+  if(!["MODEL_25","MODEL_FT"].includes(row.target)||row.status!=="OPEN"||row.modelStatus!=="SHADOW_VALIDATED"||!Number.isFinite(Number(row.modelProbability))||!Number.isFinite(Number(row.modelMinimumOdds))||Number(row.modelMinimumOdds)<=1||!Number.isFinite(Number(row.modelCalibrationError)))continue;
+  const group=String(row.matchId)+"|"+row.target,prior=latest.get(group);if(!prior||stamp(row.createdAt)>stamp(prior.createdAt))latest.set(group,row);
+ }
+ const fresh=Number.isFinite(feedAt)&&now-feedAt<=8*60000&&Number.isFinite(ledgerAt)&&now-ledgerAt<=6*60000;
+ if(fresh)for(const row of latest.values()){
+  const rec=live.get(String(row.matchId));if(!rec)continue;
+  const m=rec.match,min=Number(m.live_minute),after=Number(row.actionableAfterMinute),deadline=Number(row.deadlineMinute),created=stamp(row.createdAt);
+  if(!Number.isFinite(min)||min<1||min>110||!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after||min>deadline||!Number.isFinite(created)||created>now)continue;
+  const fx=features(m,feed.recent_history||[],rec.collected_at||feed.collected_at,now);if(!fx.ready)continue;
+  const key=String(row.matchId)+"|"+row.target;if(byKey.has(key))continue;
+  const conservative=Math.max(.01,Number(row.modelProbability)-Number(row.modelCalibrationError));
+  const entry={key,predictionId:String(row.id||row.matchId+"|"+row.target),matchId:String(row.matchId),target:row.target,home:row.home||m.home,away:row.away||m.away,competition:row.competition||m.competition||"",capturedAt:now,sourcePredictionAt:created,capturedMinute:min,capturedScore:(Number(m.home_score)||0)+":"+(Number(m.away_score)||0),actionableAfterMinute:after,deadlineMinute:deadline,modelProbability:Number(row.modelProbability),conservativeProbability:Number(conservative.toFixed(6)),calibrationError:Number(row.modelCalibrationError),minimumOdds:Number(row.modelMinimumOdds),stake:1,status:"OPEN",resultScore:null,settledAt:null};
+  entries.push(entry);byKey.set(key,entry);
+ }
+ const predictionById=new Map(prediction.predictions.map(x=>[String(x.id||""),x]));
+ for(const entry of entries){const p=predictionById.get(entry.predictionId);if(!p)continue;if(["HIT","MISS","UNRESOLVED"].includes(p.status)){entry.status=p.status;entry.resultScore=p.resultScore||null;entry.settledAt=p.checkedAt||null;entry.resultMinute=p.resultMinute??null;}}
+ const summary={MODEL_25:summarize(entries,"MODEL_25"),MODEL_FT:summarize(entries,"MODEL_FT")};
+ const output={schema_version:1,source:"Flashscore",mode:"TOP_OPPORTUNITY_LEDGER",retention_policy:"permanent",updated_at:nowDate.toISOString(),feed_collected_at:feed.collected_at||null,total_entries:entries.length,summary,entries:entries.slice().sort((a,b)=>stamp(b.capturedAt)-stamp(a.capturedAt))};
+ const tmp=file+".tmp";fs.writeFileSync(tmp,JSON.stringify(output,null,2)+"\n");fs.renameSync(tmp,file);
+ return{total:entries.length,summary,updated_at:output.updated_at};
+}
+if(require.main===module){try{console.log("AI EDGE TOP OPPORTUNITY LEDGER",JSON.stringify(buildTopLedger()));}catch(e){console.error("AI EDGE TOP LEDGER FAILED:",e.message);process.exit(1);}}
+module.exports={summarize,buildTopLedger};
