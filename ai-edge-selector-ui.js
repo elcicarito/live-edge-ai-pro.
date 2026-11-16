@@ -189,7 +189,7 @@
       const m=current.record.match||{},minute=Number.parseInt(m.live_minute,10);
       if(!Number.isFinite(minute)||minute<1||(row.target==="MODEL_FT"?minute>100:minute>90))continue;
       const deadline=Number(row.deadlineMinute),after=Number(row.actionableAfterMinute);
-      // Model 25 potrebuje dostatočné zostávajúce okno; MODEL_FT môže zostať aktívny aj v riadnom nadstavení.
+      // Model 25 potrebuje dostatočné zostávajúce okno; MODEL_FT môže zostať aktívny aj v nadstavenom čase riadnej hracej doby.
       if(!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after)continue;
       if(row.target==="MODEL_FT"?(after>=100||minute>100):(after>=90||minute>deadline))continue;
       const p=Number(row.modelProbability),error=Number(row.modelCalibrationError??0);
