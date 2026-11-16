@@ -45,18 +45,20 @@ function buildLateFTSamples(rows,outcomes,startedAt){
   if(!confirmedRegular(outcome))continue;
   const tr=base.goalTransitions(matchRows);
   if(tr.invalid)continue;
-  // One sample per match: latest usable observation between 70' and 85'.
-  let chosen=-1;
+  // One latest usable observation per five-minute window, matching the live selector's capture cadence.
+  const chosenByWindow=new Map();
   for(let i=0;i<matchRows.length;i++){
    const minute=base.finite(matchRows[i]?.snapshot?.live_minute);
-   if(minute>=MINUTE_FROM&&minute<=MINUTE_TO&&base.featureVector(matchRows[i],matchRows[i-1]))chosen=i;
+   if(minute>=MINUTE_FROM&&minute<=MINUTE_TO&&base.featureVector(matchRows[i],matchRows[i-1]))
+    chosenByWindow.set(Math.floor(minute/5)*5,i);
   }
-  if(chosen<0)continue;
-  const row=matchRows[chosen],y=labelLateFT(row,matchRows,tr.transitions,outcome);
-  if(y===null)continue;
-  samples.push({id:matchId+"|"+row.snapshot.collected_at+"|70_FT",match_id:matchId,
-   x:base.featureVector(row,matchRows[chosen-1]),y,
-   split:base.stableValidationMatch(matchId)?"validation":"train"});
+  for(const [windowStart,chosen] of chosenByWindow){
+   const row=matchRows[chosen],y=labelLateFT(row,matchRows,tr.transitions,outcome);
+   if(y===null)continue;
+   samples.push({id:matchId+"|"+row.snapshot.collected_at+"|"+windowStart+"_FT",match_id:matchId,
+    x:base.featureVector(row,matchRows[chosen-1]),y,
+    split:base.stableValidationMatch(matchId)?"validation":"train"});
+  }
  }
  return samples;
 }
@@ -74,7 +76,7 @@ async function run(dataDir=DATA,nowDate=new Date()){
   target:"At least one goal after the 5-minute effective decision lag until confirmed regular-time full-time",
   started_at:new Date(startedAt).toISOString(),updated_at:nowDate.toISOString(),
   lag_minutes:LAG,observation_minute_range:[MINUTE_FROM,MINUTE_TO],
-  sample_policy:"One latest eligible snapshot per match, captured after activation. No historical backfill. Ambiguous goals crossing the lag boundary and non-regular-time/abandoned matches are excluded.",
+  sample_policy:"One latest eligible snapshot per five-minute window from 70' to 85', captured after activation. No historical backfill. Ambiguous goals crossing the lag boundary and non-regular-time/abandoned matches are excluded.",
   validation_policy:trained.validation_policy||{min_train_samples:500,min_validation_samples:300,min_train_matches:100,min_validation_matches:50,min_relative_log_loss_gain:0.01,min_relative_brier_gain:0.005,metrics_weighted_per_match:true},
   calibration_policy:{min_effective_match_weight:8,max_absolute_error:0.08,abstain_outside_reliable_bins:true},
   total_labeled_matches:samples.length,model:trained,
