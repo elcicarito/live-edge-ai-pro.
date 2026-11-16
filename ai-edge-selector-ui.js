@@ -121,9 +121,10 @@
   }
 
   function renderPredictionLedger(ledger){
-    const summary=$("ai-edge-prediction-summary"),list=$("ai-edge-prediction-log");
+    const summary=$("ai-edge-prediction-summary"),topSummary=$("ai-edge-top-simulation-summary"),list=$("ai-edge-prediction-log");
     if(!ledger){
       if(summary)summary.innerHTML="<div><span>Trvalá história</span><b>Čaká na prvý zber</b></div>";
+      if(topSummary)topSummary.innerHTML="<div class=\"ai-edge-prediction-group\"><strong>Čaká sa na prvý zber</strong><span>Simulácia sa zobrazí po načítaní predikčného ledgeru.</span></div>";
       if(list)list.innerHTML="<p>Trvalá história sa vytvorí po prvom úspešnom zbere s novým modulom.</p>";
       return;
     }
@@ -134,6 +135,7 @@
       const cards=totals.map(x=>"<div><span>"+esc(x[0])+"</span><b>"+fmt(x[1])+"</b></div>").join("");
       const breakdown=groups.map(([id,g])=>{const sim=g.minimum_odds_simulation;const simulation=sim?"<span>SIMULÁCIA PRI INDIVIDUÁLNOM MINIMÁLNOM KURZE · 1 jednotka na zápas</span><b>Čistý výsledok: "+(sim.net_profit>0?"+":"")+Number(sim.net_profit||0).toFixed(2)+" j. · ROI "+(sim.roi===null?"—":(sim.roi>0?"+":"")+Number(sim.roi).toFixed(2)+" %")+"</b><span>Vyhodnotené "+fmt(sim.decided)+" · HIT "+fmt(sim.HIT)+" / MISS "+fmt(sim.MISS)+" · otvorené "+fmt(sim.OPEN)+" · nevyriešené "+fmt(sim.UNRESOLVED)+" · priemerný min. kurz "+(sim.average_minimum_odds===null?"—":Number(sim.average_minimum_odds).toFixed(2))+"</span>":"";return "<div class='ai-edge-prediction-group'><strong>"+esc(g.label)+"</strong><span>HIT "+fmt(g.HIT)+" · MISS "+fmt(g.MISS)+" · nevyhodnotiteľné "+fmt(g.UNRESOLVED)+" · otvorené "+fmt(g.OPEN)+"</span><b>Úspešnosť vyhodnotených: "+(g.accuracy===null||g.accuracy===undefined?"—":Math.round(g.accuracy*100)+"%")+" ("+fmt(g.decided)+")</b>"+simulation+"</div>";}).join("");
       summary.innerHTML=cards+breakdown;
+      if(topSummary)topSummary.innerHTML=breakdown||"<div class=\"ai-edge-prediction-group\"><strong>Zatiaľ bez vyhodnotených modelov</strong><span>Údaje sa doplnia po prvých predikciách.</span></div>";
     }
     if(list){
       const allRows=ledger.predictions||[];const rows=allRows.slice(0,30);
