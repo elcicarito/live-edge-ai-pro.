@@ -10,7 +10,7 @@ function read(file,fallback){try{return JSON.parse(fs.readFileSync(file,"utf8"))
 function write(file,value){const tmp=file+".tmp";fs.writeFileSync(tmp,JSON.stringify(value,null,2)+"\n");fs.renameSync(tmp,file);}
 function validStage(stage){return !/(half.?time|\bht\b|finished|full.?time|\bft\b|after extra time|penalt|abandoned|cancelled|postponed|suspended)/i.test(String(stage||""));}
 function confirmedRegular(outcome){
- const t=String(outcome?.final_match?.status_text||"");
+ const t=[outcome?.final_match?.status_text,outcome?.final_match?.stage,outcome?.final_match?.status].filter(Boolean).join(" ");
  return outcome?.source==="Flashscore"&&outcome?.status==="CONFIRMED"&&
  outcome?.status_confirmation==="confirmed_finished"&&outcome?.final_status==="FINISHED"&&
  !/penalt|extra time|\baet\b|abandoned|cancelled|postponed|suspended/i.test(t);
