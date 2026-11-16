@@ -203,8 +203,16 @@
       const id=String(row.matchId||"")+"|"+row.target,previous=latest.get(id);
       if(!previous||Number(row.createdAt)>Number(previous.createdAt))latest.set(id,row);
     }
+    // Jeden TOP záznam na zápas a model počas celého zápasu.
+    // Po zachytení v trvalom TOP registri sa ďalšie časovo posunuté predikcie
+    // toho istého zápasu už v paneli nezobrazujú, ani keď pôvodný tip skončil.
+    const alreadyCaptured=new Set((topLedger?.entries||[])
+      .filter(x=>["MODEL_25","MODEL_FT"].includes(x.target))
+      .map(x=>String(x.matchId||"")+"|"+x.target));
     const candidates=[];
     for(const row of latest.values()){
+      const groupId=String(row.matchId||"")+"|"+row.target;
+      if(alreadyCaptured.has(groupId))continue;
       const current=live.get(String(row.matchId||""));if(!current)continue;
       const m=current.record.match||{},minute=Number.parseInt(m.live_minute,10);
       if(!Number.isFinite(minute)||minute<1||minute>110)continue;
