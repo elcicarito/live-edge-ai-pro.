@@ -47,6 +47,38 @@ assert.equal(model15.modelProbability,0.5,"15-minute model probability is calcul
 assert.equal(model15.modelMinimumOdds,2.19,"model prediction stores conservative minimum odds with five-percent edge");
 assert.equal(model15.deadlineMinute,70,"15-minute model uses the five-minute delay buffer");
 assert(model25,"validated 25-minute shadow model creates a prediction");
+
+const lateFtModel={
+ source:"Flashscore",mode:"FORWARD_ONLY_LIVE_TRAINING_LATE_FT",updated_at:new Date(now).toISOString(),
+ validation_policy:{min_train_matches:100,min_validation_matches:50,min_relative_log_loss_gain:0.01,min_relative_brier_gain:0.005},
+ model:{status:"SHADOW_VALIDATED",counts:{train:600,validation:350,train_matches:120,validation_matches:60},metrics:{relative_log_loss_gain:0.02,relative_brier_gain:0.015,calibration:{bins:[{range:"50-60",matches_weight:12,absolute_error:0.02}]}},weights:Array(17).fill(0)}
+};
+const ftRows=[];
+addPredictions(ftRows,{...feed,records:[{collected_at:new Date(now).toISOString(),match:{...match,live_minute:75}}]},now,null,lateFtModel);
+const modelFT=ftRows.find(p=>p.target==="MODEL_FT");
+assert(modelFT,"independently validated full-time model creates its own prediction");
+assert.equal(modelFT.modelProbability,0.5);
+assert.equal(modelFT.actionableAfterMinute,80,"full-time model includes the five-minute data lag");
+assert.equal(modelFT.deadlineMinute,120,"full-time target remains open through regulation stoppage time");
+const blockedFt=[];
+addPredictions(blockedFt,{...feed,records:[{collected_at:new Date(now).toISOString(),match:{...match,live_minute:75}}]},now,null,{...lateFtModel,model:{...lateFtModel.model,status:"WARMUP"}});
+assert.equal(blockedFt.some(p=>p.target==="MODEL_FT"),false,"unvalidated full-time model never emits a prediction");
+const ftHit={...modelFT,status:"OPEN",snapshots:[...modelFT.snapshots]};
+evaluate([ftHit],{source:"Flashscore",collected_at:new Date(now+40*60000).toISOString(),records:[],recent_history:[
+ {time:now+32*60000,match:{...match,live_minute:82,home_score:2,away_score:0,stage:"2nd Half"}}
+]},{matches:{}},now+40*60000);
+assert.equal(ftHit.status,"HIT","full-time model is hit only by a goal after the actionable lag");
+const ftMiss={...modelFT,status:"OPEN",snapshots:[...modelFT.snapshots]};
+evaluate([ftMiss],{source:"Flashscore",collected_at:new Date(now+45*60000).toISOString(),records:[],recent_history:[
+ {time:now+45*60000,match:{...match,live_minute:90,stage:"2nd Half"}}
+]},{matches:{"fixture-1":{status:"CONFIRMED",home_score:1,away_score:0,confirmed_at:new Date(now+46*60000).toISOString(),final_match:{status_text:"Finished",stage:"2nd Half"}}}},now+46*60000);
+assert.equal(ftMiss.status,"MISS","confirmed regulation full-time with no later goal is a miss");
+const ftExtra={...modelFT,status:"OPEN",snapshots:[...modelFT.snapshots]};
+evaluate([ftExtra],{source:"Flashscore",collected_at:new Date(now+45*60000).toISOString(),records:[],recent_history:[
+ {time:now+45*60000,match:{...match,live_minute:91,home_score:2,away_score:0,stage:"Extra Time",status_text:"After extra time"}}
+]},{matches:{"fixture-1":{status:"CONFIRMED",home_score:2,away_score:0,confirmed_at:new Date(now+46*60000).toISOString(),final_match:{status_text:"After extra time",stage:"Extra Time"}}}},now+46*60000);
+assert.equal(ftExtra.status,"UNRESOLVED","extra-time outcomes are excluded from the regulation full-time model");
+
 assert.equal(model25.modelProbability,0.5,"model probability is calculated from stored weights");
 assert.equal(model25.actionableAfterMinute,55,"model uses the five-minute buffer");
 assert.equal(model25.deadlineMinute,80,"model horizon ends 25 minutes after the delay buffer");
