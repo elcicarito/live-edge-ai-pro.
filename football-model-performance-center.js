@@ -144,7 +144,7 @@
     const model = data.model;
     renderModel(grid, model, 15);
     renderModel(grid, model, 25);
-    ["15", "25", "MODEL_15", "MODEL_25", "FT", "NEXT_TEAM", "BTTS", "RESULT_1X2"].forEach(key => renderLedgerTarget(grid, data.ledger, key));
+    ["15", "25", "MODEL_15", "MODEL_25", "MODEL_FT", "FT", "NEXT_TEAM", "BTTS", "RESULT_1X2"].forEach(key => renderLedgerTarget(grid, data.ledger, key));
     renderLate(grid, data.late);
 
     addCard(grid, "ZELENÝ SIGNÁL · STARŠÍ ENGINE", "VYPNUTÝ",
