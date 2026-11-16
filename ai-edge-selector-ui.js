@@ -208,7 +208,7 @@
       candidates.push({row,current,minute,conservative,after,deadline,target:row.target,market,oddsKey,entered,ev,min});
     }
     candidates.sort((a,b)=>(b.ev===null?-1:b.ev)-(a.ev===null?-1:a.ev)||b.conservative-a.conservative||Number(b.row.modelCalibrationMatchesWeight)-Number(a.row.modelCalibrationMatchesWeight));
-    const top=candidates.slice(0,8);
+    const top=candidates;
     const cards=top.map((item,index)=>{
       const r=item.row,m=item.current.record.match||{},entered=item.entered,v=Number(entered.replace(",",".")),p=Number(r.modelProbability),fair=1/p,min=item.min,error=Number(r.modelCalibrationError),conservative=item.conservative;
       const ev=entered.trim()&&Number.isFinite(v)&&v>1?(v*conservative-1)*100:null;
