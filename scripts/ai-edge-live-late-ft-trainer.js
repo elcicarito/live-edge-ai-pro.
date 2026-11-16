@@ -13,7 +13,7 @@ function confirmedRegular(outcome){
  const t=String(outcome?.final_match?.status_text||"");
  return outcome?.source==="Flashscore"&&outcome?.status==="CONFIRMED"&&
  outcome?.status_confirmation==="confirmed_finished"&&outcome?.final_status==="FINISHED"&&
- !/penalt|extra time|\\baet\\b|abandoned|cancelled|postponed|suspended/i.test(t);
+ !/penalt|extra time|\baet\b|abandoned|cancelled|postponed|suspended/i.test(t);
 }
 function labelLateFT(sample,rows,transitions,outcome){
  const minute=base.finite(sample?.snapshot?.live_minute);
