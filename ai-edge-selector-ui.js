@@ -199,7 +199,7 @@
       const current=live.get(String(row.matchId||""));if(!current)continue;
       const m=current.record.match||{},minute=Number.parseInt(m.live_minute,10);
       if(!Number.isFinite(minute)||minute<1||minute>110)continue;
-      const deadline=Number(row.deadlineMinute),after=Number(row.actionableAfterMinute),rowAge=Date.now()-Date.parse(row.createdAt);
+      const deadline=Number(row.deadlineMinute),after=Number(row.actionableAfterMinute),createdRaw=row.createdAt,createdAt=typeof createdRaw==="number"?createdRaw:(Number.isFinite(Number(createdRaw))?Number(createdRaw):Date.parse(createdRaw)),rowAge=Date.now()-createdAt;
       if(!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after||minute>deadline)continue;
       if(!Number.isFinite(rowAge)||rowAge<0)continue;
       const p=Number(row.modelProbability),error=Number(row.modelCalibrationError),conservative=Math.max(0.01,p-error);
