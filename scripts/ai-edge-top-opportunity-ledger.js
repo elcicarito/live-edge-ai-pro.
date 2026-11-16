@@ -5,6 +5,8 @@ const DATA=path.resolve(__dirname,"..","data");
 function read(file,fallback){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code==="ENOENT")return fallback;throw e;}}
 function readHistory(file){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code!=="ENOENT")throw e;}try{return JSON.parse(zlib.gunzipSync(fs.readFileSync(file+".gz")).toString("utf8"));}catch(e){if(e.code==="ENOENT")return null;throw e;}}
 function stamp(v){const n=Number(v);if(Number.isFinite(n))return n;const p=Date.parse(v||"");return Number.isFinite(p)?p:NaN;}
+function topEntryKey(matchId,target){return String(matchId)+"|"+String(target);}
+function hasCaptured(entries,matchId,target){return entries.some(x=>x.matchId!==undefined&&topEntryKey(x.matchId,x.target)===topEntryKey(matchId,target));}
 function summarize(rows,target){
  const list=rows.filter(x=>x.target===target),counts={HIT:0,MISS:0,OPEN:0,UNRESOLVED:0};for(const x of list)if(counts[x.status]!==undefined)counts[x.status]++;
  const settled=list.filter(x=>x.status==="HIT"||x.status==="MISS").sort((a,b)=>stamp(a.capturedAt)-stamp(b.capturedAt));
@@ -18,7 +20,7 @@ function buildTopLedger(dataDir=DATA,nowDate=new Date()){
  const now=nowDate.getTime(),feedAt=stamp(feed.collected_at),ledgerAt=stamp(prediction.updated_at);
  const file=path.join(dataDir,"ai-edge-top-opportunity-ledger.json"),old=read(file,{schema_version:1,source:"Flashscore",mode:"TOP_OPPORTUNITY_LEDGER",retention_policy:"permanent",entries:[]});
  if(old.source!=="Flashscore"||!Array.isArray(old.entries))throw Error("Neplatná TOP história; odmietam prepísať.");
- const entries=old.entries,byKey=new Map(entries.map(x=>[x.key,x]));
+ const entries=old.entries,byKey=new Map(entries.map(x=>[x.key||topEntryKey(x.matchId,x.target),x]));
  const live=new Map(feed.records.filter(r=>r?.match?.source==="Flashscore"&&r.match.status==="live").map(r=>[String(r.match.id),r]));
  const latest=new Map();
  for(const row of prediction.predictions){
@@ -31,7 +33,7 @@ function buildTopLedger(dataDir=DATA,nowDate=new Date()){
   const m=rec.match,min=Number.parseInt(m.live_minute,10),after=Number(row.actionableAfterMinute),deadline=Number(row.deadlineMinute),created=stamp(row.createdAt);
   if(!Number.isFinite(min)||min<1||min>110||!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after||min>deadline||!Number.isFinite(created)||created>now)continue;
   const fx=features(m,feed.recent_history||[],rec.collected_at||feed.collected_at,now);if(!fx.ready)continue;
-  const key=String(row.matchId)+"|"+row.target;if(byKey.has(key))continue;
+  const key=topEntryKey(row.matchId,row.target);if(byKey.has(key)||hasCaptured(entries,row.matchId,row.target))continue;
   const conservative=Math.max(.01,Number(row.modelProbability)-Number(row.modelCalibrationError));
   const entry={key,predictionId:String(row.id||row.matchId+"|"+row.target),matchId:String(row.matchId),target:row.target,home:row.home||m.home,away:row.away||m.away,competition:row.competition||m.competition||"",capturedAt:now,sourcePredictionAt:created,capturedMinute:min,capturedScore:(Number(m.home_score)||0)+":"+(Number(m.away_score)||0),actionableAfterMinute:after,deadlineMinute:deadline,modelProbability:Number(row.modelProbability),conservativeProbability:Number(conservative.toFixed(6)),calibrationError:Number(row.modelCalibrationError),minimumOdds:Number(row.modelMinimumOdds),stake:1,status:"OPEN",resultScore:null,settledAt:null};
   entries.push(entry);byKey.set(key,entry);
@@ -44,4 +46,4 @@ function buildTopLedger(dataDir=DATA,nowDate=new Date()){
  return{total:entries.length,summary,updated_at:output.updated_at};
 }
 if(require.main===module){try{console.log("AI EDGE TOP OPPORTUNITY LEDGER",JSON.stringify(buildTopLedger()));}catch(e){console.error("AI EDGE TOP LEDGER FAILED:",e.message);process.exit(1);}}
-module.exports={summarize,buildTopLedger};
+module.exports={summarize,buildTopLedger,topEntryKey,hasCaptured};
