@@ -212,7 +212,7 @@ assert.equal(sim.flat.bets,2,"at most one bet is counted per match");
 assert.equal(sim.flat.wins,1);assert.equal(sim.flat.losses,1);assert.equal(sim.flat.skipped,2);assert.equal(sim.flat.skippedDuplicateMatches,1);assert.equal(sim.flat.net,0.6);
 assert.equal(sim.progressive.bets,2);assert.equal(sim.progressive.net,1.9,"progression raises next stake after loss");assert.equal(sim.progressive.maxLosingStreak,1);
 assert.throws(()=>simulateStrategy(simRows,{odds:1,bankroll:100,baseStake:1}),/Neplatné/);
-const {matchLevelSummary}=require("./ai-edge-live-prediction-ledger");
+const {matchLevelSummary,minimumOddsSimulationSummary}=require("./ai-edge-live-prediction-ledger");
 const matchLevel=matchLevelSummary([
  {id:"m1-first",matchId:"m1",target:"MODEL_25",createdAt:100,status:"MISS"},
  {id:"m1-later",matchId:"m1",target:"MODEL_25",createdAt:200,status:"HIT"},
@@ -228,4 +228,17 @@ assert.equal(matchLevel.MISS,1,"the earliest result wins; a later repeated hit c
 assert.equal(matchLevel.OPEN,1);
 assert.equal(matchLevel.decided,2);
 assert.equal(matchLevel.accuracy,0.5);
+const minimumOddsSummary=minimumOddsSimulationSummary([
+ {matchId:"sim-a",target:"MODEL_25",createdAt:10,status:"HIT",modelMinimumOdds:2.0},
+ {matchId:"sim-a",target:"MODEL_25",createdAt:20,status:"MISS",modelMinimumOdds:2.5},
+ {matchId:"sim-b",target:"MODEL_25",createdAt:30,status:"MISS",simulationMinimumOdds:2.2},
+ {matchId:"sim-c",target:"MODEL_25",createdAt:40,status:"OPEN",simulationMinimumOdds:1.8},
+ {matchId:"sim-d",target:"MODEL_FT",createdAt:50,status:"HIT",simulationMinimumOdds:2.1}
+],"MODEL_25");
+assert.equal(minimumOddsSummary.total,3,"one earliest eligible prediction per match and model is selected");
+assert.equal(minimumOddsSummary.HIT,1);
+assert.equal(minimumOddsSummary.MISS,1);
+assert.equal(minimumOddsSummary.OPEN,1);
+assert.equal(minimumOddsSummary.net_profit,0,"at 2.00 one win earns +1 and one loss loses -1");
+assert.equal(minimumOddsSummary.roi,0,"ROI uses one unit staked on each settled match");
 console.log("AI Edge live prediction ledger tests passed.");
