@@ -79,7 +79,7 @@ async function run(dataDir=DATA,nowDate=new Date()){
   sample_policy:"One latest eligible snapshot per five-minute window from 70' to 85', captured after activation. No historical backfill. Ambiguous goals crossing the lag boundary and non-regular-time/abandoned matches are excluded.",
   validation_policy:trained.validation_policy||{min_train_samples:500,min_validation_samples:300,min_train_matches:100,min_validation_matches:50,min_relative_log_loss_gain:0.01,min_relative_brier_gain:0.005,metrics_weighted_per_match:true},
   calibration_policy:{min_effective_match_weight:8,max_absolute_error:0.08,abstain_outside_reliable_bins:true},
-  total_labeled_matches:samples.length,model:trained,
+  total_labeled_samples:samples.length,total_labeled_matches:new Set(samples.map(row=>row.match_id)).size,model:trained,
   status:trained.status==="SHADOW_VALIDATED"?"SHADOW_VALIDATED":"COLLECTING_OR_NOT_VALIDATED"};
  write(modelPath,output);
  return {started_at:output.started_at,total_labeled_matches:samples.length,status:output.status,model:trained};
