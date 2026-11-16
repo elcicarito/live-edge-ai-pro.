@@ -167,7 +167,7 @@
   function renderTopOpportunities(data,ledger,model,lateFtModel,usable){
     const panel=$("ai-edge-top-opportunities");if(!panel)return;
     const title="<div style='font-size:13px;font-weight:900;letter-spacing:.6px;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div>";
-    const note="<div style='font-size:10px;color:#9bb1c7;line-height:1.45;margin:5px 0 9px'>Spoločný výber validovaných modelov AI EDGE 25 a GÓL DO KONCA ZÁPASU. Pri full-time modeli sa OVER linka počíta zo skóre po päťminútovom oneskorení; pred otvorením rozhodovacieho okna je vstup kurzu uzamknutý. Kurz zadávaš ručne.</div>";
+    const note="<div style='font-size:10px;color:#9bb1c7;line-height:1.45;margin:5px 0 9px'>Zobrazujú sa iba modely, ktoré samostatne prešli validáciou: AI EDGE 25 a/alebo GÓL DO KONCA ZÁPASU. Pri full-time modeli sa OVER linka počíta zo skóre po päťminútovom oneskorení; pred otvorením rozhodovacieho okna je vstup kurzu uzamknutý. Kurz zadávaš ručne.</div>";
     const liveAt=Date.parse(data.collected_at||"");
     const ledgerAt=Date.parse(ledger?.updated_at||"");
     const ready25=model?.models?.["25"]?.status==="SHADOW_VALIDATED"&&Array.isArray(model.models["25"].weights);
@@ -189,7 +189,7 @@
       const m=current.record.match||{},minute=Number.parseInt(m.live_minute,10);
       if(!Number.isFinite(minute)||minute<1||(row.target==="MODEL_FT"?minute>100:minute>90))continue;
       const deadline=Number(row.deadlineMinute),after=Number(row.actionableAfterMinute);
-      // Po započítaní päťminútového oneskorenia nesmie kandidát vstúpiť do rozhodovacieho okna až od 90. minúty; reálny čas na 25-minútové rozhodnutie by už nebol k dispozícii.
+      // Model 25 potrebuje dostatočné zostávajúce okno; MODEL_FT môže zostať aktívny aj v riadnom nadstavení.
       if(!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after)continue;
       if(row.target==="MODEL_FT"?(after>=100||minute>100):(after>=90||minute>deadline))continue;
       const p=Number(row.modelProbability),error=Number(row.modelCalibrationError??0);
