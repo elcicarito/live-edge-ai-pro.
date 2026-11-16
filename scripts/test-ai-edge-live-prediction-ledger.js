@@ -60,6 +60,9 @@ assert(modelFT,"independently validated full-time model creates its own predicti
 assert.equal(modelFT.modelProbability,0.5);
 assert.equal(modelFT.actionableAfterMinute,80,"full-time model includes the five-minute data lag");
 assert.equal(modelFT.deadlineMinute,120,"full-time target remains open through regulation stoppage time");
+const ftEarlyRows=[];
+addPredictions(ftEarlyRows,{...feed,records:[{collected_at:new Date(now).toISOString(),match:{...match,live_minute:65}}]},now,null,lateFtModel);
+assert(ftEarlyRows.some(p=>p.target==="MODEL_FT"),"validated full-time model also predicts from the 65th minute");
 const blockedFt=[];
 addPredictions(blockedFt,{...feed,records:[{collected_at:new Date(now).toISOString(),match:{...match,live_minute:75}}]},now,null,{...lateFtModel,model:{...lateFtModel.model,status:"WARMUP"}});
 assert.equal(blockedFt.some(p=>p.target==="MODEL_FT"),false,"unvalidated full-time model never emits a prediction");
