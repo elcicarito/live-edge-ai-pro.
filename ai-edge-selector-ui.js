@@ -202,7 +202,7 @@
       if(!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after||after>=100||minute>deadline)continue;
       if(!Number.isFinite(rowAge)||rowAge<0||rowAge>7*60000||minute>after+4)continue;
       const p=Number(row.modelProbability),error=Number(row.modelCalibrationError??0),conservative=Math.max(0.01,p-error);
-      const m=current.record.match||{},market="OVER "+((Number(m.home_score)||0)+(Number(m.away_score)||0)+0.5).toFixed(1);
+      const market="OVER "+((Number(m.home_score)||0)+(Number(m.away_score)||0)+0.5).toFixed(1);
       const oddsKey=String(row.id||row.matchId+"|MODEL_FT")+"|"+market.replace(/\s+/g,"_"),entered=foundOdds.get(oddsKey)||"",enteredNum=Number(entered.replace(",",".")),ev=entered.trim()&&Number.isFinite(enteredNum)&&enteredNum>1?(enteredNum*conservative-1)*100:null;
       candidates.push({row,current,minute,conservative,after,deadline,target:row.target,market,oddsKey,entered,ev});
     }
