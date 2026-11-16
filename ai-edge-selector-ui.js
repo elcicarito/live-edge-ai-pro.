@@ -167,7 +167,7 @@
   function renderTopOpportunities(data,ledger,model,lateFtModel,usable){
     const panel=$("ai-edge-top-opportunities");if(!panel)return;
     const title="<div style='font-size:13px;font-weight:900;letter-spacing:.6px;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div>";
-    const note="<div style='font-size:10px;color:#9bb1c7;line-height:1.45;margin:5px 0 9px'>Spoločný výber validovaných modelov AI EDGE 25 a GÓL DO KONCA ZÁPASU. Pri full-time modeli sa OVER linka počíta zo skóre po päťminútovom buff eri; pred otvorením rozhodovacieho okna je vstup kurzu uzamknutý. Kurz zadávaš ručne.</div>";
+    const note="<div style='font-size:10px;color:#9bb1c7;line-height:1.45;margin:5px 0 9px'>Spoločný výber validovaných modelov AI EDGE 25 a GÓL DO KONCA ZÁPASU. Pri full-time modeli sa OVER linka počíta zo skóre po päťminútovom oneskorení; pred otvorením rozhodovacieho okna je vstup kurzu uzamknutý. Kurz zadávaš ručne.</div>";
     const liveAt=Date.parse(data.collected_at||"");
     const ledgerAt=Date.parse(ledger?.updated_at||"");
     const ready25=model?.models?.["25"]?.status==="SHADOW_VALIDATED"&&Array.isArray(model.models["25"].weights);
