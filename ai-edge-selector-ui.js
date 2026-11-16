@@ -2,12 +2,15 @@
 (() => {
   const FEED = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/flashscore-primary-current.json";
   const SIMULATION = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-strategy-simulation.json";
+  const LATE_FT_MODEL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-live-late-ft-model.json";
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? "—").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const fmt = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString("sk-SK") : "—";
   const date = value => { const d=new Date(value||""); return Number.isNaN(d.getTime())?"—":d.toLocaleTimeString("sk-SK"); };
   const dateTime = value => { const d=new Date(value||""); return Number.isNaN(d.getTime())?"—":d.toLocaleString("sk-SK",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}); };
+  const ODDS_STORAGE_KEY = "live-edge-ai-pro-found-odds-v1";
   const foundOdds = new Map();
+  try { const saved=JSON.parse(localStorage.getItem(ODDS_STORAGE_KEY)||"{}"); for(const [key,value] of Object.entries(saved)) foundOdds.set(key,String(value)); } catch {}
   async function load(){
     const res=await fetch(FEED+"?t="+Date.now(),{cache:"no-store",headers:{Accept:"application/json"}});
     if(!res.ok) throw new Error("LIVE feed HTTP "+res.status);
@@ -78,7 +81,15 @@
     if(model.source!=="Flashscore"||model.mode!=="FORWARD_ONLY_LIVE_TRAINING")throw new Error("Neplatný formát LIVE modelu");
     return model;
   }
-  function renderModelStatus(model){
+  async function loadLateFTModel(){
+    const res=await fetch(LATE_FT_MODEL+"?t="+Date.now(),{cache:"no-store",headers:{Accept:"application/json"}});
+    if(res.status===404)return null;
+    if(!res.ok)throw new Error("LIVE full-time model HTTP "+res.status);
+    const model=await res.json();
+    if(model.source!=="Flashscore"||model.mode!=="FORWARD_ONLY_LIVE_TRAINING_LATE_FT")throw new Error("Neplatný formát full-time modelu");
+    return model;
+  }
+  function renderModelStatus(model,lateFtModel){
     const el=$("ai-edge-model-status");if(!el)return;
     if(!model){
       el.textContent="Čakám na prvý zber po aktivácii tréningu. Model prijíma iba nové Flashscore LIVE snímky; staršie zápasy sa spätne nenačítavajú.";
@@ -103,7 +114,10 @@
       }).join("");
       return "<div style='overflow-x:auto;margin:8px 0 12px'><b>Kalibrácia "+h+" min · "+(cal.populated_bins||0)+"/"+(cal.bin_count||10)+" obsadených intervalov</b><table style='width:100%;border-collapse:collapse;font-size:12px;margin-top:5px'><thead><tr><th>Rozsah</th><th>Počet</th><th>Váha zápasov</th><th>Predikcia</th><th>Realita</th><th>Odchýlka</th></tr></thead><tbody>"+rows+"</tbody></table></div>";
     }).join("");
-    el.innerHTML="<div>Spustené "+esc(date(model.started_at))+" · oneskorenie započítané: 5 min · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+esc(line)+". Každý zápas má pri vyhodnotení rovnakú váhu. Predikciu model vynechá, ak kalibračný interval nemá aspoň "+fmt(model.calibration_policy?.min_effective_match_weight||8)+" efektívnych zápasov alebo odchýlka presahuje "+(Number(model.calibration_policy?.max_absolute_error??0.08)*100).toFixed(0)+" %. Staršie výsledky bez nových validačných pravidiel sa nepovažujú za potvrdenie modelu. Pravdepodobnosti sú tieňové a automaticky vyhodnocované; nejde o potvrdenú produkčnú ani stávkovú výhodu.</div>"+calibrationTables;
+    const ft=lateFtModel?.model||{},ftCounts=ft.counts||{},ftPolicy=lateFtModel?.validation_policy||{};
+    const ftStatus=ft.status==="SHADOW_VALIDATED"?"tieňovo validovaný":ft.status==="NOT_VALIDATED"?"nesplnil validačné kritériá":"zbiera vzorky";
+    const ftLine="Gól do konca zápasu: "+ftStatus+" · tréning "+fmt(ftCounts.train||0)+" vzoriek / "+fmt(ftCounts.train_matches||0)+" zápasov · overenie "+fmt(ftCounts.validation||0)+" vzoriek / "+fmt(ftCounts.validation_matches||0)+" zápasov (cieľ min. "+fmt(ftPolicy.min_validation_matches||50)+" validačných zápasov)";
+    el.innerHTML="<div>Spustené "+esc(date(model.started_at))+" · oneskorenie započítané: 5 min · "+fmt(model.total_labeled_samples||0)+" označených LIVE vzoriek. "+esc(line)+" | "+esc(ftLine)+". Každý zápas má pri vyhodnotení rovnakú váhu. Predikciu model vynechá, ak kalibračný interval nemá aspoň "+fmt(model.calibration_policy?.min_effective_match_weight||8)+" efektívnych zápasov alebo odchýlka presahuje "+(Number(model.calibration_policy?.max_absolute_error??0.08)*100).toFixed(0)+" %. Staršie výsledky bez nových validačných pravidiel sa nepovažujú za potvrdenie modelu. Pravdepodobnosti sú tieňové a automaticky vyhodnocované; nejde o potvrdenú produkčnú ani stávkovú výhodu.</div>"+calibrationTables;
   }
 
   function renderPredictionLedger(ledger){
@@ -125,7 +139,7 @@
       const allRows=ledger.predictions||[];const rows=allRows.slice(0,30);
       list.innerHTML=rows.length?rows.map(p=>{
         const status=p.status==="HIT"?"HIT":p.status==="MISS"?"MISS":p.status==="UNRESOLVED"?"NEVYHODNOTITEĽNÉ":"OTVORENÉ";
-        const target=p.target==="RESULT_1X2"?"1X2 · "+(p.predictedOutcome==="HOME"?p.home:p.predictedOutcome==="AWAY"?p.away:"remíza"):p.target==="NEXT_TEAM"?"ďalší skórujúci · "+esc(p.predictedTeam||"—"):p.target==="BTTS"?"oba tímy skórujú do FT":(p.target==="MODEL_15"||p.target==="MODEL_25")?"AI EDGE · gól do "+(p.target==="MODEL_15"?15:25)+" min · "+(Number.isFinite(Number(p.modelProbability))?(Number(p.modelProbability)*100).toFixed(1)+"% SHADOW":"bez pravdepodobnosti"):p.target==="FT"?"gól do konca zápasu":"gól do "+p.target+" min";
+        const target=p.target==="RESULT_1X2"?"1X2 · "+(p.predictedOutcome==="HOME"?p.home:p.predictedOutcome==="AWAY"?p.away:"remíza"):p.target==="NEXT_TEAM"?"ďalší skórujúci · "+esc(p.predictedTeam||"—"):p.target==="BTTS"?"oba tímy skórujú do FT":(p.target==="MODEL_15"||p.target==="MODEL_25")?"AI EDGE · gól do "+(p.target==="MODEL_15"?15:25)+" min · "+(Number.isFinite(Number(p.modelProbability))?(Number(p.modelProbability)*100).toFixed(1)+"% SHADOW":"bez pravdepodobnosti"):p.target==="MODEL_FT"?"AI EDGE · gól do konca zápasu · "+(Number.isFinite(Number(p.modelProbability))?(Number(p.modelProbability)*100).toFixed(1)+"% SHADOW":"bez pravdepodobnosti"):p.target==="FT"?"gól do konca zápasu":"gól do "+p.target+" min";
         const result=p.resultScore?" · výsledok "+p.resultScore:"";
         const actual=p.actualOutcome?" · skutočný výsledok "+(p.actualOutcome==="HOME"?p.home:p.actualOutcome==="AWAY"?p.away:"remíza"):"";
         const pressure=p.target==="BTTS"?" · tlak tímu bez gólu "+fmt(p.scorelessPressure)+"/100":" · tlak "+fmt(p.pressure)+"/100";
@@ -150,21 +164,23 @@
     if(data.source!=="Flashscore"||data.mode!=="LIVE_PREDICTION_LEDGER_VIEW")throw new Error("Neplatný formát trvalej histórie");
     return data;
   }
-  function renderTopOpportunities(data,ledger,model,usable){
+  function renderTopOpportunities(data,ledger,model,lateFtModel,usable){
     const panel=$("ai-edge-top-opportunities");if(!panel)return;
     const title="<div style='font-size:13px;font-weight:900;letter-spacing:.6px;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div>";
-    const note="<div style='font-size:10px;color:#9bb1c7;line-height:1.45;margin:5px 0 9px'>Iba 25-minútový SHADOW model po validácii · zoradené podľa konzervatívnej pravdepodobnosti · 5-minútové oneskorenie je započítané. Zelená kontrola znamená iba splnenie vypočítaného kurzového limitu.</div>";
+    const note="<div style='font-size:10px;color:#9bb1c7;line-height:1.45;margin:5px 0 9px'>Spoločný výber validovaných modelov AI EDGE 25 a GÓL DO KONCA ZÁPASU. Pri full-time modeli sa trh počíta ako OVER aktuálny počet gólov + 0,5. Päťminútové oneskorenie je započítané; kurz zadávaš ručne.</div>";
     const liveAt=Date.parse(data.collected_at||"");
     const ledgerAt=Date.parse(ledger?.updated_at||"");
-    if(model?.models?.["25"]?.status!=="SHADOW_VALIDATED"||!Array.isArray(model.models["25"].weights)||!ledger||!Number.isFinite(liveAt)||Date.now()-liveAt>8*60000||!Number.isFinite(ledgerAt)||Date.now()-ledgerAt>6*60000){
-      panel.innerHTML=title+note+"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#f4d28d;font-size:11px'>Zatiaľ nie je možné bezpečne vybrať kandidátov: čakám na čerstvé LIVE dáta, aktuálnu históriu a platný 25-minútový model.</div>";
+    const ready25=model?.models?.["25"]?.status==="SHADOW_VALIDATED"&&Array.isArray(model.models["25"].weights);
+    const readyFT=lateFtModel?.model?.status==="SHADOW_VALIDATED"&&Array.isArray(lateFtModel.model.weights);
+    if((!ready25&&!readyFT)||!ledger||!Number.isFinite(liveAt)||Date.now()-liveAt>8*60000||!Number.isFinite(ledgerAt)||Date.now()-ledgerAt>6*60000){
+      panel.innerHTML=title+note+"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#f4d28d;font-size:11px'>Zatiaľ nie je možné bezpečne vybrať kandidátov: čakám na čerstvé LIVE dáta, aktuálnu históriu a aspoň jeden samostatne validovaný model.</div>";
       return;
     }
     const live=new Map(usable.filter(x=>x.fx.ready).map(x=>[String(x.record.match?.id),x]));
     const latest=new Map();
     for(const row of ledger.predictions||[]){
-      if(row.target!=="MODEL_25"||row.status!=="OPEN"||row.modelStatus!=="SHADOW_VALIDATED"||!Number.isFinite(Number(row.modelProbability))||!Number.isFinite(Number(row.modelMinimumOdds)))continue;
-      const id=String(row.matchId||"");const previous=latest.get(id);
+      if((row.target!=="MODEL_25"&&row.target!=="MODEL_FT")||row.status!=="OPEN"||row.modelStatus!=="SHADOW_VALIDATED"||!Number.isFinite(Number(row.modelProbability))||!Number.isFinite(Number(row.modelMinimumOdds)))continue;
+      const id=String(row.matchId||"")+"|"+row.target;const previous=latest.get(id);
       if(!previous||Number(row.createdAt)>Number(previous.createdAt))latest.set(id,row);
     }
     const candidates=[];
@@ -174,18 +190,21 @@
       if(!Number.isFinite(minute)||minute<1||minute>90)continue;
       const deadline=Number(row.deadlineMinute),after=Number(row.actionableAfterMinute);
       // Po započítaní päťminútového oneskorenia nesmie kandidát vstúpiť do rozhodovacieho okna až od 90. minúty; reálny čas na 25-minútové rozhodnutie by už nebol k dispozícii.
-      if(!Number.isFinite(after)||after>=90||!Number.isFinite(deadline)||deadline<=after||minute>deadline)continue;
+      if(!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after)continue;
+      if(row.target==="MODEL_FT"?(after>=100||minute>100):(after>=90||minute>deadline))continue;
       const p=Number(row.modelProbability),error=Number(row.modelCalibrationError??0);
-      candidates.push({row,current,minute,conservative:p-error,after,deadline});
+      candidates.push({row,current,minute,conservative:p-error,after,deadline,target:row.target});
     }
     candidates.sort((a,b)=>b.conservative-a.conservative||b.row.modelCalibrationMatchesWeight-a.row.modelCalibrationMatchesWeight);
     const top=candidates.slice(0,5);
     const cards=top.map((item,index)=>{
-      const r=item.row,m=item.current.record.match||{},key=String(r.id||r.matchId+"|MODEL_25"),entered=foundOdds.get(key)||"";
+      const r=item.row,m=item.current.record.match||{},key=String(r.id||r.matchId+"|"+item.target),entered=foundOdds.get(key)||"";
       const p=Number(r.modelProbability),fair=1/p,min=Number(r.modelMinimumOdds),error=Number(r.modelCalibrationError??0),v=Number(entered.replace(",",".")); 
       const comparison=!entered.trim()?"<span class='ai-edge-odds-result neutral'>ČAKÁ NA TVOJ KURZ</span>":!Number.isFinite(v)||v<=1?"<span class='ai-edge-odds-result neutral'>NEPLATNÝ KURZ</span>":v+1e-9>=min?"<span class='ai-edge-odds-result good'>LIMIT SPLNENÝ · SHADOW</span>":"<span class='ai-edge-odds-result bad'>POD MINIMÁLNYM KURZOM</span>";
       const timing=item.minute<item.after?"ČAKÁ NA OKNO od "+item.after+"′": "OKNO AKTÍVNE";
-      return "<article class='ai-edge-match' style='border-color:#3b6578'><div class='ai-edge-match-head'><span>"+(index+1)+". "+esc(m.home)+" – "+esc(m.away)+"</span><span>"+esc(m.live_minute)+"′ · "+esc(m.home_score)+":"+esc(m.away_score)+"</span></div><div class='ai-edge-match-sub'>"+esc(m.competition||m.league||"")+" · <span style='color:#f5d47c;font-weight:900'>SHADOW · 25 MIN</span> · "+timing+"</div><div class='ai-edge-model-numbers' style='margin-top:8px'><b>"+(p*100).toFixed(1)+" %</b><span>modelová pravdepodobnosť</span><b>"+fair.toFixed(2)+"</b><span>férový kurz</span><b>"+min.toFixed(2)+"</b><span>teoretický minimálny kurz</span></div><div class='ai-edge-model-time'>Zachytené: "+fmt(r.startMinute)+"′ pri skóre "+fmt(r.startHome)+":"+fmt(r.startAway)+" · "+esc(dateTime(r.createdAt))+" · rozhodovacie okno "+fmt(item.after)+"′–"+fmt(item.deadline)+"′</div><div class='ai-edge-odds-check'><label>MÔJ NÁJDENÝ KURZ<input type='number' min='1.01' step='0.01' inputmode='decimal' placeholder='napr. 2.10' value='"+esc(entered)+"' data-ai-edge-odds='"+esc(key)+"' data-min-odds='"+min+"'></label>"+comparison+"</div><div class='ai-edge-model-foot'>Kalibračná vzorka: "+fmt(r.modelCalibrationMatchesWeight)+" vážených zápasov · chyba intervalu "+(error*100).toFixed(1)+" %. SHADOW nie je potvrdená produkčná výhoda ani pokyn na stávku.</div></article>";
+      const targetLabel=item.target==="MODEL_FT"?"GÓL DO KONCA ZÁPASU":"GÓL DO 25 MINÚT";
+      const currentGoals=(Number(m.home_score)||0)+(Number(m.away_score)||0),market=item.target==="MODEL_FT"?"OVER "+(currentGoals+0.5).toFixed(1):"25-MINÚTOVÝ HORIZONT · bez mapovania na OVER FT";
+      return "<article class='ai-edge-match' style='border-color:#3b6578'><div class='ai-edge-match-head'><span>"+(index+1)+". "+esc(m.home)+" – "+esc(m.away)+"</span><span>"+esc(m.live_minute)+"′ · "+esc(m.home_score)+":"+esc(m.away_score)+"</span></div><div class='ai-edge-match-sub'>"+esc(m.competition||m.league||"")+" · <span style='color:#f5d47c;font-weight:900'>SHADOW · "+targetLabel+"</span> · "+timing+"</div><div style='font-size:11px;font-weight:900;color:#d7f2ff;margin-top:5px'>TRH: "+esc(market)+"</div><div class='ai-edge-model-numbers' style='margin-top:8px'><b>"+(p*100).toFixed(1)+" %</b><span>modelová pravdepodobnosť</span><b>"+fair.toFixed(2)+"</b><span>férový kurz</span><b>"+min.toFixed(2)+"</b><span>teoretický minimálny kurz</span></div><div class='ai-edge-model-time'>Zachytené: "+fmt(r.startMinute)+"′ pri skóre "+fmt(r.startHome)+":"+fmt(r.startAway)+" · "+esc(dateTime(r.createdAt))+" · rozhodovacie okno "+fmt(item.after)+"′–"+fmt(item.deadline)+"′</div><div class='ai-edge-odds-check'><label>MÔJ NÁJDENÝ KURZ<input type='number' min='1.01' step='0.01' inputmode='decimal' placeholder='napr. 2.10' value='"+esc(entered)+"' data-ai-edge-odds='"+esc(key)+"' data-min-odds='"+min+"'></label>"+comparison+"</div><div class='ai-edge-model-foot'>Kalibračná vzorka: "+fmt(r.modelCalibrationMatchesWeight)+" vážených zápasov · chyba intervalu "+(error*100).toFixed(1)+" %. SHADOW nie je potvrdená produkčná výhoda ani pokyn na stávku.</div></article>";
     }).join("");
     panel.innerHTML=title+note+(cards||"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#c3d2e1;font-size:11px'>Momentálne nie je žiadny kandidát, ktorý súčasne spĺňa validáciu, čerstvosť dát a aktívne časové okno. Žiadny tip sa nebude vytvárať nasilu.</div>");
   }
@@ -197,8 +216,8 @@
     const withStats=usable.filter(x=>x.fx.hasCore).length;
     const fresh=usable.filter(x=>x.fx.ready).length;
     renderPredictionLedger(ledger);
-    renderModelStatus(model);
-    renderTopOpportunities(data,ledger,model,usable);
+    renderModelStatus(model,lateFtModel);
+    renderTopOpportunities(data,ledger,model,lateFtModel,usable);
     $("ai-edge-metrics").innerHTML=[
       ["<b>"+fmt(records.length)+"</b>","LIVE zápasy"],
       ["<b>"+fmt(withStats)+"</b>","So štatistikami"],
@@ -233,7 +252,7 @@
     $("ai-edge-audit-status").textContent="LIVE analytika · trvalá história · bez kurzov";
   }
   async function refresh(){
-    const [feedResult,ledgerResult,modelResult,simulationResult]=await Promise.allSettled([load(),loadLedger(),loadModel(),loadStrategy()]);
+    const [feedResult,ledgerResult,modelResult,lateFtResult,simulationResult]=await Promise.allSettled([load(),loadLedger(),loadModel(),loadLateFTModel(),loadStrategy()]);
     if(feedResult.status!=="fulfilled"){
       const s=$("ai-edge-state");if(s){s.className="ai-edge-state bad";s.textContent="LIVE DÁTA NEDOSTUPNÉ · "+(feedResult.reason?.message||"chyba LIVE feedu");}
       const panel=$("ai-edge-top-opportunities");if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>LIVE feed sa nepodarilo načítať. Výber kandidátov je pozastavený, aby sa nezobrazovali neaktuálne údaje.</div>";
@@ -245,7 +264,8 @@
     }
     const ledger=ledgerResult.status==="fulfilled"?ledgerResult.value:null;
     const model=modelResult.status==="fulfilled"?modelResult.value:null;
-    try{render(feedResult.value,ledger,model);}catch(e){
+    const lateFtModel=lateFtResult.status==="fulfilled"?lateFtResult.value:null;
+    try{render(feedResult.value,ledger,model,lateFtModel);}catch(e){
       const panel=$("ai-edge-top-opportunities");if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>Výber kandidátov sa nepodarilo spracovať: "+esc(e?.message||"neznáma chyba")+". Ostatné LIVE údaje zostávajú oddelené.</div>";
     }
     if(simulationResult.status==="fulfilled")runStrategySimulation(simulationResult.value);
@@ -253,7 +273,8 @@
     const warnings=[];
     if(ledgerResult.status!=="fulfilled")warnings.push("história predikcií: "+(ledgerResult.reason?.message||"nedostupná"));
     if(modelResult.status!=="fulfilled")warnings.push("model: "+(modelResult.reason?.message||"nedostupný"));
+    if(lateFtResult.status!=="fulfilled")warnings.push("model gól do FT: "+(lateFtResult.reason?.message||"nedostupný"));
     if(warnings.length){const meta=$("ai-edge-updated");if(meta)meta.textContent+=" · "+warnings.join(" · ");}
   }
-  document.addEventListener("DOMContentLoaded",()=>{document.addEventListener("input",event=>{const input=event.target.closest("[data-ai-edge-odds]");if(!input)return;const key=input.dataset.aiEdgeOdds;foundOdds.set(key,input.value);const result=input.parentElement?.querySelector(".ai-edge-odds-result");if(!result)return;const value=Number(input.value.replace(',','.')),minimum=Number(input.dataset.minOdds);if(!input.value.trim()){result.className="ai-edge-odds-result neutral";result.textContent="Zadaj kurz, ktorý si našiel";}else if(!Number.isFinite(value)||value<=1){result.className="ai-edge-odds-result neutral";result.textContent="Neplatný kurz";}else if(!Number.isFinite(minimum)||minimum<=1){result.className="ai-edge-odds-result neutral";result.textContent="Minimálny kurz nie je dostupný";}else if(value+1e-9>=minimum){result.className="ai-edge-odds-result good";result.textContent="LIMIT SPLNENÝ · SHADOW";}else{result.className="ai-edge-odds-result bad";result.textContent="POD MINIMÁLNYM KURZOM";}});$("ai-edge-sim-run")?.addEventListener("click",async()=>{try{runStrategySimulation(await loadStrategy());}catch(e){const out=$("ai-edge-strategy-results");if(out)out.textContent=e.message;}});refresh();window.setInterval(refresh,60000);});
+  document.addEventListener("DOMContentLoaded",()=>{document.addEventListener("input",event=>{const input=event.target.closest("[data-ai-edge-odds]");if(!input)return;const key=input.dataset.aiEdgeOdds;foundOdds.set(key,input.value);try{localStorage.setItem(ODDS_STORAGE_KEY,JSON.stringify(Object.fromEntries(foundOdds)));}catch{}const result=input.parentElement?.querySelector(".ai-edge-odds-result");if(!result)return;const value=Number(input.value.replace(',','.')),minimum=Number(input.dataset.minOdds);if(!input.value.trim()){result.className="ai-edge-odds-result neutral";result.textContent="Zadaj kurz, ktorý si našiel";}else if(!Number.isFinite(value)||value<=1){result.className="ai-edge-odds-result neutral";result.textContent="Neplatný kurz";}else if(!Number.isFinite(minimum)||minimum<=1){result.className="ai-edge-odds-result neutral";result.textContent="Minimálny kurz nie je dostupný";}else if(value+1e-9>=minimum){result.className="ai-edge-odds-result good";result.textContent="LIMIT SPLNENÝ · SHADOW";}else{result.className="ai-edge-odds-result bad";result.textContent="POD MINIMÁLNYM KURZOM";}});$("ai-edge-sim-run")?.addEventListener("click",async()=>{try{runStrategySimulation(await loadStrategy());}catch(e){const out=$("ai-edge-strategy-results");if(out)out.textContent=e.message;}});refresh();window.setInterval(refresh,60000);});
 })();
