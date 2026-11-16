@@ -11,6 +11,8 @@ const stats=[
 const row=(minute,homeScore=0)=>({match_id:"flashscore:test-1",snapshot:{collected_at:new Date(Date.UTC(2026,10,15,12,minute)).toISOString(),live_minute:minute,stage:"2nd Half",home_score:homeScore,away_score:0,stats}});
 const sample=row(75), rows=[row(70),sample,row(80),row(90)];
 assert.equal(labelLateFT(sample,rows,[],outcome),0,"confirmed full-time with no later goal is negative");
+const earlySample=row(65);
+assert.equal(labelLateFT(earlySample,[row(65),row(70),row(90)],[],outcome),0,"65th-minute capture uses the five-minute decision lag and full-time label");
 const positiveRows=[row(70),sample,row(80),row(85),row(90,1)];
 const positiveTransitions=base.goalTransitions(positiveRows).transitions;
 assert.equal(labelLateFT(sample,positiveRows,positiveTransitions,outcome),1,"goal after effective 80' boundary is positive");
@@ -28,11 +30,11 @@ for(let i=0;i<5;i++)many.push({...row(70),match_id:"flashscore:m"+i,snapshot:{..
 const grouped=[];
 for(let i=0;i<5;i++){
  const id="flashscore:m"+i;
- for(const minute of [70,75,80,85,90])grouped.push({match_id:id,snapshot:{...row(minute).snapshot,collected_at:new Date(Date.UTC(2026,10,15,12,i+minute)).toISOString()}});
+ for(const minute of [65,70,75,80,85,90])grouped.push({match_id:id,snapshot:{...row(minute).snapshot,collected_at:new Date(Date.UTC(2026,10,15,12,i+minute)).toISOString()}});
 }
 const outcomes={matches:Object.fromEntries(Array.from({length:5},(_,i)=>["m"+i,outcome]))};
 const samples=buildLateFTSamples(grouped,outcomes,Date.UTC(2026,10,15,0));
-assert.equal(samples.length,20,"four five-minute decision windows are sampled for each of five matches");
-assert.ok(samples.every(x=>/\|(70|75|80|85)_FT$/.test(x.id)),"late FT target uses distinct five-minute window IDs");
+assert.equal(samples.length,25,"five five-minute decision windows from 65' to 85' are sampled for each of five matches");
+assert.ok(samples.every(x=>/\|(65|70|75|80|85)_FT$/.test(x.id)),"late FT target uses distinct five-minute window IDs");
 assert.equal(new Set(samples.map(x=>x.match_id+"|"+x.id.split("|").slice(-1)[0])).size,samples.length,"a match contributes at most one sample per decision window");
 console.log("AI Edge late FT trainer tests passed.");
