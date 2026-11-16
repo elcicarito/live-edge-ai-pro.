@@ -201,7 +201,7 @@
       if(!Number.isFinite(minute)||minute<1||minute>110)continue;
       const deadline=Number(row.deadlineMinute),after=Number(row.actionableAfterMinute),rowAge=Date.now()-Date.parse(row.createdAt);
       if(!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after||minute>deadline)continue;
-      if(!Number.isFinite(rowAge)||rowAge<0||rowAge>7*60000||minute>after+4)continue;
+      if(!Number.isFinite(rowAge)||rowAge<0)continue;
       const p=Number(row.modelProbability),error=Number(row.modelCalibrationError),conservative=Math.max(0.01,p-error);
       const is25=row.target==="MODEL_25";
       const market=is25?"GÓL V NASLEDUJÚCICH 25 MIN":"OVER "+((Number(m.home_score)||0)+(Number(m.away_score)||0)+0.5).toFixed(1);
