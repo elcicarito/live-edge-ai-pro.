@@ -28,7 +28,7 @@ function buildTopLedger(dataDir=DATA,nowDate=new Date()){
  const fresh=Number.isFinite(feedAt)&&now-feedAt<=8*60000&&Number.isFinite(ledgerAt)&&now-ledgerAt<=6*60000;
  if(fresh)for(const row of latest.values()){
   const rec=live.get(String(row.matchId));if(!rec)continue;
-  const m=rec.match,min=Number(m.live_minute),after=Number(row.actionableAfterMinute),deadline=Number(row.deadlineMinute),created=stamp(row.createdAt);
+  const m=rec.match,min=Number.parseInt(m.live_minute,10),after=Number(row.actionableAfterMinute),deadline=Number(row.deadlineMinute),created=stamp(row.createdAt);
   if(!Number.isFinite(min)||min<1||min>110||!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after||min>deadline||!Number.isFinite(created)||created>now)continue;
   const fx=features(m,feed.recent_history||[],rec.collected_at||feed.collected_at,now);if(!fx.ready)continue;
   const key=String(row.matchId)+"|"+row.target;if(byKey.has(key))continue;
