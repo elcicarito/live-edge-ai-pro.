@@ -1,11 +1,11 @@
 "use strict";
 // Independent forward-only model: probability of >=1 goal after the 5-minute
-// observation lag from a LIVE snapshot at 70'-85' until regulation full-time.
+// observation lag from a LIVE snapshot at 65'-85' until regulation full-time.
 const fs=require("node:fs"),path=require("node:path");
 const base=require("./ai-edge-live-online-trainer");
 const DATA=path.resolve(__dirname,"..","data");
 const FILE="ai-edge-live-late-ft-model.json";
-const LAG=5,MINUTE_FROM=70,MINUTE_TO=85;
+const LAG=5,MINUTE_FROM=65,MINUTE_TO=85;
 function read(file,fallback){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code==="ENOENT")return fallback;throw e;}}
 function write(file,value){const tmp=file+".tmp";fs.writeFileSync(tmp,JSON.stringify(value,null,2)+"\n");fs.renameSync(tmp,file);}
 function validStage(stage){return !/(half.?time|\bht\b|finished|full.?time|\bft\b|after extra time|penalt|abandoned|cancelled|postponed|suspended)/i.test(String(stage||""));}
@@ -65,9 +65,9 @@ function buildLateFTSamples(rows,outcomes,startedAt){
 async function run(dataDir=DATA,nowDate=new Date()){
  const modelPath=path.join(dataDir,FILE),existing=read(modelPath,null);
  if(existing&&(existing.source!=="Flashscore"||existing.mode!=="FORWARD_ONLY_LIVE_TRAINING_LATE_FT"))
-  throw new Error("Neplatný samostatný 70+ FT model; odmietam prepísať.");
+  throw new Error("Neplatný samostatný late FT model; odmietam prepísať.");
  const startedAt=existing?Date.parse(existing.started_at):nowDate.getTime();
- if(!Number.isFinite(startedAt))throw new Error("Neplatný čas aktivácie 70+ FT tréningu.");
+ if(!Number.isFinite(startedAt))throw new Error("Neplatný čas aktivácie late FT tréningu.");
  const timeline=await base.readTimeline(dataDir,startedAt);
  const outcomes=read(path.join(dataDir,"flashscore-confirmed-outcomes.json"),{matches:{}});
  const samples=buildLateFTSamples(timeline,outcomes,startedAt);
