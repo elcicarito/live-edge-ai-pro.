@@ -10,7 +10,7 @@ function summarize(rows,target){
  const settled=list.filter(x=>x.status==="HIT"||x.status==="MISS").sort((a,b)=>stamp(a.capturedAt)-stamp(b.capturedAt));
  let balance=0,peak=0,maxDrawdown=0,staked=0,net=0;
  for(const x of settled){const odds=Number(x.minimumOdds);if(!Number.isFinite(odds)||odds<=1)continue;const change=x.status==="HIT"?odds-1:-1;balance+=change;net+=change;staked++;peak=Math.max(peak,balance);maxDrawdown=Math.max(maxDrawdown,peak-balance);}
- return{target,total:list.length,...counts,decided:counts.HIT+counts.MISS,accuracy:counts.HIT+counts.MISS?counts.HIT/(counts.HIT+counts.MISS):null,stakePerPick:1,totalStaked:staked,netProfit:Number(net.toFixed(4)),roi:staked?Number((net/staked*100).toFixed(2)):null,maxDrawdown:Number(maxDrawdown.toFixed(4)),oddsBasis:"locked_individual_minimum_hypothetical_not_actual_bookmaker_odds"};
+ return{target,total:list.length,...counts,decided:counts.HIT+counts.MISS,accuracy:counts.HIT+counts.MISS?counts.HIT/(counts.HIT+counts.MISS):null,stakePerPick:1,totalStaked:staked,netProfit:staked?Number(net.toFixed(4)):null,roi:staked?Number((net/staked*100).toFixed(2)):null,maxDrawdown:staked?Number(maxDrawdown.toFixed(4)):null,oddsBasis:"locked_individual_minimum_hypothetical_not_actual_bookmaker_odds"};
 }
 function buildTopLedger(dataDir=DATA,nowDate=new Date()){
  const feed=read(path.join(dataDir,"flashscore-primary-current.json"),null),prediction=readHistory(path.join(dataDir,"ai-edge-prediction-history.json"));
