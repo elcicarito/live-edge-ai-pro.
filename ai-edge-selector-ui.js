@@ -177,45 +177,48 @@
   function renderTopOpportunities(data,ledger,model,lateFtModel,usable){
     const panel=$("ai-edge-top-opportunities");if(!panel)return;
     const title="<div style='font-size:13px;font-weight:900;letter-spacing:.6px;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div>";
-    const note="<div style='font-size:10px;color:#9bb1c7;line-height:1.45;margin:5px 0 9px'>Tento panel vyberá iba samostatne validovaný model GÓL DO KONCA ZÁPASU, pretože jeho predikcia sa mapuje na hranicu OVER podľa aktuálneho skóre. AI EDGE 25 zostáva oddelený: bez trhu na gól v nasledujúcich 25 minútach sa nesmie zamieňať za OVER do konca. Kurz zadávaš ručne; EV sa počíta konzervatívne po odpočítaní chyby kalibrácie.</div>";
-    const liveAt=Date.parse(data.collected_at||"");
-    const ledgerAt=Date.parse(ledger?.updated_at||"");
-    const ftItem=lateFtModel?.model||{},ftCounts=ftItem.counts||{},ftMetrics=ftItem.metrics||{},ftPolicy=lateFtModel?.validation_policy||{};
-    const readyFT=lateFtModel?.source==="Flashscore"&&lateFtModel?.mode==="FORWARD_ONLY_LIVE_TRAINING_LATE_FT"&&ftItem.status==="SHADOW_VALIDATED"&&Array.isArray(ftItem.weights)&&ftItem.weights.length===17&&Number(ftCounts.train)>=Math.max(500,Number(ftPolicy.min_train_samples)||500)&&Number(ftCounts.validation)>=Math.max(300,Number(ftPolicy.min_validation_samples)||300)&&Number(ftCounts.train_matches)>=Math.max(100,Number(ftPolicy.min_train_matches)||100)&&Number(ftCounts.validation_matches)>=Math.max(50,Number(ftPolicy.min_validation_matches)||50)&&Number(ftMetrics.relative_log_loss_gain)>=(Number(ftPolicy.min_relative_log_loss_gain)||0.01)&&Number(ftMetrics.relative_brier_gain)>=(Number(ftPolicy.min_relative_brier_gain)||0.005);
-    if(!readyFT||!ledger||!Number.isFinite(liveAt)||Date.now()-liveAt>8*60000||!Number.isFinite(ledgerAt)||Date.now()-ledgerAt>6*60000){
-      panel.innerHTML=title+note+"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#f4d28d;font-size:11px'>Zatiaľ nie je možné bezpečne vybrať kandidátov: čakám na čerstvé LIVE dáta, aktuálnu históriu a aspoň jeden samostatne validovaný model.</div>";
-      return;
+    const note="<div style='font-size:10px;color:#9bb1c7;line-height:1.45;margin:5px 0 9px'>Panel zobrazuje dva oddelené modely: <b>AI EDGE 25</b> = gól v nasledujúcich 25 minútach po 5-minútovom oneskorení; <b>MODEL_FT</b> = gól do konca riadneho zápasu. Ich pravdepodobnosti ani trhy sa nezamieňajú. Zadaj skutočný kurz, aplikácia ukáže konzervatívne odhadované EV po odpočítaní chyby kalibrácie.</div>";
+    const liveAt=Date.parse(data.collected_at||""),ledgerAt=Date.parse(ledger?.updated_at||"");
+    if(!ledger||!Number.isFinite(liveAt)||Date.now()-liveAt>8*60000||!Number.isFinite(ledgerAt)||Date.now()-ledgerAt>6*60000){
+      panel.innerHTML=title+note+"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#f4d28d;font-size:11px'>Výber je pozastavený: čakám na čerstvé LIVE dáta a aktuálnu predikčnú históriu.</div>";return;
     }
     const live=new Map(usable.filter(x=>x.fx.ready).map(x=>[String(x.record.match?.id),x]));
     const latest=new Map();
     for(const row of ledger.predictions||[]){
-      if(row.target!=="MODEL_FT"||row.status!=="OPEN"||row.modelStatus!=="SHADOW_VALIDATED"||!Number.isFinite(Number(row.modelProbability))||!Number.isFinite(Number(row.modelMinimumOdds)))continue;
-      const id=String(row.matchId||"")+"|"+row.target;const previous=latest.get(id);
+      if(!["MODEL_25","MODEL_FT"].includes(row.target)||row.status!=="OPEN"||row.modelStatus!=="SHADOW_VALIDATED"||!Number.isFinite(Number(row.modelProbability))||!Number.isFinite(Number(row.modelMinimumOdds))||!Number.isFinite(Number(row.modelCalibrationError)))continue;
+      const id=String(row.matchId||"")+"|"+row.target,previous=latest.get(id);
       if(!previous||Number(row.createdAt)>Number(previous.createdAt))latest.set(id,row);
     }
     const candidates=[];
-    for(const [id,row] of latest){
+    for(const row of latest.values()){
       const current=live.get(String(row.matchId||""));if(!current)continue;
       const m=current.record.match||{},minute=Number.parseInt(m.live_minute,10);
-      if(!Number.isFinite(minute)||minute<1||minute>100)continue;
+      if(!Number.isFinite(minute)||minute<1||minute>110)continue;
       const deadline=Number(row.deadlineMinute),after=Number(row.actionableAfterMinute),rowAge=Date.now()-Date.parse(row.createdAt);
-      if(!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after||after>=100||minute>deadline)continue;
+      if(!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after||minute>deadline)continue;
       if(!Number.isFinite(rowAge)||rowAge<0||rowAge>7*60000||minute>after+4)continue;
-      const p=Number(row.modelProbability),error=Number(row.modelCalibrationError??0),conservative=Math.max(0.01,p-error);
-      const market="OVER "+((Number(m.home_score)||0)+(Number(m.away_score)||0)+0.5).toFixed(1);
-      const oddsKey=String(row.id||row.matchId+"|MODEL_FT")+"|"+market.replace(/\s+/g,"_"),entered=foundOdds.get(oddsKey)||"",enteredNum=Number(entered.replace(",",".")),ev=entered.trim()&&Number.isFinite(enteredNum)&&enteredNum>1?(enteredNum*conservative-1)*100:null;
-      candidates.push({row,current,minute,conservative,after,deadline,target:row.target,market,oddsKey,entered,ev});
+      const p=Number(row.modelProbability),error=Number(row.modelCalibrationError),conservative=Math.max(0.01,p-error);
+      const is25=row.target==="MODEL_25";
+      const market=is25?"GÓL V NASLEDUJÚCICH 25 MIN":"OVER "+((Number(m.home_score)||0)+(Number(m.away_score)||0)+0.5).toFixed(1);
+      const oddsKey=String(row.id||row.matchId+"|"+row.target)+"|"+(is25?"GOAL_25_MIN":market.replace(/\s+/g,"_"));
+      const entered=foundOdds.get(oddsKey)||"",enteredNum=Number(entered.replace(",",".")),ev=entered.trim()&&Number.isFinite(enteredNum)&&enteredNum>1?(enteredNum*conservative-1)*100:null;
+      const min=Number(row.modelMinimumOdds);
+      candidates.push({row,current,minute,conservative,after,deadline,target:row.target,market,oddsKey,entered,ev,min});
     }
     candidates.sort((a,b)=>(b.ev===null?-1:b.ev)-(a.ev===null?-1:a.ev)||b.conservative-a.conservative||Number(b.row.modelCalibrationMatchesWeight)-Number(a.row.modelCalibrationMatchesWeight));
-    const top=candidates.slice(0,5);
+    const top=candidates.slice(0,8);
     const cards=top.map((item,index)=>{
-      const r=item.row,m=item.current.record.match||{},market=item.market,key=item.oddsKey,entered=item.entered;
-      const p=Number(r.modelProbability),fair=1/p,min=Number(r.modelMinimumOdds),error=Number(r.modelCalibrationError??0),v=Number(entered.replace(",",".")),conservative=item.conservative,ev=entered.trim()&&Number.isFinite(v)&&v>1?(v*conservative-1)*100:null,oddsDisabled=item.minute<item.after?" disabled":"";
-      const comparison=!entered.trim()?"<span class='ai-edge-odds-result neutral'>ČAKÁ NA TVOJ KURZ</span>":!Number.isFinite(v)||v<=1?"<span class='ai-edge-odds-result neutral'>NEPLATNÝ KURZ</span>":ev>=5?"<span class='ai-edge-odds-result good'>EV+ ≥ 5 % · SHADOW TEST</span>":ev>0?"<span class='ai-edge-odds-result neutral'>POZITÍVNE EV, ALE POD BEZPEČNOSTNÝM LIMITOM</span>":"<span class='ai-edge-odds-result bad'>BEZ PREUKÁZANEJ VÝHODY</span>";
+      const r=item.row,m=item.current.record.match||{},entered=item.entered,v=Number(entered.replace(",",".")),p=Number(r.modelProbability),fair=1/p,min=item.min,error=Number(r.modelCalibrationError),conservative=item.conservative;
+      const ev=entered.trim()&&Number.isFinite(v)&&v>1?(v*conservative-1)*100:null;
+      const meets=Number.isFinite(v)&&v>1&&v+1e-9>=min;
+      const comparison=!entered.trim()?"<span class='ai-edge-odds-result neutral'>ČAKÁ NA TVOJ KURZ</span>":!Number.isFinite(v)||v<=1?"<span class='ai-edge-odds-result neutral'>NEPLATNÝ KURZ</span>":meets?"<span class='ai-edge-odds-result good'>KURZ DOSAHUJE MINIMUM · EV+ ODHAD</span>":ev>0?"<span class='ai-edge-odds-result neutral'>EV KLADNÉ, ALE KURZ POD BEZPEČNÝM MINIMOM</span>":"<span class='ai-edge-odds-result bad'>KURZ POD MINIMOM · EV NIE JE KLADNÉ</span>";
       const timing=item.minute<item.after?"ČAKÁ NA OKNO od "+item.after+"′":"OKNO AKTÍVNE";
-      return "<article class='ai-edge-match' style='border-color:#3b6578'><div class='ai-edge-match-head'><span>"+(index+1)+". "+esc(m.home)+" – "+esc(m.away)+"</span><span>"+esc(m.live_minute)+"′ · "+esc(m.home_score)+":"+esc(m.away_score)+"</span></div><div class='ai-edge-match-sub'>"+esc(m.competition||m.league||"")+" · <span style='color:#f5d47c;font-weight:900'>SHADOW · GÓL DO KONCA ZÁPASU</span> · "+timing+"</div><div style='font-size:11px;font-weight:900;color:#d7f2ff;margin-top:5px'>TRH: "+esc(market)+"</div><div class='ai-edge-model-numbers' style='margin-top:8px'><b>"+(p*100).toFixed(1)+" %</b><span>modelová pravdepodobnosť</span><b>"+(conservative*100).toFixed(1)+" %</b><span>konzervatívna pravdepodobnosť</span><b>"+fair.toFixed(2)+"</b><span>férový kurz</span><b>"+min.toFixed(2)+"</b><span>minimálny kurz pre EV +5 %</span></div><div class='ai-edge-model-time'>Zachytené: "+fmt(r.startMinute)+"′ pri skóre "+fmt(r.startHome)+":"+fmt(r.startAway)+" · "+esc(dateTime(r.createdAt))+" · rozhodovacie okno "+fmt(item.after)+"′–"+fmt(item.deadline)+"′</div><div class='ai-edge-odds-check'><label>MÔJ NÁJDENÝ KURZ<input type='number' min='1.01' step='0.01' inputmode='decimal' placeholder='napr. 2.10' value='"+esc(entered)+"' data-ai-edge-odds='"+esc(key)+"' data-min-odds='"+min+"' data-conservative-probability='"+conservative+"'"+oddsDisabled+"></label>"+comparison+"<span class='ai-edge-model-time' data-ev-output=''>"+(ev===null?"Konzervatívne očakávané ROI: —":"Konzervatívne očakávané ROI: "+(ev>=0?"+":"")+ev.toFixed(1)+" % na vklad")+"</span></div><div class='ai-edge-model-foot'>Výpočet používa P − chyba kalibrácie a 5 % bezpečnostnú rezervu. Kalibračná vzorka: "+fmt(r.modelCalibrationMatchesWeight)+" vážených zápasov · chyba intervalu "+(error*100).toFixed(1)+" %. EV+ je zatiaľ tieňový kandidát; ziskovosť musí potvrdiť evidencia skutočných kurzov a vyhodnotených stávok.</div></article>";
+      const color=meets?"#39d98a":ev!==null&&ev>0?"#f4d27a":"#f08b8b";
+      const horizon=item.target==="MODEL_25"?"AI EDGE 25 · GÓL V NASLEDUJÚCICH 25 MIN":"MODEL_FT · GÓL DO KONCA RIADNEHO ČASU";
+      const marketHint=item.target==="MODEL_25"?"Nie je to automaticky OVER do konca zápasu.":"Trh OVER podľa aktuálneho skóre.";
+      return "<article class='ai-edge-match' style='border-color:"+color+"'><div class='ai-edge-match-head'><span>"+(index+1)+". "+esc(m.home)+" – "+esc(m.away)+"</span><span>"+esc(m.live_minute)+"′ · "+esc(m.home_score)+":"+esc(m.away_score)+"</span></div><div class='ai-edge-match-sub'>"+esc(m.competition||m.league||"")+" · <span style='color:"+color+";font-weight:900'>"+horizon+"</span> · "+timing+"</div><div style='font-size:11px;font-weight:900;color:#d7f2ff;margin-top:5px'>TRH / CIEĽ: "+esc(item.market)+"</div><div class='ai-edge-model-numbers' style='margin-top:8px'><b>"+(p*100).toFixed(1)+" %</b><span>modelová pravdepodobnosť</span><b>"+(conservative*100).toFixed(1)+" %</b><span>konzervatívna pravdepodobnosť</span><b>"+fair.toFixed(2)+"</b><span>férový kurz</span><b>"+min.toFixed(2)+"</b><span>minimálny kurz pre EV +5 %</span></div><div class='ai-edge-model-time'>Zachytené: "+fmt(r.startMinute)+"′ pri skóre "+fmt(r.startHome)+":"+fmt(r.startAway)+" · "+esc(dateTime(r.createdAt))+" · rozhodovacie okno "+fmt(item.after)+"′–"+fmt(item.deadline)+"′</div><div class='ai-edge-odds-check'><label>MÔJ SKUTOČNÝ NÁJDENÝ KURZ<input type='number' min='1.01' step='0.01' inputmode='decimal' placeholder='napr. 2.10' value='"+esc(entered)+"' data-ai-edge-odds='"+esc(item.oddsKey)+"' data-min-odds='"+min+"' data-conservative-probability='"+conservative+"'></label>"+comparison+"<span class='ai-edge-model-time' data-ev-output='' style='color:"+color+";font-weight:900'>"+(ev===null?"Odhadované EV pri zadanom kurze: —":"Odhadované EV pri zadanom kurze: "+(ev>=0?"+":"")+ev.toFixed(1)+" % na vklad")+"</span></div><div class='ai-edge-model-foot'>"+marketHint+" Výpočet EV = (skutočný kurz × konzervatívna pravdepodobnosť) − 1. Použitá P = modelová P − chyba kalibrácie ("+(error*100).toFixed(1)+" %); bezpečnostná rezerva minimálneho kurzu je 5 %. Vzorka kalibrácie: "+fmt(r.modelCalibrationMatchesWeight)+" vážených zápasov. Je to odhad podľa modelu, nie dôkaz ziskovosti.</div></article>";
     }).join("");
-    panel.innerHTML=title+note+(cards||"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#c3d2e1;font-size:11px'>Momentálne nie je žiadny kandidát, ktorý súčasne spĺňa validáciu, čerstvosť dát a aktívne časové okno. Žiadny tip sa nebude vytvárať nasilu.</div>");
+    panel.innerHTML=title+note+(cards||"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#c3d2e1;font-size:11px'>Momentálne nie je kandidát z AI EDGE 25 ani MODEL_FT, ktorý súčasne spĺňa vlastnú validáciu, kalibráciu, čerstvosť dát a aktívne časové okno. Žiadny tip sa nebude vytvárať nasilu.</div>");
   }
 
   function render(data,ledger,model,lateFtModel){
