@@ -56,6 +56,30 @@ function flattenMatches(payload) {
   return matches;
 }
 
+function extractFinalYellowCards(payload) {
+  const rows = [];
+  for (const period of Array.isArray(payload?.periods) ? payload.periods : []) {
+    const periodName = String(period?.period || "").toLowerCase();
+    if (periodName && !["all", "match", "full", "full_time", "fulltime"].includes(periodName)) continue;
+    for (const group of Array.isArray(period?.groups) ? period.groups : []) {
+      for (const stat of Array.isArray(group?.statistics) ? group.statistics : []) {
+        const label = String(stat?.name || stat?.label || "").trim().toLowerCase();
+        if (!/^(yellow cards|yellow card)$/.test(label)) continue;
+        const home = validScore(stat.home_value ?? stat.home);
+        const away = validScore(stat.away_value ?? stat.away);
+        if (home !== null && away !== null) rows.push({ home, away, label: stat.name || stat.label, period: period.period || null });
+      }
+    }
+  }
+  if (!rows.length) return null;
+  const unique = new Map(rows.map(row => [row.home + ":" + row.away, row]));
+  if (unique.size !== 1) return null;
+  const value = [...unique.values()][0];
+  return { home_yellow_cards: value.home, away_yellow_cards: value.away,
+    total_yellow_cards: value.home + value.away, status: "CONFIRMED",
+    source: "Flashscore /matches/statistics", period: value.period, confirmed_at: null };
+}
+
 function extractFinalCorners(payload) {
   const rows = [];
   for (const period of Array.isArray(payload?.periods) ? payload.periods : []) {
@@ -87,7 +111,8 @@ async function fetchFinalStatistics(matchId) {
     signal: AbortSignal.timeout(30000), cache: "no-store"
   });
   if (!response.ok) throw new Error("/matches/statistics match=" + matchId + " HTTP " + response.status);
-  return extractFinalCorners(await response.json());
+  const payload = await response.json();
+  return { corners: extractFinalCorners(payload), yellow_cards: extractFinalYellowCards(payload) };
 }
 
 function dueForCheck(date, dateChecks, nowMs) {
@@ -163,7 +188,7 @@ function buildFinalMatch(match, archived) {
   };
 }
 
-function settleOne(match, archived, outcomes, confirmedAt, finalCorners = null) {
+function settleOne(match, archived, outcomes, confirmedAt, finalStatistics = null) {
   if (String(match?.status || "").toLowerCase() !== "finished") return false;
   const homeScore = validScore(match.home_score);
   const awayScore = validScore(match.away_score);
@@ -173,15 +198,25 @@ function settleOne(match, archived, outcomes, confirmedAt, finalCorners = null) 
   const finalMatch = buildFinalMatch(match, archived);
   const finalScore = homeScore + " : " + awayScore;
   const previous = outcomes.matches[id];
+  const finalCorners = finalStatistics?.corners || null;
+  const finalYellowCards = finalStatistics?.yellow_cards || null;
   const validCorners = finalCorners && Number.isInteger(finalCorners.home_corners) && finalCorners.home_corners >= 0 && Number.isInteger(finalCorners.away_corners) && finalCorners.away_corners >= 0 ? { ...finalCorners, confirmed_at: confirmedAt } : null;
+  const validYellowCards = finalYellowCards && Number.isInteger(finalYellowCards.home_yellow_cards) && finalYellowCards.home_yellow_cards >= 0 && Number.isInteger(finalYellowCards.away_yellow_cards) && finalYellowCards.away_yellow_cards >= 0 ? { ...finalYellowCards, confirmed_at: confirmedAt } : null;
   if (previous && previous.final_score === finalScore) {
+    let changed = false;
     if (validCorners && (!previous.final_corners || previous.final_corners.total_corners !== validCorners.total_corners || previous.final_corners.home_corners !== validCorners.home_corners || previous.final_corners.away_corners !== validCorners.away_corners)) {
       previous.final_corners = validCorners;
       previous.corners_status = "CONFIRMED";
       previous.corners_confirmed_at = confirmedAt;
-      return true;
+      changed = true;
     }
-    return false;
+    if (validYellowCards && (!previous.final_yellow_cards || previous.final_yellow_cards.total_yellow_cards !== validYellowCards.total_yellow_cards || previous.final_yellow_cards.home_yellow_cards !== validYellowCards.home_yellow_cards || previous.final_yellow_cards.away_yellow_cards !== validYellowCards.away_yellow_cards)) {
+      previous.final_yellow_cards = validYellowCards;
+      previous.yellow_cards_status = "CONFIRMED";
+      previous.yellow_cards_confirmed_at = confirmedAt;
+      changed = true;
+    }
+    return changed;
   }
   const revisions = Array.isArray(previous?.revisions) ? previous.revisions.slice() : [];
   if (previous) {
@@ -209,6 +244,9 @@ function settleOne(match, archived, outcomes, confirmedAt, finalCorners = null) 
     final_corners: validCorners || previous?.final_corners || null,
     corners_status: validCorners ? "CONFIRMED" : (previous?.corners_status || "PENDING_STATISTICS"),
     corners_confirmed_at: validCorners ? confirmedAt : (previous?.corners_confirmed_at || null),
+    final_yellow_cards: validYellowCards || previous?.final_yellow_cards || null,
+    yellow_cards_status: validYellowCards ? "CONFIRMED" : (previous?.yellow_cards_status || "PENDING_STATISTICS"),
+    yellow_cards_confirmed_at: validYellowCards ? confirmedAt : (previous?.yellow_cards_confirmed_at || null),
     first_confirmed_at: previous?.first_confirmed_at || confirmedAt,
     confirmed_at: confirmedAt,
     archived_at: confirmedAt,
@@ -292,7 +330,10 @@ async function settleOutcomes(dataDir = DATA, now = new Date()) {
         const archived = archive.matches[id];
         if (!archived) continue;
         const previous = outcomes.matches[id];
-        const didSettle = settleOne(match, archived, outcomes, now.toISOString());
+        let finalStatistics = null;
+        try { finalStatistics = await fetchFinalStatistics(id); }
+        catch (error) { errors.push("statistics " + id + ": " + (error?.message || String(error))); }
+        const didSettle = settleOne(match, archived, outcomes, now.toISOString(), finalStatistics);
         if (!didSettle) continue;
         changed = true;
         settledOnDate++;
@@ -364,6 +405,9 @@ module.exports = {
   selectDates,
   buildFinalMatch,
   settleOne,
+  extractFinalCorners,
+  extractFinalYellowCards,
+  fetchFinalStatistics,
   pendingMatches,
   settleOutcomes
 };
