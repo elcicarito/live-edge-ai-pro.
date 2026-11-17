@@ -31,7 +31,10 @@ assert.ok(built.byLine.UNDER_11_5.every(sample => sample.y === 1));
 const lag = [row("lag",55,3,2),row("lag",58,3,2),row("lag",61,4,2),row("lag",66,4,2),row("lag",70,4,2),row("lag",75,4,2),row("lag",80,5,4),row("lag",90,5,4)];
 const excluded = corners.buildSamples(lag, { matches: { lag: outcome } }, Date.parse("2026-11-17T00:00:00.000Z"));
 assert.ok(excluded.excluded.lag_ambiguous > 0);
-assert.ok(excluded.byLine.UNDER_9_5.length < built.byLine.UNDER_9_5.length);
+const control = corners.buildSamples(
+  [row("control",55,3,2),row("control",58,3,2),row("control",61,3,2),row("control",66,3,2),row("control",70,3,2),row("control",75,3,2),row("control",80,3,2),row("control",90,5,4)],
+  { matches: { control: outcome } }, Date.parse("2026-11-17T00:00:00.000Z"));
+assert.ok(excluded.byLine.UNDER_9_5.length < control.byLine.UNDER_9_5.length);
 const shortCoverage = [row("short",55,3,2),row("short",58,3,2),row("short",90,5,4)];
 assert.equal(corners.hasCornerChangeInLag(shortCoverage,0,60),true);
 const mismatch = corners.buildSamples([row("bad",55,6,4),row("bad",60,6,4),row("bad",90,6,4)],
