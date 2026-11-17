@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "source": "Flashscore",
+  "mode": "FORWARD_ONLY_LIVE_CARDS_SHADOW",
+  "started_at": "2026-11-17T19:03:30.493Z",
+  "updated_at": "2026-11-17T19:03:30.493Z",
+  "target": "Final total yellow cards in regular time (90 minutes plus stoppage time); extra time and penalty shootouts excluded.",
+  "lag_minutes": 5,
+  "observation_minute_range": [
+    55,
+    80
+  ],
+  "lines": [
+    {
+      "key": "UNDER_3_5",
+      "side": "UNDER",
+      "line": 3.5
+    },
+    {
+      "key": "UNDER_4_5",
+      "side": "UNDER",
+      "line": 4.5
+    },
+    {
+      "key": "UNDER_5_5",
+      "side": "UNDER",
+      "line": 5.5
+    },
+    {
+      "key": "OVER_2_5",
+      "side": "OVER",
+      "line": 2.5
+    },
+    {
+      "key": "OVER_3_5",
+      "side": "OVER",
+      "line": 3.5
+    },
+    {
+      "key": "OVER_4_5",
+      "side": "OVER",
+      "line": 4.5
+    }
+  ],
+  "training_policy": "Only snapshots captured at or after activation are eligible. One latest observation per five-minute decision window. Matches without confirmed full-time yellow-card totals, incomplete timelines, decreasing card sequences or a card event inside the five-minute effective lag are excluded. No historical backfill.",
+  "validation_policy": {
+    "min_train_samples": 500,
+    "min_validation_samples": 300,
+    "min_train_matches": 100,
+    "min_validation_matches": 50,
+    "min_relative_log_loss_gain": 0.01,
+    "min_relative_brier_gain": 0.005,
+    "min_effective_match_weight_per_calibration_bin": 8,
+    "max_absolute_calibration_error": 0.08,
+    "metrics_weighted_per_match": true
+  },
+  "prediction_policy": "Shadow evaluation only. No TOP opportunities or betting recommendations are emitted by this trainer.",
+  "total_labeled_samples": 0,
+  "total_labeled_matches": 0,
+  "excluded": {
+    "missing_final_cards": 0,
+    "incomplete_timeline": 0,
+    "invalid_card_sequence": 0,
+    "lag_ambiguous": 0
+  },
+  "validated_lines": 0,
+  "status": "COLLECTING_OR_NOT_VALIDATED",
+  "models": {
+    "UNDER_3_5": {
+      "status": "WARMUP",
+      "counts": {
+        "train": 0,
+        "validation": 0,
+        "train_matches": 0,
+        "validation_matches": 0,
+        "train_positive": 0,
+        "train_negative": 0,
+        "validation_positive": 0,
+        "validation_negative": 0
+      },
+      "metrics": null,
+      "weights": null
+    },
+    "UNDER_4_5": {
+      "status": "WARMUP",
+      "counts": {
+        "train": 0,
+        "validation": 0,
+        "train_matches": 0,
+        "validation_matches": 0,
+        "train_positive": 0,
+        "train_negative": 0,
+        "validation_positive": 0,
+        "validation_negative": 0
+      },
+      "metrics": null,
+      "weights": null
+    },
+    "UNDER_5_5": {
+      "status": "WARMUP",
+      "counts": {
+        "train": 0,
+        "validation": 0,
+        "train_matches": 0,
+        "validation_matches": 0,
+        "train_positive": 0,
+        "train_negative": 0,
+        "validation_positive": 0,
+        "validation_negative": 0
+      },
+      "metrics": null,
+      "weights": null
+    },
+    "OVER_2_5": {
+      "status": "WARMUP",
+      "counts": {
+        "train": 0,
+        "validation": 0,
+        "train_matches": 0,
+        "validation_matches": 0,
+        "train_positive": 0,
+        "train_negative": 0,
+        "validation_positive": 0,
+        "validation_negative": 0
+      },
+      "metrics": null,
+      "weights": null
+    },
+    "OVER_3_5": {
+      "status": "WARMUP",
+      "counts": {
+        "train": 0,
+        "validation": 0,
+        "train_matches": 0,
+        "validation_matches": 0,
+        "train_positive": 0,
+        "train_negative": 0,
+        "validation_positive": 0,
+        "validation_negative": 0
+      },
+      "metrics": null,
+      "weights": null
+    },
+    "OVER_4_5": {
+      "status": "WARMUP",
+      "counts": {
+        "train": 0,
+        "validation": 0,
+        "train_matches": 0,
+        "validation_matches": 0,
+        "train_positive": 0,
+        "train_negative": 0,
+        "validation_positive": 0,
+        "validation_negative": 0
+      },
+      "metrics": null,
+      "weights": null
+    }
+  }
+}
