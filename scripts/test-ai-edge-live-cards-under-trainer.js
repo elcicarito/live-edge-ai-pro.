@@ -43,4 +43,12 @@ assert.ok(excluded.excluded.lag_ambiguous > 0);
 assert.ok(excluded.byLine.UNDER_4_5.length < built.byLine.UNDER_4_5.length);
 const invalid = cards.buildSamples([row("bad", 55, 2, 1), row("bad", 60, 1, 1), row("bad", 90, 2, 2)], { matches: { bad: outcome } }, 0);
 assert.equal(invalid.excluded.invalid_card_sequence, 1);
+
+assert.equal(cards.hasCardChangeInLag([row("coverage", 55, 1, 1), row("coverage", 58, 1, 1)], 0, 60), true);
+const finalCardsMismatch = cards.buildSamples(
+  [row("mismatch", 55, 1, 1), row("mismatch", 60, 1, 1), row("mismatch", 90, 3, 2)],
+  { matches: { mismatch: { ...outcome, final_yellow_cards: { home_yellow_cards: 1, away_yellow_cards: 1, total_yellow_cards: 2 } } } },
+  Date.parse("2026-11-17T00:00:00.000Z")
+);
+assert.equal(finalCardsMismatch.excluded.invalid_card_sequence, 1);
 process.stdout.write("AI EDGE live cards shadow trainer tests passed.\n");
