@@ -67,7 +67,9 @@ function featureVector(row, previous) {
   const oldCards = base.statValue(oldStats, PATTERNS.cards);
   const oldFouls = base.statValue(oldStats, PATTERNS.fouls);
   const oldShots = base.statValue(oldStats, PATTERNS.shots);
-  const score = base.scoreOf(row);
+  const scoreHome = base.finite(row?.snapshot?.home_score);
+  const scoreAway = base.finite(row?.snapshot?.away_score);
+  const score = scoreHome === null || scoreAway === null ? null : [scoreHome, scoreAway];
   const minute = minuteOf(row);
   if (!cards || !score || minute === null) return null;
   const total = value => value ? value.home + value.away : 0;
