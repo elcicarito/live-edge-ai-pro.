@@ -9,6 +9,8 @@ const OUTCOMES_PATH = path.join(DATA, "flashscore-confirmed-outcomes.json");
 const API_BASE = String(process.env.FLASHSCORE_API_BASE || "http://127.0.0.1:8000").replace(/\/$/, "");
 const CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const RECENT_RECHECK_DAYS = 7;
+const STATISTICS_RECHECK_MS = 24 * 60 * 60 * 1000;
+const MAX_STATISTICS_FETCHES_PER_RUN = 10;
 
 function readJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, "utf8")); }
@@ -108,7 +110,7 @@ async function fetchFinalStatistics(matchId) {
   url.searchParams.set("match", String(matchId));
   const response = await fetch(url, {
     headers: { Accept: "application/json", "User-Agent": "LIVE-EDGE-AI-PRO/10.0" },
-    signal: AbortSignal.timeout(30000), cache: "no-store"
+    signal: AbortSignal.timeout(10000), cache: "no-store"
   });
   if (!response.ok) throw new Error("/matches/statistics match=" + matchId + " HTTP " + response.status);
   const payload = await response.json();
@@ -204,6 +206,11 @@ function settleOne(match, archived, outcomes, confirmedAt, finalStatistics = nul
   const validYellowCards = finalYellowCards && Number.isInteger(finalYellowCards.home_yellow_cards) && finalYellowCards.home_yellow_cards >= 0 && Number.isInteger(finalYellowCards.away_yellow_cards) && finalYellowCards.away_yellow_cards >= 0 ? { ...finalYellowCards, confirmed_at: confirmedAt } : null;
   if (previous && previous.final_score === finalScore) {
     let changed = false;
+    if (finalStatistics) {
+      previous.statistics_checked_at = confirmedAt;
+      previous.statistics_error = finalStatistics.error || null;
+      changed = true;
+    }
     if (validCorners && (!previous.final_corners || previous.final_corners.total_corners !== validCorners.total_corners || previous.final_corners.home_corners !== validCorners.home_corners || previous.final_corners.away_corners !== validCorners.away_corners)) {
       previous.final_corners = validCorners;
       previous.corners_status = "CONFIRMED";
@@ -244,6 +251,8 @@ function settleOne(match, archived, outcomes, confirmedAt, finalStatistics = nul
     final_corners: validCorners || previous?.final_corners || null,
     corners_status: validCorners ? "CONFIRMED" : (previous?.corners_status || "PENDING_STATISTICS"),
     corners_confirmed_at: validCorners ? confirmedAt : (previous?.corners_confirmed_at || null),
+    statistics_checked_at: finalStatistics ? confirmedAt : (previous?.statistics_checked_at || null),
+    statistics_error: finalStatistics?.error || null,
     final_yellow_cards: validYellowCards || previous?.final_yellow_cards || null,
     yellow_cards_status: validYellowCards ? "CONFIRMED" : (previous?.yellow_cards_status || "PENDING_STATISTICS"),
     yellow_cards_confirmed_at: validYellowCards ? confirmedAt : (previous?.yellow_cards_confirmed_at || null),
@@ -319,6 +328,7 @@ async function settleOutcomes(dataDir = DATA, now = new Date()) {
   let feedMatches = 0;
   let newConfirmed = 0;
   let corrected = 0;
+  let statisticsFetches = 0;
   const errors = [];
   for (const date of dates) {
     try {
@@ -331,8 +341,17 @@ async function settleOutcomes(dataDir = DATA, now = new Date()) {
         if (!archived) continue;
         const previous = outcomes.matches[id];
         let finalStatistics = null;
-        try { finalStatistics = await fetchFinalStatistics(id); }
-        catch (error) { errors.push("statistics " + id + ": " + (error?.message || String(error))); }
+        const lastStatsCheck = Date.parse(previous?.statistics_checked_at || "");
+        const needsStatistics = !previous?.final_corners || !previous?.final_yellow_cards;
+        const statsCheckDue = !Number.isFinite(lastStatsCheck) || now.getTime() - lastStatsCheck >= STATISTICS_RECHECK_MS;
+        if (needsStatistics && statsCheckDue && statisticsFetches < MAX_STATISTICS_FETCHES_PER_RUN) {
+          statisticsFetches++;
+          try { finalStatistics = await fetchFinalStatistics(id); }
+          catch (error) {
+            finalStatistics = { error: error?.message || String(error) };
+            errors.push("statistics " + id + ": " + finalStatistics.error);
+          }
+        }
         const didSettle = settleOne(match, archived, outcomes, now.toISOString(), finalStatistics);
         if (!didSettle) continue;
         changed = true;
@@ -379,6 +398,7 @@ async function settleOutcomes(dataDir = DATA, now = new Date()) {
     feed_matches: feedMatches,
     newly_confirmed: newConfirmed,
     corrected_scores: corrected,
+    statistics_fetches: statisticsFetches,
     pending_matches: pending.length,
     total_confirmed: archivedMatches.length,
     errors,
