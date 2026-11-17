@@ -36,7 +36,7 @@ const server = http.createServer((req, res) => {
   if (url.pathname === "/matches/statistics") {
     assert.ok(url.searchParams.get("match"));
     res.writeHead(200, {"content-type":"application/json"});
-    res.end(JSON.stringify({periods:[{period:"ALL",groups:[{category:"Match",statistics:[{name:"Corner kicks",home_value:"4",away_value:"3"}]}]}]}));
+    res.end(JSON.stringify({periods:[{period:"ALL",groups:[{category:"Match",statistics:[{name:"Corner kicks",home_value:"4",away_value:"3"},{name:"Yellow cards",home_value:"2",away_value:"1"}]}]}]}));
     return;
   }
   res.statusCode = 404;
@@ -82,6 +82,8 @@ const server = http.createServer((req, res) => {
     assert.equal(first.newly_confirmed, 0);
     assert.equal(output.matches["finished-corrected"].final_score, "2 : 1");
     assert.deepEqual(output.matches["finished-corrected"].final_corners, { home_corners: 4, away_corners: 3, total_corners: 7, status: "CONFIRMED", source: "Flashscore /matches/statistics", period: "ALL", confirmed_at: now.toISOString() });
+    assert.deepEqual(output.matches["finished-corrected"].final_yellow_cards, { home_yellow_cards: 2, away_yellow_cards: 1, total_yellow_cards: 3, status: "CONFIRMED", source: "Flashscore /matches/statistics", period: "ALL", confirmed_at: now.toISOString() });
+    assert.equal(output.matches["finished-corrected"].yellow_cards_status, "CONFIRMED");
     assert.equal(output.matches["finished-corrected"].snapshots_count, 3);
     assert.equal(output.matches["finished-corrected"].revisions.length, 1);
     assert.equal(output.matches["finished-corrected"].revisions[0].final_score, "1 : 0");
@@ -94,6 +96,9 @@ const server = http.createServer((req, res) => {
     assert.deepEqual(settlement.extractFinalCorners({periods:[{period:"ALL",groups:[{statistics:[{name:"Corner kicks",home_value:"0",away_value:"2"}]}]}]}).total_corners, 2);
     assert.equal(settlement.extractFinalCorners({periods:[{period:"ALL",groups:[{statistics:[{name:"Corner kicks",home_value:"4",away_value:null}]}]}]}), null, "incomplete corners must never be confirmed");
     assert.equal(settlement.extractFinalCorners({periods:[{period:"1ST",groups:[{statistics:[{name:"Corner kicks",home_value:"4",away_value:"3"}]}]}]}), null, "period-only corners must not be treated as full match total");
+    assert.equal(settlement.extractFinalYellowCards({periods:[{period:"ALL",groups:[{statistics:[{name:"Yellow cards",home_value:"0",away_value:"2"}]}]}]}).total_yellow_cards, 2);
+    assert.equal(settlement.extractFinalYellowCards({periods:[{period:"ALL",groups:[{statistics:[{name:"Yellow cards",home_value:"2",away_value:null}]}]}]}), null, "incomplete yellow cards must never be confirmed");
+    assert.equal(settlement.extractFinalYellowCards({periods:[{period:"2ND",groups:[{statistics:[{name:"Yellow cards",home_value:"2",away_value:"1"}]}]}]}), null, "period-only yellow cards must not be treated as full match total");
 
     const cooldown = await settlement.settleOutcomes(dataDir, new Date(now.getTime() + 60 * 1000));
     assert.equal(cooldown.checked_dates, 0, "date checks must respect the 15-minute cooldown");
