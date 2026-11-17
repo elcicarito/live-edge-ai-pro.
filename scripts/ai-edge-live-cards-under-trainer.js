@@ -96,18 +96,29 @@ function featureVector(row, previous) {
 }
 function hasCardChangeInLag(rows, index, startMinute) {
   const before = cardValue(rows[index]);
-  if (!before) return true;
+  const sampleMinute = minuteOf(rows[index]);
+  if (!before || sampleMinute === null || !Number.isFinite(startMinute)) return true;
+  let coveredThroughLag = false;
   for (let i = index + 1; i < rows.length; i++) {
     const from = minuteOf(rows[i - 1]);
     const to = minuteOf(rows[i]);
+    if (to === null || to <= sampleMinute) continue;
     const after = cardValue(rows[i]);
-    if (from === null || to === null || !after) continue;
-    if (after.home < before.home || after.away < before.away) return true;
-    if (from <= startMinute && to > minuteOf(rows[index]) &&
-        (after.home > before.home || after.away > before.away)) return true;
-    if (to >= startMinute) break;
+    // Missing card statistics inside the effective-lag window make the event timing unknowable.
+    if (from === null || !after) {
+      if (from === null || from < startMinute) return true;
+    } else {
+      if (after.home < before.home || after.away < before.away) return true;
+      // If a card count rose before the lag elapsed, the displayed sample may already be stale.
+      if (from < startMinute && (after.home > before.home || after.away > before.away)) return true;
+    }
+    if (to >= startMinute) {
+      coveredThroughLag = true;
+      break;
+    }
   }
-  return false;
+  // Never accept a sample unless the timeline actually reaches the end of its five-minute lag.
+  return !coveredThroughLag;
 }
 function buildSamples(rows, outcomes, startedAt) {
   const grouped = new Map();
@@ -126,6 +137,12 @@ function buildSamples(rows, outcomes, startedAt) {
     if (!confirmedRegularCards(outcome)) { excluded.missing_final_cards++; continue; }
     const lastMinute = minuteOf(matchRows[matchRows.length - 1]);
     if (lastMinute === null || lastMinute < 90) { excluded.incomplete_timeline++; continue; }
+    const finalTotal = outcome.final_yellow_cards.total_yellow_cards;
+    const finalObservedCards = cardValue(matchRows[matchRows.length - 1]);
+    if (!finalObservedCards || finalTotal < finalObservedCards.home + finalObservedCards.away) {
+      excluded.invalid_card_sequence++;
+      continue;
+    }
     let invalidSequence = false;
     for (let i = 1; i < matchRows.length; i++) {
       const a = cardValue(matchRows[i - 1]), b = cardValue(matchRows[i]);
@@ -149,9 +166,8 @@ function buildSamples(rows, outcomes, startedAt) {
         excluded.lag_ambiguous++;
         continue;
       }
-      const finalTotal = outcome.final_yellow_cards.total_yellow_cards;
       const current = cardValue(row);
-      if (!current || finalTotal < current.home + current.away) continue;
+      if (!current) continue;
       const x = featureVector(row, matchRows[index - 1]);
       for (const line of LINES) {
         byLine[line.key].push({
