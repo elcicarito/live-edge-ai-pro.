@@ -80,7 +80,8 @@ const server = http.createServer((req, res) => {
     const output = JSON.parse(fs.readFileSync(outputPath, "utf8"));
     assert.equal(first.corrected_scores, 1, "a changed finished score must be audited as a correction");
     assert.equal(first.newly_confirmed, 0);
-    assert.equal(output.matches["finished-corrected"].final_score, "2 : 1");\n    assert.deepEqual(output.matches["finished-corrected"].final_corners, { home_corners: 4, away_corners: 3, total_corners: 7, status: "CONFIRMED", source: "Flashscore /matches/statistics", period: "ALL", confirmed_at: now.toISOString() });
+    assert.equal(output.matches["finished-corrected"].final_score, "2 : 1");
+    assert.deepEqual(output.matches["finished-corrected"].final_corners, { home_corners: 4, away_corners: 3, total_corners: 7, status: "CONFIRMED", source: "Flashscore /matches/statistics", period: "ALL", confirmed_at: now.toISOString() });
     assert.equal(output.matches["finished-corrected"].snapshots_count, 3);
     assert.equal(output.matches["finished-corrected"].revisions.length, 1);
     assert.equal(output.matches["finished-corrected"].revisions[0].final_score, "1 : 0");
@@ -97,7 +98,8 @@ const server = http.createServer((req, res) => {
     const cooldown = await settlement.settleOutcomes(dataDir, new Date(now.getTime() + 60 * 1000));
     assert.equal(cooldown.checked_dates, 0, "date checks must respect the 15-minute cooldown");
 
-    process.stdout.write("Flashscore outcome settlement tests passed: explicit FINISHED status, valid score, pending matches, correction audit and check cooldown.\n");
+    process.stdout.write("Flashscore outcome settlement tests passed: explicit FINISHED status, valid score, pending matches, correction audit and check cooldown.
+");
   } finally {
     await new Promise(resolve => server.close(resolve));
     fs.rmSync(tempDir, {recursive:true,force:true});
