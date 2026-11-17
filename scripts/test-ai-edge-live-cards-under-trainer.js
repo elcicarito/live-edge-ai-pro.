@@ -3,7 +3,7 @@
 const assert = require("node:assert/strict");
 const cards = require("./ai-edge-live-cards-under-trainer");
 
-const at = minute => "2026-11-17T12:" + String(minute).padStart(2, "0") + ":00.000Z";
+const at = minute => new Date(Date.UTC(2026, 10, 17, 12, 0) + minute * 60000).toISOString();
 function row(matchId, minute, homeCards, awayCards) {
   return {
     match_id: "flashscore:" + matchId,
