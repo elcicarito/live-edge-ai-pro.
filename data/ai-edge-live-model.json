@@ -3,7 +3,7 @@
   "source": "Flashscore",
   "mode": "FORWARD_ONLY_LIVE_TRAINING",
   "started_at": "2026-11-12T21:44:46.455Z",
-  "updated_at": "2026-11-17T19:13:30.296Z",
+  "updated_at": "2026-11-17T19:17:22.523Z",
   "lag_minutes": 5,
   "horizons_minutes": [
     15,
@@ -26,8 +26,8 @@
     "abstain_outside_reliable_bins": true
   },
   "total_labeled_samples": 41734,
-  "validated_horizons": 1,
-  "status": "SHADOW_VALIDATION_AVAILABLE",
+  "validated_horizons": 0,
+  "status": "COLLECTING_LIVE_TRAINING_DATA",
   "models": {
     "15": {
       "status": "NOT_VALIDATED",
@@ -85,17 +85,27 @@
         "relative_log_loss_gain": 0.0078,
         "relative_brier_gain": 0.0106
       },
+      "calibration_gate": {
+        "passed": false,
+        "reliable_bins": 3,
+        "failed_bins": 1,
+        "max_reliable_error": 0.1191,
+        "reason": "RELIABLE_BIN_CALIBRATION_ERROR_ABOVE_LIMIT"
+      },
+      "validation_note": "Performance gate failed: both relative Log Loss and Brier improvements are required.",
       "validation_policy": {
         "min_train_matches": 100,
         "min_validation_matches": 50,
         "min_relative_log_loss_gain": 0.01,
         "min_relative_brier_gain": 0.005,
+        "min_effective_match_weight_per_calibration_bin": 8,
+        "max_absolute_calibration_error": 0.08,
         "metrics_weighted_per_match": true
       },
       "weights": null
     },
     "25": {
-      "status": "SHADOW_VALIDATED",
+      "status": "NOT_VALIDATED",
       "counts": {
         "train": 15992,
         "validation": 4023,
@@ -158,32 +168,24 @@
         "relative_log_loss_gain": 0.0167,
         "relative_brier_gain": 0.0215
       },
+      "calibration_gate": {
+        "passed": false,
+        "reliable_bins": 3,
+        "failed_bins": 1,
+        "max_reliable_error": 0.1667,
+        "reason": "RELIABLE_BIN_CALIBRATION_ERROR_ABOVE_LIMIT"
+      },
+      "validation_note": "Calibration gate failed: every bin with effective match weight >=8 must have absolute calibration error <=8%; weak bins remain abstention-only.",
       "validation_policy": {
         "min_train_matches": 100,
         "min_validation_matches": 50,
         "min_relative_log_loss_gain": 0.01,
         "min_relative_brier_gain": 0.005,
+        "min_effective_match_weight_per_calibration_bin": 8,
+        "max_absolute_calibration_error": 0.08,
         "metrics_weighted_per_match": true
       },
-      "weights": [
-        0.11476698,
-        0.22286508,
-        0.16179067,
-        0.0687462,
-        -0.00870519,
-        0.22245108,
-        0.03022874,
-        0.2978351,
-        -0.00904759,
-        0.27377042,
-        0.05611719,
-        0.04732511,
-        0.04541729,
-        -0.01453275,
-        0.01080032,
-        0.01689912,
-        0.03348669
-      ]
+      "weights": null
     }
   }
 }

@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "source": "Flashscore",
+  "mode": "FORWARD_ONLY_LIVE_CORNERS_UNDER_SHADOW",
+  "started_at": "2026-11-17T19:17:08.445Z",
+  "updated_at": "2026-11-17T19:17:08.445Z",
+  "target": "Final total match corners (home + away) UNDER during regular time including stoppage; extra time and penalties excluded.",
+  "lag_minutes": 5,
+  "observation_minute_range": [
+    55,
+    75
+  ],
+  "lines": [
+    {
+      "key": "UNDER_8_5",
+      "side": "UNDER",
+      "line": 8.5
+    },
+    {
+      "key": "UNDER_9_5",
+      "side": "UNDER",
+      "line": 9.5
+    },
+    {
+      "key": "UNDER_10_5",
+      "side": "UNDER",
+      "line": 10.5
+    },
+    {
+      "key": "UNDER_11_5",
+      "side": "UNDER",
+      "line": 11.5
+    }
+  ],
+  "training_policy": "Only snapshots captured at or after activation. One latest sample per five-minute decision window. Requires confirmed final Flashscore corners, a complete regular-time timeline, monotonic corner totals and full five-minute lag coverage. No historical backfill.",
+  "validation_policy": {
+    "min_train_samples": 500,
+    "min_validation_samples": 300,
+    "min_train_matches": 100,
+    "min_validation_matches": 50,
+    "min_relative_log_loss_gain": 0.01,
+    "min_relative_brier_gain": 0.005,
+    "min_effective_match_weight_per_calibration_bin": 8,
+    "max_absolute_calibration_error": 0.08,
+    "metrics_weighted_per_match": true
+  },
+  "prediction_policy": "Shadow evaluation only. No TOP opportunities or betting recommendations are emitted.",
+  "total_labeled_samples": 0,
+  "total_labeled_matches": 0,
+  "excluded": {
+    "missing_final_corners": 0,
+    "incomplete_timeline": 0,
+    "invalid_corner_sequence": 0,
+    "lag_ambiguous": 0
+  },
+  "validated_lines": 0,
+  "status": "COLLECTING_OR_NOT_VALIDATED",
+  "models": {
+    "UNDER_8_5": {
+      "status": "WARMUP",
+      "counts": {
+        "train": 0,
+        "validation": 0,
+        "train_matches": 0,
+        "validation_matches": 0,
+        "train_positive": 0,
+        "train_negative": 0,
+        "validation_positive": 0,
+        "validation_negative": 0
+      },
+      "metrics": null,
+      "weights": null
+    },
+    "UNDER_9_5": {
+      "status": "WARMUP",
+      "counts": {
+        "train": 0,
+        "validation": 0,
+        "train_matches": 0,
+        "validation_matches": 0,
+        "train_positive": 0,
+        "train_negative": 0,
+        "validation_positive": 0,
+        "validation_negative": 0
+      },
+      "metrics": null,
+      "weights": null
+    },
+    "UNDER_10_5": {
+      "status": "WARMUP",
+      "counts": {
+        "train": 0,
+        "validation": 0,
+        "train_matches": 0,
+        "validation_matches": 0,
+        "train_positive": 0,
+        "train_negative": 0,
+        "validation_positive": 0,
+        "validation_negative": 0
+      },
+      "metrics": null,
+      "weights": null
+    },
+    "UNDER_11_5": {
+      "status": "WARMUP",
+      "counts": {
+        "train": 0,
+        "validation": 0,
+        "train_matches": 0,
+        "validation_matches": 0,
+        "train_positive": 0,
+        "train_negative": 0,
+        "validation_positive": 0,
+        "validation_negative": 0
+      },
+      "metrics": null,
+      "weights": null
+    }
+  }
+}
