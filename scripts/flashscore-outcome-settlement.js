@@ -20,8 +20,7 @@ function readJson(file, fallback) {
 
 function atomicJson(file, value) {
   const temporary = file + ".tmp";
-  fs.writeFileSync(temporary, JSON.stringify(value, null, 2) + "
-");
+  fs.writeFileSync(temporary, JSON.stringify(value, null, 2) + "\n");
   fs.renameSync(temporary, file);
 }
 
