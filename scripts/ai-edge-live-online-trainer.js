@@ -317,6 +317,21 @@ function buildSamples(rows, outcomes, startedAt) {
   }
   return byHorizon;
 }
+function calibrationGate(calibrationResult, minMatchWeight = 8, maxAbsoluteError = 0.08) {
+  const bins = Array.isArray(calibrationResult?.bins) ? calibrationResult.bins : [];
+  const reliableBins = bins.filter(bin => Number(bin.matches_weight || 0) >= minMatchWeight);
+  if (!reliableBins.length) {
+    return { passed: false, reliable_bins: 0, failed_bins: 0, reason: "NO_RELIABLE_CALIBRATION_BINS" };
+  }
+  const failed = reliableBins.filter(bin => Number(bin.absolute_error ?? 1) > maxAbsoluteError);
+  return {
+    passed: failed.length === 0,
+    reliable_bins: reliableBins.length,
+    failed_bins: failed.length,
+    max_reliable_error: Math.max(...reliableBins.map(bin => Number(bin.absolute_error || 0))),
+    reason: failed.length ? "RELIABLE_BIN_CALIBRATION_ERROR_ABOVE_LIMIT" : null
+  };
+}
 function trainHorizon(samples) {
   const train = samples.filter(row => row.split === "train");
   const validation = samples.filter(row => row.split === "validation");
@@ -336,12 +351,20 @@ function trainHorizon(samples) {
   const validationMetrics = metrics(validation, weights);
   const lossGain = 1 - validationMetrics.log_loss / validationMetrics.baseline_log_loss;
   const brierGain = 1 - validationMetrics.brier / validationMetrics.baseline_brier;
-  const validated = lossGain >= MIN_RELATIVE_LOG_LOSS_GAIN && brierGain >= MIN_RELATIVE_BRIER_GAIN;
+  const calibrationResult = calibrationGate(validationMetrics.calibration, 8, 0.08);
+  const performancePassed = lossGain >= MIN_RELATIVE_LOG_LOSS_GAIN && brierGain >= MIN_RELATIVE_BRIER_GAIN;
+  const validated = performancePassed && calibrationResult.passed;
   return {
     status: validated ? "SHADOW_VALIDATED" : "NOT_VALIDATED",
     counts,
     metrics: { ...validationMetrics, relative_log_loss_gain: Number(lossGain.toFixed(4)), relative_brier_gain: Number(brierGain.toFixed(4)) },
-    validation_policy: { min_train_matches: MIN_TRAIN_MATCHES, min_validation_matches: MIN_VALIDATION_MATCHES, min_relative_log_loss_gain: MIN_RELATIVE_LOG_LOSS_GAIN, min_relative_brier_gain: MIN_RELATIVE_BRIER_GAIN, metrics_weighted_per_match: true },
+    calibration_gate: calibrationResult,
+    validation_note: !performancePassed
+      ? "Performance gate failed: both relative Log Loss and Brier improvements are required."
+      : !calibrationResult.passed
+        ? "Calibration gate failed: every bin with effective match weight >=8 must have absolute calibration error <=8%; weak bins remain abstention-only."
+        : null,
+    validation_policy: { min_train_matches: MIN_TRAIN_MATCHES, min_validation_matches: MIN_VALIDATION_MATCHES, min_relative_log_loss_gain: MIN_RELATIVE_LOG_LOSS_GAIN, min_relative_brier_gain: MIN_RELATIVE_BRIER_GAIN, min_effective_match_weight_per_calibration_bin: 8, max_absolute_calibration_error: 0.08, metrics_weighted_per_match: true },
     weights: validated ? weights : null
   };
 }
@@ -392,4 +415,4 @@ if (require.main === module) {
   run().then(result => console.log("AI EDGE FORWARD-ONLY LIVE TRAINER", JSON.stringify(result)))
     .catch(error => { console.error("AI EDGE LIVE TRAINER FAILED:", error.message); process.exit(1); });
 }
-module.exports = { finite, isoWeekKey, readTimeline, statValue, featureVector, goalTransitions, labelFor, stableValidationMatch, buildSamples, fit, calibration, metrics, trainHorizon, run };
+module.exports = { finite, isoWeekKey, readTimeline, statValue, featureVector, goalTransitions, labelFor, stableValidationMatch, buildSamples, fit, calibration, calibrationGate, metrics, trainHorizon, run };
