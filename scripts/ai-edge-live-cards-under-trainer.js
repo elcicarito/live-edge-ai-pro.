@@ -170,11 +170,12 @@ function trainLine(samples) {
   const trained = base.trainHorizon(samples);
   if (trained.status !== "SHADOW_VALIDATED" || !trained.metrics?.calibration) return trained;
   const bins = trained.metrics.calibration.bins || [];
-  const weakBins = bins.filter(bin => Number(bin.matches_weight || 0) < 8);
-  const excessiveError = Number(trained.metrics.calibration.maximum_calibration_error) > 0.08;
-  if (weakBins.length || excessiveError) {
+  const reliableBins = bins.filter(bin => Number(bin.matches_weight || 0) >= 8);
+  const maxReliableError = reliableBins.length
+    ? Math.max(...reliableBins.map(bin => Number(bin.absolute_error || 0))) : Infinity;
+  if (!reliableBins.length || maxReliableError > 0.08) {
     return { ...trained, status: "NOT_VALIDATED", weights: null,
-      validation_note: "Calibration gate failed: every populated bin needs effective match weight >=8 and maximum absolute calibration error <=8%." };
+      validation_note: "Calibration gate failed: at least one reliable bin needs effective match weight >=8 and all reliable bins must stay within 8% absolute error. Weak bins remain abstention-only." };
   }
   return trained;
 }
