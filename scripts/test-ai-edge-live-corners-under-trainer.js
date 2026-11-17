@@ -28,7 +28,7 @@ assert.ok(built.byLine.UNDER_9_5.every(sample => sample.y === 1));
 assert.ok(built.byLine.UNDER_8_5.every(sample => sample.y === 0));
 assert.ok(built.byLine.UNDER_10_5.every(sample => sample.y === 1));
 assert.ok(built.byLine.UNDER_11_5.every(sample => sample.y === 1));
-const lag = [row("lag",55,3,2),row("lag",58,4,2),row("lag",63,4,2),row("lag",70,4,2),row("lag",75,4,2),row("lag",90,5,4)];
+const lag = [row("lag",55,3,2),row("lag",58,3,2),row("lag",61,4,2),row("lag",66,4,2),row("lag",70,4,2),row("lag",75,4,2),row("lag",80,5,4),row("lag",90,5,4)];
 const excluded = corners.buildSamples(lag, { matches: { lag: outcome } }, Date.parse("2026-11-17T00:00:00.000Z"));
 assert.ok(excluded.excluded.lag_ambiguous > 0);
 assert.ok(excluded.byLine.UNDER_9_5.length < built.byLine.UNDER_9_5.length);
