@@ -43,12 +43,12 @@ function confirmedRegularCorners(outcome) {
     outcome?.final_status === "FINISHED" &&
     outcome?.corners_status === "CONFIRMED" &&
     Number.isInteger(outcome?.final_corners?.total_corners) &&
-    !/extra.?time|\\baet\\b|penalt|abandoned|cancelled|postponed|suspended/i.test(statusText);
+    !/extra.?time|\baet\b|penalt|abandoned|cancelled|postponed|suspended/i.test(statusText);
 }
 function minuteOf(row) { return base.finite(row?.snapshot?.live_minute); }
 function cornerValue(row) { return base.statValue(row?.snapshot?.stats, PATTERNS.corners); }
 function stageEligible(stage) {
-  return !/(half.?time|\\bht\\b|finished|full.?time|\\bft\\b|extra.?time|\\baet\\b|penalt|abandoned|cancelled|postponed|suspended)/i.test(String(stage || ""));
+  return !/(half.?time|\bht\b|finished|full.?time|\bft\b|extra.?time|\baet\b|penalt|abandoned|cancelled|postponed|suspended)/i.test(String(stage || ""));
 }
 function featureVector(row, previous) {
   const stats = row?.snapshot?.stats || [];
