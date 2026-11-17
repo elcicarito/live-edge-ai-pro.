@@ -92,6 +92,11 @@ jobs:
           node scripts/test-ai-edge-live-cards-under-trainer.js
           node scripts/ai-edge-live-cards-under-trainer.js
 
+      - name: Train independent forward-only total corners UNDER shadow model
+        run: |
+          node scripts/test-ai-edge-live-corners-under-trainer.js
+          node scripts/ai-edge-live-corners-under-trainer.js
+
       - name: Capture and settle Flashscore BTTS signals
         if: always()
         run: |
