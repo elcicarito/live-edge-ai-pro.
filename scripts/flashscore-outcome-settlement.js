@@ -20,7 +20,8 @@ function readJson(file, fallback) {
 
 function atomicJson(file, value) {
   const temporary = file + ".tmp";
-  fs.writeFileSync(temporary, JSON.stringify(value, null, 2) + "\n");
+  fs.writeFileSync(temporary, JSON.stringify(value, null, 2) + "
+");
   fs.renameSync(temporary, file);
 }
 
@@ -173,7 +174,16 @@ function settleOne(match, archived, outcomes, confirmedAt, finalCorners = null) 
   const finalMatch = buildFinalMatch(match, archived);
   const finalScore = homeScore + " : " + awayScore;
   const previous = outcomes.matches[id];
-  const validCorners = finalCorners && Number.isInteger(finalCorners.home_corners) && finalCorners.home_corners >= 0 && Number.isInteger(finalCorners.away_corners) && finalCorners.away_corners >= 0 ? { ...finalCorners, confirmed_at: confirmedAt } : null;\n  if (previous && previous.final_score === finalScore) {\n    if (validCorners && (!previous.final_corners || previous.final_corners.total_corners !== validCorners.total_corners || previous.final_corners.home_corners !== validCorners.home_corners || previous.final_corners.away_corners !== validCorners.away_corners)) {\n      previous.final_corners = validCorners;\n      previous.corners_status = "CONFIRMED";\n      previous.corners_confirmed_at = confirmedAt;\n      return true;\n    }\n    return false;\n  }
+  const validCorners = finalCorners && Number.isInteger(finalCorners.home_corners) && finalCorners.home_corners >= 0 && Number.isInteger(finalCorners.away_corners) && finalCorners.away_corners >= 0 ? { ...finalCorners, confirmed_at: confirmedAt } : null;
+  if (previous && previous.final_score === finalScore) {
+    if (validCorners && (!previous.final_corners || previous.final_corners.total_corners !== validCorners.total_corners || previous.final_corners.home_corners !== validCorners.home_corners || previous.final_corners.away_corners !== validCorners.away_corners)) {
+      previous.final_corners = validCorners;
+      previous.corners_status = "CONFIRMED";
+      previous.corners_confirmed_at = confirmedAt;
+      return true;
+    }
+    return false;
+  }
   const revisions = Array.isArray(previous?.revisions) ? previous.revisions.slice() : [];
   if (previous) {
     revisions.push({
@@ -196,7 +206,10 @@ function settleOne(match, archived, outcomes, confirmedAt, finalCorners = null) 
     snapshots_count: Number(archived.snapshots_count || 0),
     home_score: homeScore,
     away_score: awayScore,
-    final_match: finalMatch,\n    final_corners: validCorners || previous?.final_corners || null,\n    corners_status: validCorners ? "CONFIRMED" : (previous?.corners_status || "PENDING_STATISTICS"),\n    corners_confirmed_at: validCorners ? confirmedAt : (previous?.corners_confirmed_at || null),
+    final_match: finalMatch,
+    final_corners: validCorners || previous?.final_corners || null,
+    corners_status: validCorners ? "CONFIRMED" : (previous?.corners_status || "PENDING_STATISTICS"),
+    corners_confirmed_at: validCorners ? confirmedAt : (previous?.corners_confirmed_at || null),
     first_confirmed_at: previous?.first_confirmed_at || confirmedAt,
     confirmed_at: confirmedAt,
     archived_at: confirmedAt,
