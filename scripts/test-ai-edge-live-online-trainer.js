@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const zlib = require("node:zlib");
-const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, calibration, metrics, fit, run, readTimeline } = require("./ai-edge-live-online-trainer");
+const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, calibration, calibrationGate, metrics, fit, run, readTimeline } = require("./ai-edge-live-online-trainer");
 
 const started = Date.parse("2026-11-12T21:00:00.000Z");
 const stats = (minute, goal) => [
@@ -79,6 +79,21 @@ const calibrated = calibration([
 assert.equal(calibrated.expected_calibration_error, 0, "calibration handles a balanced validation set");
 assert.equal(calibrated.bins[0].mean_predicted, 0.5);
 
+
+const reliableCalibrationPass = calibrationGate({ bins: [
+  { matches_weight: 12, absolute_error: 0.04 },
+  { matches_weight: 9, absolute_error: 0.08 },
+  { matches_weight: 2, absolute_error: 0.35 }
+] });
+assert.equal(reliableCalibrationPass.passed, true, "weak bins below eight effective matches are abstention-only");
+const reliableCalibrationFail = calibrationGate({ bins: [
+  { matches_weight: 12, absolute_error: 0.04 },
+  { matches_weight: 11, absolute_error: 0.167 }
+] });
+assert.equal(reliableCalibrationFail.passed, false, "a sufficiently weighted bin above eight percent blocks validation");
+assert.equal(reliableCalibrationFail.failed_bins, 1);
+assert.equal(calibrationGate({ bins: [{ matches_weight: 7.9, absolute_error: 0.01 }] }).passed, false,
+  "no sufficiently weighted calibration bin means no validation");
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "ai-edge-live-trainer-"));
 async function main() {
