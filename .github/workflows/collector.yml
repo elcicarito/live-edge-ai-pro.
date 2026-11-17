@@ -87,6 +87,11 @@ jobs:
       - name: Settle confirmed Flashscore final results
         run: node scripts/flashscore-outcome-settlement.js
 
+      - name: Train independent forward-only yellow-card O/U shadow model
+        run: |
+          node scripts/test-ai-edge-live-cards-under-trainer.js
+          node scripts/ai-edge-live-cards-under-trainer.js
+
       - name: Capture and settle Flashscore BTTS signals
         if: always()
         run: |
