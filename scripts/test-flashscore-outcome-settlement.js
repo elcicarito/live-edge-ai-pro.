@@ -103,8 +103,7 @@ const server = http.createServer((req, res) => {
     const cooldown = await settlement.settleOutcomes(dataDir, new Date(now.getTime() + 60 * 1000));
     assert.equal(cooldown.checked_dates, 0, "date checks must respect the 15-minute cooldown");
 
-    process.stdout.write("Flashscore outcome settlement tests passed: explicit FINISHED status, valid score, pending matches, correction audit and check cooldown.
-");
+    process.stdout.write("Flashscore outcome settlement tests passed: explicit FINISHED status, valid score, pending matches, correction audit and check cooldown.\\n");
   } finally {
     await new Promise(resolve => server.close(resolve));
     fs.rmSync(tempDir, {recursive:true,force:true});
