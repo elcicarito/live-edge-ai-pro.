@@ -101,7 +101,7 @@ function hasCardChangeInLag(rows, index, startMinute) {
     const after = cardValue(rows[i]);
     if (from === null || to === null || !after) continue;
     if (after.home < before.home || after.away < before.away) return true;
-    if (from < startMinute && to > minuteOf(rows[index]) &&
+    if (from <= startMinute && to > minuteOf(rows[index]) &&
         (after.home > before.home || after.away > before.away)) return true;
     if (to >= startMinute) break;
   }
