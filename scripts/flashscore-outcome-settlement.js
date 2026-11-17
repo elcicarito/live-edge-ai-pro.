@@ -56,6 +56,40 @@ function flattenMatches(payload) {
   return matches;
 }
 
+function extractFinalCorners(payload) {
+  const rows = [];
+  for (const period of Array.isArray(payload?.periods) ? payload.periods : []) {
+    const periodName = String(period?.period || "").toLowerCase();
+    if (periodName && !["all", "match", "full", "full_time", "fulltime"].includes(periodName)) continue;
+    for (const group of Array.isArray(period?.groups) ? period.groups : []) {
+      for (const stat of Array.isArray(group?.statistics) ? group.statistics : []) {
+        const label = String(stat?.name || stat?.label || "").trim().toLowerCase();
+        if (!/^(corner kicks|corners|total corners)$/.test(label)) continue;
+        const home = validScore(stat.home_value ?? stat.home);
+        const away = validScore(stat.away_value ?? stat.away);
+        if (home !== null && away !== null) rows.push({ home, away, label: stat.name || stat.label, period: period.period || null });
+      }
+    }
+  }
+  if (!rows.length) return null;
+  const unique = new Map(rows.map(row => [row.home + ":" + row.away, row]));
+  if (unique.size !== 1) return null;
+  const value = [...unique.values()][0];
+  return { home_corners: value.home, away_corners: value.away, total_corners: value.home + value.away,
+    status: "CONFIRMED", source: "Flashscore /matches/statistics", period: value.period, confirmed_at: null };
+}
+
+async function fetchFinalStatistics(matchId) {
+  const url = new URL(API_BASE + "/matches/statistics");
+  url.searchParams.set("match", String(matchId));
+  const response = await fetch(url, {
+    headers: { Accept: "application/json", "User-Agent": "LIVE-EDGE-AI-PRO/10.0" },
+    signal: AbortSignal.timeout(30000), cache: "no-store"
+  });
+  if (!response.ok) throw new Error("/matches/statistics match=" + matchId + " HTTP " + response.status);
+  return extractFinalCorners(await response.json());
+}
+
 function dueForCheck(date, dateChecks, nowMs) {
   const last = Date.parse(dateChecks?.[date]?.last_checked_at || "");
   return !Number.isFinite(last) || nowMs - last >= CHECK_INTERVAL_MS;
@@ -129,7 +163,7 @@ function buildFinalMatch(match, archived) {
   };
 }
 
-function settleOne(match, archived, outcomes, confirmedAt) {
+function settleOne(match, archived, outcomes, confirmedAt, finalCorners = null) {
   if (String(match?.status || "").toLowerCase() !== "finished") return false;
   const homeScore = validScore(match.home_score);
   const awayScore = validScore(match.away_score);
@@ -139,7 +173,7 @@ function settleOne(match, archived, outcomes, confirmedAt) {
   const finalMatch = buildFinalMatch(match, archived);
   const finalScore = homeScore + " : " + awayScore;
   const previous = outcomes.matches[id];
-  if (previous && previous.final_score === finalScore) return false;
+  const validCorners = finalCorners && Number.isInteger(finalCorners.home_corners) && finalCorners.home_corners >= 0 && Number.isInteger(finalCorners.away_corners) && finalCorners.away_corners >= 0 ? { ...finalCorners, confirmed_at: confirmedAt } : null;\n  if (previous && previous.final_score === finalScore) {\n    if (validCorners && (!previous.final_corners || previous.final_corners.total_corners !== validCorners.total_corners || previous.final_corners.home_corners !== validCorners.home_corners || previous.final_corners.away_corners !== validCorners.away_corners)) {\n      previous.final_corners = validCorners;\n      previous.corners_status = "CONFIRMED";\n      previous.corners_confirmed_at = confirmedAt;\n      return true;\n    }\n    return false;\n  }
   const revisions = Array.isArray(previous?.revisions) ? previous.revisions.slice() : [];
   if (previous) {
     revisions.push({
@@ -162,7 +196,7 @@ function settleOne(match, archived, outcomes, confirmedAt) {
     snapshots_count: Number(archived.snapshots_count || 0),
     home_score: homeScore,
     away_score: awayScore,
-    final_match: finalMatch,
+    final_match: finalMatch,\n    final_corners: validCorners || previous?.final_corners || null,\n    corners_status: validCorners ? "CONFIRMED" : (previous?.corners_status || "PENDING_STATISTICS"),\n    corners_confirmed_at: validCorners ? confirmedAt : (previous?.corners_confirmed_at || null),
     first_confirmed_at: previous?.first_confirmed_at || confirmedAt,
     confirmed_at: confirmedAt,
     archived_at: confirmedAt,
