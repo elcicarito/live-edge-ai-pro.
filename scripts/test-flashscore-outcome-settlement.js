@@ -24,13 +24,23 @@ const apiMatches = [
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, "http://127.0.0.1");
-  assert.equal(url.pathname, "/matches");
-  assert.equal(url.searchParams.get("sport"), "football");
-  assert.equal(url.searchParams.get("date"), date);
-  assert.equal(url.searchParams.get("timezone"), "0");
-  assert.equal(url.searchParams.get("status"), "finished");
-  res.writeHead(200, {"content-type":"application/json"});
-  res.end(JSON.stringify({competitions:[{competition:{name:"Test League",country:{name:"Testland"}},matches:apiMatches}]}));
+  if (url.pathname === "/matches") {
+    assert.equal(url.searchParams.get("sport"), "football");
+    assert.equal(url.searchParams.get("date"), date);
+    assert.equal(url.searchParams.get("timezone"), "0");
+    assert.equal(url.searchParams.get("status"), "finished");
+    res.writeHead(200, {"content-type":"application/json"});
+    res.end(JSON.stringify({competitions:[{competition:{name:"Test League",country:{name:"Testland"}},matches:apiMatches}]}));
+    return;
+  }
+  if (url.pathname === "/matches/statistics") {
+    assert.ok(url.searchParams.get("match"));
+    res.writeHead(200, {"content-type":"application/json"});
+    res.end(JSON.stringify({periods:[{period:"ALL",groups:[{category:"Match",statistics:[{name:"Corner kicks",home_value:"4",away_value:"3"}]}]}]}));
+    return;
+  }
+  res.statusCode = 404;
+  res.end("{}");
 });
 
 (async () => {
