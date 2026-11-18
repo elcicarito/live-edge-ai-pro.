@@ -440,7 +440,7 @@ jobs:
           const history = read(PREDICTIONS, { sport: "basketball", predictions: [] });
           // Keep all existing v3 predictions and all half-model v4 records.
           const predictions = (Array.isArray(history.predictions) ? history.predictions : [])
-            .filter(p => (p.model_version === 3 && p.training_scope === "league") || p.model_version === 4 || p.model_version === 5);
+            .filter(p => (p.model_version === 3 && p.training_scope === "league") || p.model_version === 4 || p.model_version === 5 || p.model_version === 6);
           const keyOf = m => String(m.id || m.slug || m.url || [m.home, m.away, m.time].join("|"));
           const leagueOf = m => String(m.competition?.name || m.league?.name || m.competition || m.league || "Liga neznáma").trim();
           const formatOf = m => {
@@ -471,6 +471,19 @@ jobs:
           const isHalftime = m => /half.?time|halftime|break/.test(
             String(m.status_text || m.period?.name || m.period || m.status || "").toLowerCase()
           );
+          const isFinished = m => /finished|ended|full.?time|complete/.test(
+            String(m.status_text || m.period?.name || m.period || m.status || "").toLowerCase()
+          );
+          const numericScore = value => {
+            if (value === null || value === undefined || value === "") return null;
+            const n = Number(String(value).replace(/[^0-9.-]/g, ""));
+            return Number.isFinite(n) ? n : null;
+          };
+          const finalGameTotal = m => {
+            const home = numericScore(m?.home_score ?? m?.homeScore);
+            const away = numericScore(m?.away_score ?? m?.awayScore);
+            return home !== null && away !== null && home + away > 0 ? home + away : null;
+          };
           const archiveMatches = Array.isArray(archive.matches) ? archive.matches : [];
           const allNow = [...(Array.isArray(current.live_matches) ? current.live_matches : []), ...archiveMatches];
           const lookup = new Map(allNow.map(m => [keyOf(m), m]));
@@ -479,6 +492,16 @@ jobs:
             if (p.actual_total !== null && p.actual_total !== undefined) continue;
             const m = lookup.get(p.match_key);
             if (!m) continue;
+            if (p.model_version === 6) {
+              const actual = isFinished(m) ? finalGameTotal(m) : null;
+              if (actual !== null) {
+                p.actual_total = actual;
+                p.absolute_error = Math.abs(Number(p.predicted_total) - actual);
+                p.settled_at = new Date().toISOString();
+                settled++;
+              }
+              continue;
+            }
             const halfModel = p.model_version === 4;
             if (halfModel !== (formatOf(m) === "halves")) continue;
             const target = halfModel ? Number(p.target_half) : Number(p.target_quarter);
@@ -493,8 +516,63 @@ jobs:
             [1,2,3,4].every(q => complete(m,q)));
           const halfTraining = archiveMatches.filter(m => formatOf(m) === "halves" &&
             [1,2].every(q => complete(m,q)));
+          const fullGameTraining = quarterTraining.filter(m => finalGameTotal(m) !== null);
           const live = Array.isArray(current.live_matches) ? current.live_matches : [];
           let created = 0;
+          // V6 shadow model: final total from completed-quarter pace + prior same-league finals.
+          // The current quarter is excluded because the feed does not provide a reliable game clock.
+          const fullGamePredictionTime = Date.now();
+          for (const m of live) {
+            if (formatOf(m) !== "quarters") continue;
+            const period = periodOf(m);
+            if (period < 2 || period > 4) continue;
+            const completedPeriods = period - 1;
+            if (![...Array(completedPeriods)].every((_,i) => complete(m,i+1))) continue;
+            const matchKey = keyOf(m);
+            if (predictions.some(p => p.match_key === matchKey && p.model_version === 6 && p.checkpoint_period === completedPeriods)) continue;
+            const league = leagueOf(m);
+            const liveStart = Date.parse(m.time || m.start_time || m.startTime || "");
+            if (!Number.isFinite(liveStart)) continue;
+            const selected = fullGameTraining.filter(x => {
+              const historicalStart = Date.parse(x.time || x.start_time || x.startTime || "");
+              const archivedAt = Date.parse(x.archived_at || "");
+              return leagueOf(x) === league && Number.isFinite(historicalStart) &&
+                historicalStart < liveStart && Number.isFinite(archivedAt) &&
+                archivedAt <= fullGamePredictionTime;
+            });
+            if (selected.length < 20) {
+              console.log("V6 FULL GAME SKIPPED: same-league sample below 20", league, selected.length);
+              continue;
+            }
+            const historicalTotals = selected.map(finalGameTotal).filter(v => v !== null);
+            if (historicalTotals.length < 20) continue;
+            const historicalAverage = historicalTotals.reduce((sum,v)=>sum+v,0) / historicalTotals.length;
+            const observedTotal = Array.from({length:completedPeriods},(_,i)=>qTotal(m,i+1)).reduce((sum,v)=>sum+v,0);
+            const paceProjection = observedTotal / completedPeriods * 4;
+            const paceWeight = completedPeriods === 1 ? 0.25 : completedPeriods === 2 ? 0.45 : 0.60;
+            const predicted = Math.round(historicalAverage * (1-paceWeight) + paceProjection * paceWeight);
+            const variance = historicalTotals.reduce((sum,v)=>sum+Math.pow(v-historicalAverage,2),0) / Math.max(1,historicalTotals.length-1);
+            const rangeHalfWidth = Math.max(12,Math.round(Math.sqrt(variance)*0.75));
+            predictions.push({
+              id: matchKey + "::FULL::P" + completedPeriods + "::V6",
+              model_version: 6, match_key: matchKey,
+              home: m.home || m.home_name || "Domáci", away: m.away || m.away_name || "Hostia",
+              league, checkpoint_period: completedPeriods,
+              predicted_total: predicted,
+              range_low: Math.max(0,predicted-rangeHalfWidth), range_high: predicted+rangeHalfWidth,
+              historical_average: Number(historicalAverage.toFixed(2)),
+              observed_completed_total: observedTotal, pace_projection: Number(paceProjection.toFixed(2)),
+              pace_weight: paceWeight, training_sample: historicalTotals.length,
+              training_scope: "league-as-of-full-game",
+              historical_cutoff: new Date(fullGamePredictionTime).toISOString(),
+              observed_at: new Date(fullGamePredictionTime).toISOString(),
+              data_delay_note: "V6 používa iba ukončené štvrtiny; aktuálna štvrtina a jej neznámy čas sa nezapočítavajú. Zber môže meškať približne 5 minút.",
+              model_note: "Experimentálny odhad celkového počtu bodov do konca zápasu; bez kurzov a bez stávkového signálu.",
+              actual_total: null, absolute_error: null
+            });
+            created++;
+            console.log("V6 FULL GAME SHADOW:", m.home, "-", m.away, "po Q" + completedPeriods, predicted, "vzorka", historicalTotals.length);
+          }
           // Existing v3 quarter model remains unchanged for leagues that use four quarters.
           for (const m of live) {
             if (formatOf(m) !== "quarters") continue;
@@ -602,7 +680,7 @@ jobs:
           const trimmed = predictions.sort((a,b)=>String(b.observed_at).localeCompare(String(a.observed_at))).slice(0,1000);
           fs.writeFileSync(PREDICTIONS, JSON.stringify({
             sport: "basketball", updated_at: new Date().toISOString(),
-            model: "v3: 4 štvrtiny (65/35); v4: mužské NCAA, 2 polčasy; v5: experimentálny challenger pre 4 štvrtiny (80% historická liga + 20% tempo zápasu), iba skoršie zápasy archivované pred predikciou.",
+            model: "v3: predikcia bodov ďalšej štvrtiny; v4: mužské NCAA, 2 polčasy; v5: challenger ďalšej štvrtiny; v6: experimentálny odhad celkového počtu bodov do konca zápasu z dokončených štvrtín a skorších zápasov rovnakej ligy.",
             complete_training_games: quarterTraining.length,
             complete_half_training_games: halfTraining.length,
             settled_this_run: settled, created_this_run: created, predictions: trimmed
