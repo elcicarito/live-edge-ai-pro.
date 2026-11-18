@@ -69,11 +69,13 @@ const details = await Promise.all(liveRows.map(async row => {
   // the latest period's figures are full-match totals. Period breakdown
   // remains available in stats_by_period for diagnostics and UI.
   const stage = String(row.stage || row.status || detail.stage || "LIVE");
+  // Statistics tabs can list all three periods even while the match is
+  // still in the first. Never infer the current period from available tabs.
   const explicitPeriod = periodNumber(detail.period ?? detail.current_period ?? row.period ?? row.current_period ?? stage);
-  const statsPeriods = statsByPeriod.map(item => periodNumber(item.period)).filter(Boolean);
-  const period = explicitPeriod || (statsPeriods.length ? Math.max(...statsPeriods) : null);
-  const periodSource = explicitPeriod ? "match_status" : statsPeriods.length ? "statistics_tabs" : null;
-  const clock = String(row.time || row.clock || detail.time || detail.clock || detail.status?.display_clock || "");
+  const period = explicitPeriod;
+  const periodSource = explicitPeriod ? "match_status" : null;
+  const rawClock = row.time ?? row.clock ?? detail.time ?? detail.clock ?? detail.status?.display_clock ?? "";
+  const clock = typeof rawClock === "string" || typeof rawClock === "number" ? String(rawClock) : String(rawClock?.display || rawClock?.text || rawClock?.value || "");
   return {
     id: `flashscore-${sourceId}`, source: "Flashscore", source_match_id: sourceId,
     league_slug: String((detail.competition?.name || row.competition?.name || "hockey").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")),
@@ -87,7 +89,18 @@ const details = await Promise.all(liveRows.map(async row => {
 }));
 const matches = details.filter(Boolean);
 if (liveRows.length && !matches.length) throw new Error("Flashscore returned LIVE hockey fixtures but none could be normalized; previous snapshot preserved.");
-const current = { source: "Flashscore", collected_at: now, feed_state: matches.length ? "LIVE" : "NO_LIVE", live_count: matches.length, raw_live_count: liveRows.length, matches };
+const current = {
+  source: "Flashscore", collected_at: now, feed_state: matches.length ? "LIVE" : "NO_LIVE",
+  live_count: matches.length, raw_live_count: liveRows.length,
+  data_quality: {
+    matches_with_period: matches.filter(match => match.period !== null).length,
+    matches_with_clock: matches.filter(match => Boolean(match.clock)).length,
+    matches_with_match_totals: matches.filter(match => Object.keys(match.stats.home).length || Object.keys(match.stats.away).length).length,
+    matches_with_period_stats: matches.filter(match => match.stats_by_period.some(period => period.statistics.length)).length,
+    warning: "Statistics tabs are not used to infer the current period."
+  },
+  matches
+};
 await fs.mkdir("data", { recursive: true });
 await fs.writeFile(paths.current, JSON.stringify(current, null, 2));
 const previousArchive = await readJson(paths.archive, { matches: [] });
