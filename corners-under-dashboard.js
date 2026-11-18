@@ -27,7 +27,34 @@
       throw new Error("Neplatný formát alebo zdroj modelu.");
     }
     const policy = model.validation_policy || {};
-    overview.innerHTML = lines.map(([key, label]) => {
+    const minTrain = Number(policy.min_train_samples || 500);
+    const minValidation = Number(policy.min_validation_samples || 300);
+    const minTrainMatches = Number(policy.min_train_matches || 100);
+    const minValidationMatches = Number(policy.min_validation_matches || 50);
+    const modelRows = lines.map(([key]) => model.models?.[key]?.counts || {});
+    const minCount = field => Math.min(...modelRows.map(row => Number(row[field] || 0)));
+    const readyCount = lines.filter(([key]) => model.models?.[key]?.status === "SHADOW_VALIDATED").length;
+    const sampleTrain = minCount("train");
+    const sampleValidation = minCount("validation");
+    const matchesTrain = minCount("train_matches");
+    const matchesValidation = minCount("validation_matches");
+    const sampleReady = Math.min(100, 100 * Math.min(sampleTrain / minTrain, sampleValidation / minValidation));
+    const matchReady = Math.min(100, 100 * Math.min(matchesTrain / minTrainMatches, matchesValidation / minValidationMatches));
+    const summary = "<section class='cards-readiness'>" +
+      "<div class='cards-readiness-top'><div><small>CELKOVÁ PRIPRAVENOSŤ MODELU ROHOV</small><strong>" +
+      readyCount + "/4 hraníc validovaných</strong></div><span>" +
+      (readyCount === 4 ? "VALIDÁCIA SPLNENÁ" : "ZBER A VALIDÁCIA") + "</span></div>" +
+      "<div class='cards-readiness-grid'>" +
+      "<div><b>" + number(sampleTrain) + "/" + minTrain + "</b><small>tréningové vzorky na hranicu</small></div>" +
+      "<div><b>" + number(sampleValidation) + "/" + minValidation + "</b><small>validačné vzorky na hranicu</small></div>" +
+      "<div><b>" + number(matchesTrain) + "/" + minTrainMatches + "</b><small>tréningové zápasy na hranicu</small></div>" +
+      "<div><b>" + number(matchesValidation) + "/" + minValidationMatches + "</b><small>validačné zápasy na hranicu</small></div>" +
+      "</div><div class='cards-progress'><i style='width:" + sampleReady.toFixed(1) + "%'></i></div>" +
+      "<div class='cards-progress-label'><span>Pokrytie vzorkami</span><span>" + sampleReady.toFixed(0) + " %</span></div>" +
+      "<div class='cards-progress'><i style='width:" + matchReady.toFixed(1) + "%'></i></div>" +
+      "<div class='cards-progress-label'><span>Pokrytie nezávislými zápasmi</span><span>" + matchReady.toFixed(0) + " %</span></div>" +
+      "<p>Pripravenosť vychádza z najslabšie pokrytej hranice. Zobrazené percentá vyjadrujú iba množstvo dát, nie úspešnosť modelu.</p></section>";
+    overview.innerHTML = summary + lines.map(([key, label]) => {
       const summary = model.dataset_summary?.[key] || {};
       const trained = model.models?.[key] || {};
       const counts = trained.counts || {};
