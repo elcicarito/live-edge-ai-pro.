@@ -692,6 +692,9 @@
         return;
       }
       const a = matches[aIndex], b = matches[bIndex];
+      comparisonResult.replaceChildren();
+      const grid = document.createElement("div");
+      grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;";
       const summarize = (items, label) => {
         const first = items[0]?.snapshot || {}, last = items[items.length - 1]?.snapshot || {};
         const elapsed = items.length > 1
@@ -705,15 +708,34 @@
           const dh = end[0] - start[0], da = end[1] - start[1];
           if (dh || da) deltas.push(name + ": " + (dh > 0 ? "+" : "") + dh + " : " + (da > 0 ? "+" : "") + da);
         }
-        return "<div style='padding:10px;border:1px solid #2b455f;border-radius:9px;background:#0c1928;min-width:0'>" +
-          "<strong style='color:#e6f5ff'>" + label + "</strong><div>Skóre: " + scoreOf(first) + " → <b>" + scoreOf(last) +
-          "</b></div><div>Minúta: " + clockOf(first) + " → " + clockOf(last) + "</div><div>" + items.length +
-          " snímok · " + elapsed + " min zaznamenaného času</div><div style='margin-top:5px;color:#a9c6d9'>" +
-          (deltas.length ? deltas.map(value => value.replace(/&/g, "&amp;").replace(/</g, "&lt;")).join("<br>") :
-            "Bez spoločných štatistík s merateľnou zmenou.") + "</div></div>";
+        const card = document.createElement("div");
+        card.style.cssText = "padding:10px;border:1px solid #2b455f;border-radius:9px;background:#0c1928;min-width:0;";
+        const heading = document.createElement("strong");
+        heading.textContent = label;
+        heading.style.color = "#e6f5ff";
+        card.appendChild(heading);
+        const lines = [
+          "Skóre: " + scoreOf(first) + " → " + scoreOf(last),
+          "Minúta: " + clockOf(first) + " → " + clockOf(last),
+          items.length + " snímok · " + elapsed + " min zaznamenaného času"
+        ];
+        for (const value of lines) {
+          const line = document.createElement("div");
+          line.textContent = value;
+          card.appendChild(line);
+        }
+        const stats = document.createElement("div");
+        stats.style.cssText = "margin-top:5px;color:#a9c6d9;";
+        stats.textContent = deltas.length ? deltas.join(" · ") : "Bez spoločných štatistík s merateľnou zmenou.";
+        card.appendChild(stats);
+        return card;
       };
-      comparisonResult.innerHTML = "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px'>" +
-        summarize(a, "ZÁPAS A") + summarize(b, "ZÁPAS B") + "</div><div style='margin-top:7px;color:#829bb2'>Porovnanie vychádza z prvej a poslednej dostupnej snímky. Neznamená odhad chýbajúcich udalostí ani presný čas gólu.</div>";
+      grid.append(summarize(a, "ZÁPAS A"), summarize(b, "ZÁPAS B"));
+      comparisonResult.appendChild(grid);
+      const note = document.createElement("div");
+      note.style.cssText = "margin-top:7px;color:#829bb2;";
+      note.textContent = "Porovnanie vychádza z prvej a poslednej dostupnej snímky. Neznamená odhad chýbajúcich udalostí ani presný čas gólu.";
+      comparisonResult.appendChild(note);
     };
     compareButton.addEventListener("click", renderComparison);
     if (matches.length < 2) {
