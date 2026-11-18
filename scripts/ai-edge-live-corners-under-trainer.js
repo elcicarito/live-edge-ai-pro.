@@ -170,6 +170,25 @@ function buildSamples(rows, outcomes, startedAt) {
   }
   return { byLine, excluded };
 }
+function summarizeSamples(samples) {
+  const matches = new Map();
+  for (const sample of samples) {
+    const id = String(sample.match_id || "");
+    if (!id) continue;
+    if (!matches.has(id)) matches.set(id, { split: sample.split, y: sample.y });
+  }
+  const values = [...matches.values()];
+  return {
+    samples: samples.length,
+    train_samples: samples.filter(sample => sample.split === "train").length,
+    validation_samples: samples.filter(sample => sample.split === "validation").length,
+    matches: values.length,
+    train_matches: values.filter(match => match.split === "train").length,
+    validation_matches: values.filter(match => match.split === "validation").length,
+    positive_matches: values.filter(match => match.y === 1).length,
+    negative_matches: values.filter(match => match.y === 0).length
+  };
+}
 function trainLine(samples) {
   const trained = base.trainHorizon(samples);
   if (trained.status !== "SHADOW_VALIDATED" || !trained.metrics?.calibration) return trained;
@@ -193,6 +212,7 @@ async function run(dataDir = DATA, nowDate = new Date()) {
   for (const line of LINES) models[line.key] = trainLine(built.byLine[line.key]);
   const ready = LINES.filter(line => models[line.key].status === "SHADOW_VALIDATED").length;
   const total = LINES.reduce((sum, line) => sum + built.byLine[line.key].length, 0);
+  const datasetSummary = Object.fromEntries(LINES.map(line => [line.key, summarizeSamples(built.byLine[line.key])]));
   const output = {
     schema_version: 1, source: "Flashscore", mode: "FORWARD_ONLY_LIVE_CORNERS_UNDER_SHADOW",
     started_at: new Date(startedAt).toISOString(), updated_at: nowDate.toISOString(),
@@ -205,7 +225,7 @@ async function run(dataDir = DATA, nowDate = new Date()) {
       min_relative_log_loss_gain: 0.01, min_relative_brier_gain: 0.005,
       min_effective_match_weight_per_calibration_bin: 8, max_absolute_calibration_error: 0.08, metrics_weighted_per_match: true },
     prediction_policy: "Shadow evaluation only. No TOP opportunities or betting recommendations are emitted.",
-    total_labeled_samples: total,
+    total_labeled_samples: total, dataset_summary: datasetSummary,
     total_labeled_matches: new Set(LINES.flatMap(line => built.byLine[line.key].map(sample => sample.match_id))).size,
     excluded: built.excluded, validated_lines: ready,
     status: ready ? "SHADOW_VALIDATION_AVAILABLE" : "COLLECTING_OR_NOT_VALIDATED", models
@@ -215,4 +235,4 @@ async function run(dataDir = DATA, nowDate = new Date()) {
 }
 if (require.main === module) run().then(result => console.log("AI EDGE LIVE CORNERS UNDER SHADOW TRAINER", JSON.stringify(result)))
   .catch(error => { console.error("AI EDGE LIVE CORNERS TRAINER FAILED:", error.message); process.exit(1); });
-module.exports = { LINES, confirmedRegularCorners, minuteOf, cornerValue, featureVector, hasCornerChangeInLag, buildSamples, trainLine, run };
+module.exports = { LINES, confirmedRegularCorners, minuteOf, cornerValue, featureVector, hasCornerChangeInLag, buildSamples, summarizeSamples, trainLine, run };
