@@ -792,6 +792,58 @@
         return valid;
       };
       const pointsA = activityPoints(a), pointsB = activityPoints(b);
+      const coverageSummary = items => {
+        const snapshots = items.map(entry => entry.snapshot || {});
+        const clockCount = snapshots.filter(snapshot => actualMinute(snapshot) !== null).length;
+        const statsCount = snapshots.filter(snapshot => Array.isArray(snapshot.stats) && snapshot.stats.some(stat => {
+          const home = Number(stat.home_numeric ?? stat.home);
+          const away = Number(stat.away_numeric ?? stat.away);
+          return Number.isFinite(home) && Number.isFinite(away);
+        })).length;
+        const times = items.map(entry => Date.parse(entry.snapshot?.collected_at || entry.collected_at || ""))
+          .filter(Number.isFinite).sort((x, y) => x - y);
+        const gaps = times.slice(1).map((time, index) => (time - times[index]) / 60000)
+          .filter(gap => gap >= 0);
+        const maxGap = gaps.length ? Math.max(...gaps) : null;
+        const averageGap = gaps.length ? gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length : null;
+        const ratio = items.length ? clockCount / items.length : 0;
+        const quality = items.length < 2 ? "málo snímok"
+          : ratio >= 0.8 && statsCount / items.length >= 0.8 ? "dobré pokrytie"
+          : ratio >= 0.5 || statsCount / items.length >= 0.5 ? "čiastočné pokrytie"
+          : "obmedzené pokrytie";
+        return { total: items.length, clockCount, statsCount, maxGap, averageGap, quality };
+      };
+      const coveragePanel = document.createElement("section");
+      coveragePanel.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-top:10px;";
+      const renderCoverage = (items, label) => {
+        const info = coverageSummary(items);
+        const card = document.createElement("div");
+        card.style.cssText = "padding:10px;border:1px solid #29435d;border-radius:9px;background:#0b1928;min-width:0;";
+        const title = document.createElement("div");
+        title.textContent = label + " · " + info.quality.toLocaleUpperCase("sk-SK");
+        title.style.cssText = "font-size:10px;font-weight:900;color:#dff6ff;margin-bottom:6px;";
+        card.appendChild(title);
+        const rows = [
+          "Snímky: " + info.total,
+          "Rozpoznaná minúta: " + info.clockCount + "/" + info.total,
+          "Snímky so štatistikami: " + info.statsCount + "/" + info.total,
+          "Priemerná medzera zberu: " + (info.averageGap === null ? "—" : info.averageGap.toFixed(1) + " min"),
+          "Najdlhšia medzera zberu: " + (info.maxGap === null ? "—" : info.maxGap.toFixed(1) + " min")
+        ];
+        rows.forEach(value => {
+          const row = document.createElement("div");
+          row.textContent = value;
+          row.style.cssText = "font-size:10px;line-height:1.55;color:#b8c9d9;overflow-wrap:anywhere;";
+          card.appendChild(row);
+        });
+        return card;
+      };
+      coveragePanel.append(renderCoverage(a, "POKRYTIE ZÁPASU A"), renderCoverage(b, "POKRYTIE ZÁPASU B"));
+      const coverageNote = document.createElement("div");
+      coverageNote.textContent = "Hodnotenie pokrytia opisuje iba dostupné snímky a štatistiky; samo osebe nepotvrdzuje presnosť ani úplnosť celého zápasu.";
+      coverageNote.style.cssText = "grid-column:1/-1;font-size:9px;color:#829bb2;line-height:1.45;";
+      coveragePanel.appendChild(coverageNote);
+      comparisonResult.appendChild(coveragePanel);
       const graphPanel = document.createElement("section");
       graphPanel.style.cssText = "margin-top:10px;padding:10px;border:1px solid #29435d;border-radius:10px;background:#0b1928;";
       const graphTitle = document.createElement("div");
