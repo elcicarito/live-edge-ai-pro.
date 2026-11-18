@@ -737,24 +737,31 @@
       note.textContent = "Porovnanie vychádza z prvej a poslednej dostupnej snímky. Neznamená odhad chýbajúcich udalostí ani presný čas gólu.";
       comparisonResult.appendChild(note);
 
+      const actualMinute = snapshot => {
+        const raw = snapshot.live_minute ?? snapshot.live_clock;
+        if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 && raw <= 130) return raw;
+        const textValue = String(raw ?? "").trim();
+        const match = textValue.match(/^(\\d{1,3})(?:\\+(\\d{1,2}))?\\s*'?$/);
+        if (!match) return null;
+        const minute = Number(match[1]);
+        const added = Number(match[2] || 0);
+        if (!Number.isFinite(minute) || minute < 0 || minute > 130) return null;
+        return minute + (added ? added / 60 : 0);
+      };
       const activityPoints = items => {
         const valid = items.map(entry => {
           const snapshot = entry.snapshot || {};
           const onTarget = statValue(snapshot.stats, "shots on target");
           const offTarget = statValue(snapshot.stats, "shots off target");
-          const time = Date.parse(snapshot.collected_at || "");
-          if (!onTarget || !offTarget || !Number.isFinite(time)) return null;
+          const minute = actualMinute(snapshot);
+          if (!onTarget || !offTarget || minute === null) return null;
           return {
-            time,
+            minute,
             value: (onTarget.home + onTarget.away) * 3 + offTarget.home + offTarget.away
           };
-        }).filter(Boolean);
+        }).filter(Boolean).sort((x, y) => x.minute - y.minute);
         if (valid.length < 2) return [];
-        const start = valid[0].time, end = valid[valid.length - 1].time;
-        return valid.map(point => ({
-          x: end > start ? (point.time - start) / (end - start) : 0,
-          value: point.value
-        }));
+        return valid;
       };
       const pointsA = activityPoints(a), pointsB = activityPoints(b);
       const graphPanel = document.createElement("section");
@@ -764,19 +771,22 @@
       graphTitle.style.cssText = "font-size:11px;font-weight:900;color:#dff6ff;margin-bottom:4px;";
       graphPanel.appendChild(graphTitle);
       const graphCaption = document.createElement("div");
-      graphCaption.textContent = "Kumulatívny index = strely na bránu × 3 + strely mimo brány · súčet oboch tímov";
+      graphCaption.textContent = "Skutočná minúta zápasu na osi X · index = strely na bránu × 3 + strely mimo brány · súčet oboch tímov";
       graphCaption.style.cssText = "font-size:10px;color:#91a9bf;line-height:1.5;margin-bottom:7px;";
       graphPanel.appendChild(graphCaption);
       if (pointsA.length >= 2 && pointsB.length >= 2) {
         const svgNS = "http://www.w3.org/2000/svg";
         const svg = document.createElementNS(svgNS, "svg");
-        svg.setAttribute("viewBox", "0 0 340 150");
+        svg.setAttribute("viewBox", "0 0 340 158");
         svg.setAttribute("width", "100%");
         svg.setAttribute("role", "img");
-        svg.setAttribute("aria-label", "Porovnanie kumulatívneho indexu striel v dvoch zápasoch podľa uložených Flashscore snímok");
+        svg.setAttribute("aria-label", "Porovnanie streleckej aktivity v dvoch zápasoch podľa skutočných minút a uložených Flashscore snímok");
         svg.style.cssText = "display:block;width:100%;max-width:620px;";
+        const maxMinute = Math.max(45, ...pointsA.map(p => p.minute), ...pointsB.map(p => p.minute));
         const maxValue = Math.max(1, ...pointsA.map(p => p.value), ...pointsB.map(p => p.value));
-        [25, 65, 105].forEach(y => {
+        const xFor = minute => 30 + Math.min(1, minute / maxMinute) * 300;
+        const yFor = value => 112 - value / maxValue * 86;
+        [27, 69, 112].forEach(y => {
           const line = document.createElementNS(svgNS, "line");
           line.setAttribute("x1", "30"); line.setAttribute("x2", "330");
           line.setAttribute("y1", String(y)); line.setAttribute("y2", String(y));
@@ -784,11 +794,7 @@
           svg.appendChild(line);
         });
         const makePolyline = (points, color) => {
-          const coords = points.map(point => {
-            const x = 30 + point.x * 300;
-            const y = 108 - point.value / maxValue * 82;
-            return x.toFixed(1) + "," + y.toFixed(1);
-          }).join(" ");
+          const coords = points.map(point => xFor(point.minute).toFixed(1) + "," + yFor(point.value).toFixed(1)).join(" ");
           const line = document.createElementNS(svgNS, "polyline");
           line.setAttribute("points", coords);
           line.setAttribute("fill", "none");
@@ -799,8 +805,8 @@
           svg.appendChild(line);
           points.forEach(point => {
             const dot = document.createElementNS(svgNS, "circle");
-            dot.setAttribute("cx", String(30 + point.x * 300));
-            dot.setAttribute("cy", String(108 - point.value / maxValue * 82));
+            dot.setAttribute("cx", String(xFor(point.minute)));
+            dot.setAttribute("cy", String(yFor(point.value)));
             dot.setAttribute("r", "2.5");
             dot.setAttribute("fill", color);
             svg.appendChild(dot);
@@ -808,11 +814,21 @@
         };
         makePolyline(pointsA, "#38bdf8");
         makePolyline(pointsB, "#fbbf24");
+        [0, Math.round(maxMinute / 2), Math.round(maxMinute)].forEach((minute, index) => {
+          const tick = document.createElementNS(svgNS, "text");
+          tick.setAttribute("x", String(xFor(minute)));
+          tick.setAttribute("y", "128");
+          tick.setAttribute("fill", "#8fa6bd");
+          tick.setAttribute("font-size", "9");
+          tick.setAttribute("text-anchor", index === 0 ? "start" : index === 2 ? "end" : "middle");
+          tick.textContent = minute + "'";
+          svg.appendChild(tick);
+        });
         const xLabel = document.createElementNS(svgNS, "text");
-        xLabel.setAttribute("x", "180"); xLabel.setAttribute("y", "137");
+        xLabel.setAttribute("x", "180"); xLabel.setAttribute("y", "148");
         xLabel.setAttribute("fill", "#8fa6bd"); xLabel.setAttribute("font-size", "9");
         xLabel.setAttribute("text-anchor", "middle");
-        xLabel.textContent = "Priebeh zachyteného úseku: začiatok → koniec";
+        xLabel.textContent = "Skutočná minúta zápasu";
         svg.appendChild(xLabel);
         graphPanel.appendChild(svg);
         const legend = document.createElement("div");
@@ -823,9 +839,13 @@
         legendB.textContent = "● Zápas B"; legendB.style.color = "#fbbf24";
         legend.append(legendA, legendB);
         graphPanel.appendChild(legend);
+        const actualNote = document.createElement("div");
+        actualNote.textContent = "Body predstavujú iba uložené snímky s rozpoznanou minútou. Chýbajúce minúty ani priebeh medzi snímkami sa nedopočítavajú.";
+        actualNote.style.cssText = "margin-top:5px;font-size:10px;color:#829bb2;line-height:1.5;";
+        graphPanel.appendChild(actualNote);
       } else {
         const unavailable = document.createElement("div");
-        unavailable.textContent = "Graf sa zobrazí, keď oba zápasy majú aspoň dve snímky s dostupnými strelami na bránu aj mimo brány.";
+        unavailable.textContent = "Graf sa zobrazí, keď oba zápasy majú aspoň dve snímky so štatistikami striel a rozpoznanou skutočnou minútou zápasu.";
         unavailable.style.cssText = "font-size:11px;color:#9fb4c9;line-height:1.5;";
         graphPanel.appendChild(unavailable);
       }
