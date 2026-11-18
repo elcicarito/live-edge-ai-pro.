@@ -4987,47 +4987,66 @@
 
     if (filtered.length) {
       addText(matchArchiveEl, "POTVRDENÉ KONEČNÉ VÝSLEDKY Z FLASHSCORE", "14px");
+      const leagueGroups = new Map();
       filtered.forEach(item => {
-        const match = item.final_match || {};
-        addMatchRow(
-          matchArchiveEl,
-          (match.home || "?") + " – " + (match.away || "?"),
-          item.final_score + " · " + item.final_status,
-          "#39e6a5",
-          match.competition || "KONEČNÝ VÝSLEDOK POTVRDENÝ"
-        );
+        const league = String(item.final_match?.competition || "Nezaradená súťaž").trim();
+        if (!leagueGroups.has(league)) leagueGroups.set(league, []);
+        leagueGroups.get(league).push(item);
+      });
+      [...leagueGroups.entries()].sort((a, b) => a[0].localeCompare(b[0], "sk")).forEach(([league, leagueItems], index) => {
+        const group = document.createElement("details");
+        group.open = index === 0;
+        group.style.cssText = "margin:10px 0;padding:10px 11px;border:1px solid #29445d;border-radius:12px;background:linear-gradient(135deg,#14243a,#0d1929);";
+        const groupSummary = document.createElement("summary");
+        groupSummary.textContent = "🏆 " + league + " · " + leagueItems.length + " záp.";
+        groupSummary.style.cssText = "cursor:pointer;color:#d8eaff;font-size:12px;font-weight:900;line-height:1.5;";
+        group.appendChild(groupSummary);
+        const groupBody = document.createElement("div");
+        groupBody.style.cssText = "padding-top:5px;";
+        leagueItems.forEach(item => {
+          const match = item.final_match || {};
+          addMatchRow(
+            groupBody,
+            (match.home || "?") + " – " + (match.away || "?"),
+            item.final_score + " · " + item.final_status,
+            "#39e6a5",
+            match.time ? new Date(match.time).toLocaleDateString("sk-SK") : "KONEČNÝ VÝSLEDOK POTVRDENÝ"
+          );
 
-        const details = document.createElement("details");
-        details.style.cssText = "margin:0 0 12px;padding:9px 11px;background:#0c1726;border:1px solid #2b3c52;border-radius:9px;";
-        const summary = document.createElement("summary");
-        summary.textContent = "📈 ZÁZNAM POTVRDENIA A OPRÁV";
-        summary.style.cssText = "cursor:pointer;color:#a5d8ff;font-size:11px;font-weight:900;";
-        details.appendChild(summary);
-        const body = document.createElement("div");
-        body.style.cssText = "font-size:11px;color:#cbd8e6;line-height:1.6;margin-top:7px;";
-        const line = (label, value) => {
-          const element = document.createElement("div");
-          element.textContent = label + ": " + value;
-          body.appendChild(element);
-        };
-        line("Zdroj", "Flashscore · explicitný stav FINISHED");
-        line("ID zápasu", item.id);
-        line("Konečný výsledok", item.final_score);
-        line("Uložené LIVE snímky", Number(item.snapshots_count || 0));
-        line("Prvé potvrdenie", item.first_confirmed_at || "—");
-        line("Posledné potvrdenie", item.confirmed_at || "—");
-        const revisions = Array.isArray(item.revisions) ? item.revisions : [];
-        line("Počet zaznamenaných opráv", revisions.length);
-        revisions.forEach(revision => {
-          line("Predchádzajúci výsledok · revízia " + revision.revision,
-            (revision.final_score || "?") + " · nahradené " + (revision.superseded_at || "—"));
+          const details = document.createElement("details");
+          details.style.cssText = "margin:0 0 12px;padding:9px 11px;background:#0c1726;border:1px solid #2b3c52;border-radius:9px;";
+          const summary = document.createElement("summary");
+          summary.textContent = "📈 ZÁZNAM POTVRDENIA A OPRÁV";
+          summary.style.cssText = "cursor:pointer;color:#a5d8ff;font-size:11px;font-weight:900;";
+          details.appendChild(summary);
+          const body = document.createElement("div");
+          body.style.cssText = "font-size:11px;color:#cbd8e6;line-height:1.6;margin-top:7px;";
+          const line = (label, value) => {
+            const element = document.createElement("div");
+            element.textContent = label + ": " + value;
+            body.appendChild(element);
+          };
+          line("Zdroj", "Flashscore · explicitný stav FINISHED");
+          line("ID zápasu", item.id);
+          line("Konečný výsledok", item.final_score);
+          line("Uložené LIVE snímky", Number(item.snapshots_count || 0));
+          line("Prvé potvrdenie", item.first_confirmed_at || "—");
+          line("Posledné potvrdenie", item.confirmed_at || "—");
+          const revisions = Array.isArray(item.revisions) ? item.revisions : [];
+          line("Počet zaznamenaných opráv", revisions.length);
+          revisions.forEach(revision => {
+            line("Predchádzajúci výsledok · revízia " + revision.revision,
+              (revision.final_score || "?") + " · nahradené " + (revision.superseded_at || "—"));
+          });
+          const note = document.createElement("div");
+          note.textContent = "Kompletná časová os, LIVE snímky a štatistiky zostávajú v samostatnom trvalom Flashscore archíve.";
+          note.style.cssText = "font-size:10px;color:#94a3b8;margin-top:6px;";
+          body.appendChild(note);
+          details.appendChild(body);
+          groupBody.appendChild(details);
         });
-        const note = document.createElement("div");
-        note.textContent = "Kompletná časová os, LIVE snímky a štatistiky zostávajú v samostatnom trvalom Flashscore archíve.";
-        note.style.cssText = "font-size:10px;color:#94a3b8;margin-top:6px;";
-        body.appendChild(note);
-        details.appendChild(body);
-        matchArchiveEl.appendChild(details);
+        group.appendChild(groupBody);
+        matchArchiveEl.appendChild(group);
       });
     } else if (!pending.length) {
       addText(matchArchiveEl, "Zatiaľ nie sú uložené žiadne potvrdené konečné výsledky.");
