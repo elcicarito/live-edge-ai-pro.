@@ -5,6 +5,8 @@
     btts: ROOT + "live-data-v2/data/flashscore-btts-signal-archive.json",
     model: ROOT + "live-data-v2/data/ai-edge-live-model.json",
     late: ROOT + "live-data-v2/data/ai-edge-live-late-ft-model.json",
+    corners: ROOT + "live-data-v2/data/ai-edge-live-corners-under-model.json",
+    cards: ROOT + "live-data-v2/data/ai-edge-live-cards-under-model.json",
     ledger: ROOT + "live-data-v2/data/ai-edge-prediction-live.json"
   };
   const target = document.getElementById("football-model-performance-center-content");
@@ -123,6 +125,32 @@
       ". Cieľ: aspoň jeden gól po 5-minútovom oneskorení do konca riadneho času.";
     addCard(grid, "GÓL 70–85′ → KONIEC", status, detail, tone);
   }
+  function renderThresholdModel(grid, model, title) {
+    if (!model) {
+      addCard(grid, title, "DÁTA NEDOSTUPNÉ", "Samostatný modelový súbor sa nepodarilo načítať.", "#fbbf24");
+      return;
+    }
+    const policy = model.validation_policy || {};
+    const totalMatches = number(model.total_labeled_matches);
+    const totalSamples = number(model.total_labeled_samples);
+    addCard(grid, title + " · CELKOM",
+      model.status === "SHADOW_VALIDATION_AVAILABLE" ? "VALIDÁCIA DOSTUPNÁ" : "ZBER VZORIEK",
+      totalSamples + " vzoriek naprieč hranicami · " + totalMatches + " unikátnych zápasov. Každá hranica sa vyhodnocuje samostatne; vzorky nie sú unikátne zápasy.",
+      model.status === "SHADOW_VALIDATION_AVAILABLE" ? "#60a5fa" : "#cbd5e1");
+    (model.lines || []).forEach(line => {
+      const item = model.models?.[line.key] || {};
+      const counts = item.counts || {};
+      const validated = item.status === "SHADOW_VALIDATED";
+      const status = validated ? "SHADOW VALIDATED" :
+        item.status === "NOT_VALIDATED" ? "NEVALIDOVANÝ" : "WARMUP";
+      const detail = "Tréning: " + number(counts.train) + " vzoriek / " + number(counts.train_matches) +
+        " zápasov · validácia: " + number(counts.validation) + " / " + number(counts.validation_matches) +
+        " zápasov. Cieľ validácie: " + number(policy.min_validation_samples || 300) +
+        " vzoriek / " + number(policy.min_validation_matches || 50) + " zápasov.";
+      addCard(grid, title + " · " + line.side + " " + line.line, status, detail,
+        validated ? "#60a5fa" : item.status === "NOT_VALIDATED" ? "#fbbf24" : "#cbd5e1");
+    });
+  }
   function render(data) {
     target.innerHTML = "";
     const grid = document.createElement("div");
@@ -146,6 +174,8 @@
     renderModel(grid, model, 25);
     ["15", "25", "MODEL_15", "MODEL_25", "MODEL_FT", "FT", "NEXT_TEAM", "BTTS", "RESULT_1X2"].forEach(key => renderLedgerTarget(grid, data.ledger, key));
     renderLate(grid, data.late);
+    renderThresholdModel(grid, data.corners, "AI CORNERS · CELKOVÉ ROHY");
+    renderThresholdModel(grid, data.cards, "AI CARDS · ŽLTÉ KARTY");
 
     addCard(grid, "ZELENÝ SIGNÁL · STARŠÍ ENGINE", "VYPNUTÝ",
       "Legacy zelený engine je v aktuálnej Flashscore-only verzii vypnutý. Jeho staré záznamy sa nemiešajú s novými výsledkami.",
@@ -162,15 +192,17 @@
     target.appendChild(note);
   }
   async function refresh() {
-    const results = await Promise.allSettled([read(URLS.btts), read(URLS.model), read(URLS.late), read(URLS.ledger)]);
+    const results = await Promise.allSettled([read(URLS.btts), read(URLS.model), read(URLS.late), read(URLS.corners), read(URLS.cards), read(URLS.ledger)]);
     const data = {
       btts: results[0].status === "fulfilled" ? results[0].value : null,
       model: results[1].status === "fulfilled" ? results[1].value : null,
       late: results[2].status === "fulfilled" ? results[2].value : null,
-      ledger: results[3].status === "fulfilled" ? results[3].value : null
+      corners: results[3].status === "fulfilled" ? results[3].value : null,
+      cards: results[4].status === "fulfilled" ? results[4].value : null,
+      ledger: results[5].status === "fulfilled" ? results[5].value : null
     };
     render(data);
-    const errors = results.map((result, index) => result.status === "rejected" ? ["BTTS", "AI EDGE", "neskorý gól", "predikčný denník"][index] + ": " + (result.reason?.message || "chyba") : null).filter(Boolean);
+    const errors = results.map((result, index) => result.status === "rejected" ? ["BTTS", "AI EDGE", "neskorý gól", "rohy", "žlté karty", "predikčný denník"][index] + ": " + (result.reason?.message || "chyba") : null).filter(Boolean);
     if (errors.length) {
       const warning = document.createElement("p");
       warning.textContent = "Niektoré zdroje sú dočasne nedostupné: " + errors.join(" · ");
