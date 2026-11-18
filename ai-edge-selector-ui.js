@@ -208,7 +208,7 @@
     const live=new Map(usable.filter(x=>x.fx.ready).map(x=>[String(x.record.match?.id),x]));
     const latest=new Map();
     for(const row of ledger.predictions||[]){
-      if(!["MODEL_25","MODEL_FT"].includes(row.target)||row.status!=="OPEN"||row.modelStatus!=="SHADOW_VALIDATED"||!Number.isFinite(Number(row.modelProbability))||!Number.isFinite(Number(row.modelMinimumOdds))||!Number.isFinite(Number(row.modelCalibrationError)))continue;
+      if(!["MODEL_25","MODEL_FT"].includes(row.target)||row.status!=="OPEN"||row.modelStatus!=="SHADOW_VALIDATED"||!Number.isFinite(Number(row.modelProbability))||Number(row.modelProbability)<=0||Number(row.modelProbability)>=1||!Number.isFinite(Number(row.modelMinimumOdds))||Number(row.modelMinimumOdds)<=1||!Number.isFinite(Number(row.modelCalibrationError))||Number(row.modelCalibrationError)>0.08||!Number.isFinite(Number(row.modelCalibrationMatchesWeight))||Number(row.modelCalibrationMatchesWeight)<8)continue;
       const id=String(row.matchId||"")+"|"+row.target,previous=latest.get(id);
       if(!previous||Number(row.createdAt)>Number(previous.createdAt))latest.set(id,row);
     }
@@ -224,8 +224,9 @@
       if(!Number.isFinite(minute)||minute<1||minute>110)return;
       const deadline=Number(row.deadlineMinute),after=Number(row.actionableAfterMinute),createdRaw=row.createdAt,createdAt=typeof createdRaw==="number"?createdRaw:(Number.isFinite(Number(createdRaw))?Number(createdRaw):Date.parse(createdRaw)),rowAge=Date.now()-createdAt;
       if(!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after||minute>deadline)return;
-      if(!Number.isFinite(rowAge)||rowAge<0)return;
-      const p=Number(row.modelProbability),error=Number(row.modelCalibrationError),conservative=Number.isFinite(Number(row.conservativeProbability))?Number(row.conservativeProbability):Math.max(0.01,p-error);
+      if(!Number.isFinite(rowAge)||rowAge<0||rowAge>8*60000)return;
+      const p=Number(row.modelProbability),error=Number(row.modelCalibrationError),calibrationWeight=Number(row.modelCalibrationMatchesWeight),conservative=Number.isFinite(Number(row.conservativeProbability))?Number(row.conservativeProbability):Math.max(0.01,p-error);
+      if(!Number.isFinite(p)||p<=0||p>=1||!Number.isFinite(error)||error>0.08||!Number.isFinite(calibrationWeight)||calibrationWeight<8||!Number.isFinite(Number(row.modelMinimumOdds))||Number(row.modelMinimumOdds)<=1)return;
       const is25=row.target==="MODEL_25";
       const market=is25?"GÓL V NASLEDUJÚCICH 25 MIN":"OVER "+((Number(m.home_score)||0)+(Number(m.away_score)||0)+0.5).toFixed(1);
       const oddsKey=String(row.id||row.matchId+"|"+row.target)+"|"+(is25?"GOAL_25_MIN":market.replace(/\s+/g,"_"));
@@ -241,7 +242,7 @@
       if(entry.status!=="OPEN"||!["MODEL_25","MODEL_FT"].includes(entry.target))continue;
       const current=live.get(String(entry.matchId||""));if(!current)continue;
       const score=String(entry.capturedScore||"0:0").split(":").map(Number);
-      const row={...entry,id:entry.predictionId,createdAt:entry.sourcePredictionAt,startMinute:entry.capturedMinute,startHome:score[0],startAway:score[1],modelCalibrationError:entry.calibrationError,modelMinimumOdds:entry.minimumOdds,modelProbability:entry.modelProbability,conservativeProbability:entry.conservativeProbability};
+      const row={...entry,id:entry.predictionId,createdAt:entry.sourcePredictionAt,startMinute:entry.capturedMinute,startHome:score[0],startAway:score[1],modelCalibrationError:entry.calibrationError,modelCalibrationMatchesWeight:entry.calibrationMatchesWeight,modelMinimumOdds:entry.minimumOdds,modelProbability:entry.modelProbability,conservativeProbability:entry.conservativeProbability};
       addCandidate(row,current);
     }
     // Nové kandidáty iba ak zápas + model ešte nie sú v TOP registri.
