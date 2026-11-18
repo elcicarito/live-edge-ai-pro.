@@ -85,13 +85,22 @@ const reliableCalibrationPass = calibrationGate({ bins: [
   { matches_weight: 9, absolute_error: 0.08 },
   { matches_weight: 2, absolute_error: 0.35 }
 ] });
-assert.equal(reliableCalibrationPass.passed, true, "weak bins below eight effective matches are abstention-only");
+assert.equal(reliableCalibrationPass.passed, true, "two well-calibrated bins allow selective validation while weak bins abstain");
 const reliableCalibrationFail = calibrationGate({ bins: [
   { matches_weight: 12, absolute_error: 0.04 },
   { matches_weight: 11, absolute_error: 0.167 }
 ] });
-assert.equal(reliableCalibrationFail.passed, false, "a sufficiently weighted bin above eight percent blocks validation");
+assert.equal(reliableCalibrationFail.passed, false, "one good bin is not enough for selective validation");
 assert.equal(reliableCalibrationFail.failed_bins, 1);
+const selectiveCalibration = calibrationGate({ bins: [
+  { range: "50-60", matches_weight: 84, absolute_error: 0.0144 },
+  { range: "60-70", matches_weight: 78, absolute_error: 0.0158 },
+  { range: "70-80", matches_weight: 11, absolute_error: 0.1516 },
+  { range: "80-90", matches_weight: 0.03, absolute_error: 0.1995 }
+] });
+assert.equal(selectiveCalibration.passed, true, "two calibrated 50-60 and 60-70 bands validate selectively despite a blocked 70-80 band");
+assert.equal(selectiveCalibration.passing_bins, 2);
+assert.equal(selectiveCalibration.failed_bins, 1);
 assert.equal(calibrationGate({ bins: [{ matches_weight: 7.9, absolute_error: 0.01 }] }).passed, false,
   "no sufficiently weighted calibration bin means no validation");
 
