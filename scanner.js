@@ -632,6 +632,101 @@
       " · " + rows.length + (rows.length === 1 ? " snímka" : " snímok");
     flashscoreArchiveResultsEl.appendChild(overview);
 
+    // Rýchle porovnanie dvoch zápasov používa iba reálne uložené snímky.
+    const comparison = document.createElement("section");
+    comparison.style.cssText = "margin:10px 0 14px;padding:12px;border:1px solid #31516b;border-radius:12px;background:linear-gradient(125deg,#13283e,#101d2d);";
+    const comparisonTitle = document.createElement("div");
+    comparisonTitle.textContent = "⚖️ POROVNANIE PRIEBEHU DVOCH ZÁPASOV";
+    comparisonTitle.style.cssText = "margin-bottom:9px;color:#dff6ff;font-size:12px;font-weight:900;letter-spacing:.04em;";
+    comparison.appendChild(comparisonTitle);
+    const comparisonControls = document.createElement("div");
+    comparisonControls.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;";
+    const makeMatchSelect = (label, initial) => {
+      const wrap = document.createElement("label");
+      wrap.style.cssText = "display:grid;gap:5px;color:#9fb4c9;font-size:10px;font-weight:800;";
+      const caption = document.createElement("span");
+      caption.textContent = label;
+      const select = document.createElement("select");
+      select.style.cssText = "width:100%;min-width:0;padding:9px;border:1px solid #38536d;border-radius:8px;background:#0c1a2a;color:#e8f1fa;font-size:12px;";
+      matches.forEach((items, index) => {
+        const first = items[0], last = items[items.length - 1]?.snapshot || {};
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = (first.home || "Domáci") + " " + (last.home_score ?? "–") + ":" +
+          (last.away_score ?? "–") + " " + (first.away || "Hostia");
+        select.appendChild(option);
+      });
+      select.value = String(Math.min(initial, matches.length - 1));
+      wrap.append(caption, select);
+      return { wrap, select };
+    };
+    const firstChoice = makeMatchSelect("ZÁPAS A", 0);
+    const secondChoice = makeMatchSelect("ZÁPAS B", 1);
+    comparisonControls.append(firstChoice.wrap, secondChoice.wrap);
+    comparison.appendChild(comparisonControls);
+    const compareButton = document.createElement("button");
+    compareButton.type = "button";
+    compareButton.textContent = "POROVNAŤ PRIEBEH";
+    compareButton.style.cssText = "margin-top:9px;padding:9px 13px;border:1px solid #3295a8;border-radius:8px;background:#17445a;color:#e7fbff;font-size:11px;font-weight:900;cursor:pointer;";
+    comparison.appendChild(compareButton);
+    const comparisonResult = document.createElement("div");
+    comparisonResult.style.cssText = "margin-top:10px;color:#cbd9e8;font-size:11px;line-height:1.6;";
+    comparison.appendChild(comparisonResult);
+    const scoreOf = snapshot => (snapshot.home_score ?? "–") + " : " + (snapshot.away_score ?? "–");
+    const clockOf = snapshot => snapshot.live_clock || (snapshot.live_minute !== null && snapshot.live_minute !== undefined
+      ? String(snapshot.live_minute).replace(/'$/, "") + "'" : snapshot.stage || "čas nezistený");
+    const statMap = snapshot => {
+      const result = new Map();
+      for (const stat of Array.isArray(snapshot.stats) ? snapshot.stats : []) {
+        const label = String(stat.label || stat.name || "").trim();
+        const home = Number(stat.home_numeric ?? stat.home);
+        const away = Number(stat.away_numeric ?? stat.away);
+        if (label && Number.isFinite(home) && Number.isFinite(away)) result.set(label, [home, away]);
+      }
+      return result;
+    };
+    const renderComparison = () => {
+      const aIndex = Number(firstChoice.select.value), bIndex = Number(secondChoice.select.value);
+      if (aIndex === bIndex) {
+        comparisonResult.textContent = "Vyber dva rozdielne zápasy.";
+        return;
+      }
+      const a = matches[aIndex], b = matches[bIndex];
+      const summarize = (items, label) => {
+        const first = items[0]?.snapshot || {}, last = items[items.length - 1]?.snapshot || {};
+        const elapsed = items.length > 1
+          ? Math.max(0, Math.round((Date.parse(last.collected_at) - Date.parse(first.collected_at)) / 60000))
+          : 0;
+        const firstStats = statMap(first), lastStats = statMap(last);
+        const deltas = [];
+        for (const [name, end] of lastStats) {
+          const start = firstStats.get(name);
+          if (!start) continue;
+          const dh = end[0] - start[0], da = end[1] - start[1];
+          if (dh || da) deltas.push(name + ": " + (dh > 0 ? "+" : "") + dh + " : " + (da > 0 ? "+" : "") + da);
+        }
+        return "<div style='padding:10px;border:1px solid #2b455f;border-radius:9px;background:#0c1928;min-width:0'>" +
+          "<strong style='color:#e6f5ff'>" + label + "</strong><div>Skóre: " + scoreOf(first) + " → <b>" + scoreOf(last) +
+          "</b></div><div>Minúta: " + clockOf(first) + " → " + clockOf(last) + "</div><div>" + items.length +
+          " snímok · " + elapsed + " min zaznamenaného času</div><div style='margin-top:5px;color:#a9c6d9'>" +
+          (deltas.length ? deltas.map(value => value.replace(/&/g, "&amp;").replace(/</g, "&lt;")).join("<br>") :
+            "Bez spoločných štatistík s merateľnou zmenou.") + "</div></div>";
+      };
+      comparisonResult.innerHTML = "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px'>" +
+        summarize(a, "ZÁPAS A") + summarize(b, "ZÁPAS B") + "</div><div style='margin-top:7px;color:#829bb2'>Porovnanie vychádza z prvej a poslednej dostupnej snímky. Neznamená odhad chýbajúcich udalostí ani presný čas gólu.</div>";
+    };
+    compareButton.addEventListener("click", renderComparison);
+    if (matches.length < 2) {
+      firstChoice.select.disabled = true;
+      secondChoice.select.disabled = true;
+      compareButton.disabled = true;
+      compareButton.style.opacity = ".45";
+      comparisonResult.textContent = "Na porovnanie sú potrebné aspoň dva zápasy vo vybranom dátume a filtri.";
+    } else {
+      comparisonResult.textContent = "Vyber dva zápasy a zobraz ich vývoj podľa uložených snímok.";
+    }
+    flashscoreArchiveResultsEl.appendChild(comparison);
+
     function createCount(label) {
       const count = document.createElement("span");
       count.textContent = label;
