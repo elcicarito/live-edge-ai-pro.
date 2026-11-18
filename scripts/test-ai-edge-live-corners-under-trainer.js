@@ -21,6 +21,20 @@ const outcome = { source: "Flashscore", status: "CONFIRMED", status_confirmation
   final_corners: { home_corners: 5, away_corners: 4, total_corners: 9 } };
 assert.equal(corners.confirmedRegularCorners(outcome), true);
 assert.equal(corners.confirmedRegularCorners({ ...outcome, final_match: { status_text: "After extra time" } }), false);
+
+// A recent paired snapshot contributes a real corner delta; a stale one does not.
+const current = row("pace", 60, 4, 3);
+const freshPrevious = row("pace", 55, 3, 2);
+const stalePrevious = row("pace", 40, 3, 2);
+const freshFeatures = corners.featureVector(current, freshPrevious);
+const staleFeatures = corners.featureVector(current, stalePrevious);
+const noPreviousFeatures = corners.featureVector(current, null);
+assert.equal(freshFeatures[16], 1);
+assert.equal(staleFeatures[16], 0);
+assert.equal(noPreviousFeatures[16], 0);
+assert.ok(freshFeatures[12] > 0);
+assert.equal(staleFeatures[12], 0);
+assert.equal(noPreviousFeatures[12], 0);
 const rows = [row("under9",55,3,2),row("under9",60,3,2),row("under9",65,4,2),row("under9",70,4,2),row("under9",75,4,2),row("under9",80,5,4),row("under9",90,5,4)];
 const built = corners.buildSamples(rows, { matches: { under9: outcome } }, Date.parse("2026-11-17T00:00:00.000Z"));
 assert.ok(built.byLine.UNDER_9_5.length > 0);
