@@ -1853,6 +1853,11 @@ input,select,textarea{border-color:#344b65!important;background:#0d1928!importan
  #matches .half-period-panel{width:100%!important}
 }
 
+
+.flashscore-archive-quick-filters{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 4px}
+.flashscore-archive-filter{border:1px solid #344b65;border-radius:999px;padding:7px 11px;background:#13243a;color:#aebfd2;font-size:11px;font-weight:800;cursor:pointer;transition:background .18s,border-color .18s,color .18s}
+.flashscore-archive-filter:hover{border-color:#4c829a;color:#e5f7ff}
+.flashscore-archive-filter.active{background:linear-gradient(120deg,#174b60,#1b3b59);border-color:#36a6b5;color:#e7fbff;box-shadow:0 0 0 1px #36a6b522}
 </style>
 </head>
 
@@ -2020,6 +2025,12 @@ input,select,textarea{border-color:#344b65!important;background:#0d1928!importan
     <input id="flashscore-archive-date" type="date">
     <label for="flashscore-archive-search">Vyhľadať tím, súťaž alebo minútu</label>
     <input id="flashscore-archive-search" type="search" placeholder="Napr. Slovan, Premier League, 67">
+    <div class="flashscore-archive-quick-filters" role="group" aria-label="Rýchle filtre archívu">
+      <button type="button" class="flashscore-archive-filter active" data-flashscore-filter="all" aria-pressed="true">Všetky</button>
+      <button type="button" class="flashscore-archive-filter" data-flashscore-filter="score" aria-pressed="false">⚽ Zmena skóre</button>
+      <button type="button" class="flashscore-archive-filter" data-flashscore-filter="multiple" aria-pressed="false">▤ Viac snímok</button>
+      <button type="button" class="flashscore-archive-filter" data-flashscore-filter="stats" aria-pressed="false">▥ So štatistikami</button>
+    </div>
     <button id="flashscore-archive-load" type="button">NAČÍTAŤ ZÁZNAMY</button>
   </div>
   <p id="flashscore-archive-status">Čakám na nový Flashscore archív...</p>
@@ -2151,7 +2162,7 @@ OBNOVIŤ SKENER
 })();
 </script>
 <script src="./momentum-engine.js?v=5"></script>
-<script src="./scanner.js?v=191"></script>
+<script src="./scanner.js?v=192"></script>
 <script src="./basketball.js?v=12"></script>
 <script src="./hockey.js?v=3"></script>
 <script src="./ai-edge-selector-ui.js?v=35"></script>
