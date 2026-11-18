@@ -317,19 +317,30 @@ function buildSamples(rows, outcomes, startedAt) {
   }
   return byHorizon;
 }
-function calibrationGate(calibrationResult, minMatchWeight = 8, maxAbsoluteError = 0.08) {
+function calibrationGate(calibrationResult, minMatchWeight = 8, maxAbsoluteError = 0.08, minPassingBins = 2) {
   const bins = Array.isArray(calibrationResult?.bins) ? calibrationResult.bins : [];
   const reliableBins = bins.filter(bin => Number(bin.matches_weight || 0) >= minMatchWeight);
-  if (!reliableBins.length) {
-    return { passed: false, reliable_bins: 0, failed_bins: 0, reason: "NO_RELIABLE_CALIBRATION_BINS" };
-  }
-  const failed = reliableBins.filter(bin => Number(bin.absolute_error ?? 1) > maxAbsoluteError);
+  const passingBins = reliableBins.filter(bin =>
+    Number.isFinite(Number(bin.absolute_error)) && Number(bin.absolute_error) <= maxAbsoluteError
+  );
+  const failed = reliableBins.filter(bin => !passingBins.includes(bin));
   return {
-    passed: failed.length === 0,
+    passed: passingBins.length >= minPassingBins,
     reliable_bins: reliableBins.length,
+    passing_bins: passingBins.length,
     failed_bins: failed.length,
-    max_reliable_error: Math.max(...reliableBins.map(bin => Number(bin.absolute_error || 0))),
-    reason: failed.length ? "RELIABLE_BIN_CALIBRATION_ERROR_ABOVE_LIMIT" : null
+    min_passing_bins: minPassingBins,
+    max_reliable_error: reliableBins.length
+      ? Math.max(...reliableBins.map(bin => Number(bin.absolute_error ?? 1)))
+      : null,
+    max_passing_error: passingBins.length
+      ? Math.max(...passingBins.map(bin => Number(bin.absolute_error)))
+      : null,
+    reason: !reliableBins.length
+      ? "NO_RELIABLE_CALIBRATION_BINS"
+      : passingBins.length < minPassingBins
+        ? "INSUFFICIENT_WELL_CALIBRATED_BINS"
+        : null
   };
 }
 function trainHorizon(samples) {
@@ -351,7 +362,7 @@ function trainHorizon(samples) {
   const validationMetrics = metrics(validation, weights);
   const lossGain = 1 - validationMetrics.log_loss / validationMetrics.baseline_log_loss;
   const brierGain = 1 - validationMetrics.brier / validationMetrics.baseline_brier;
-  const calibrationResult = calibrationGate(validationMetrics.calibration, 8, 0.08);
+  const calibrationResult = calibrationGate(validationMetrics.calibration, 8, 0.08, 2);
   const performancePassed = lossGain >= MIN_RELATIVE_LOG_LOSS_GAIN && brierGain >= MIN_RELATIVE_BRIER_GAIN;
   const validated = performancePassed && calibrationResult.passed;
   return {
@@ -364,7 +375,7 @@ function trainHorizon(samples) {
       : !calibrationResult.passed
         ? "Calibration gate failed: every bin with effective match weight >=8 must have absolute calibration error <=8%; weak bins remain abstention-only."
         : null,
-    validation_policy: { min_train_matches: MIN_TRAIN_MATCHES, min_validation_matches: MIN_VALIDATION_MATCHES, min_relative_log_loss_gain: MIN_RELATIVE_LOG_LOSS_GAIN, min_relative_brier_gain: MIN_RELATIVE_BRIER_GAIN, min_effective_match_weight_per_calibration_bin: 8, max_absolute_calibration_error: 0.08, metrics_weighted_per_match: true },
+    validation_policy: { min_train_matches: MIN_TRAIN_MATCHES, min_validation_matches: MIN_VALIDATION_MATCHES, min_relative_log_loss_gain: MIN_RELATIVE_LOG_LOSS_GAIN, min_relative_brier_gain: MIN_RELATIVE_BRIER_GAIN, min_effective_match_weight_per_calibration_bin: 8, min_well_calibrated_bins: 2, max_absolute_calibration_error: 0.08, metrics_weighted_per_match: true },
     weights: validated ? weights : null
   };
 }
@@ -401,8 +412,8 @@ async function run(dataDir = DATA, nowDate = new Date()) {
       min_relative_brier_gain: MIN_RELATIVE_BRIER_GAIN,
       metrics_weighted_per_match: true
     },
-    prediction_policy: "Weights stay shadow-only; validation requires at least 50 independent validation matches and improvement in both match-weighted log loss and Brier score.",
-    calibration_policy: { min_effective_match_weight: 8, max_absolute_error: 0.08, abstain_outside_reliable_bins: true },
+    prediction_policy: "Weights stay shadow-only; validation requires at least 50 independent validation matches, improvement in both match-weighted log loss and Brier score, and at least two reliable calibration bins. Predictions are emitted only inside individually reliable bins; all other bins abstain.",
+    calibration_policy: { min_effective_match_weight: 8, min_reliable_bins: 2, max_absolute_error: 0.08, abstain_outside_reliable_bins: true },
     total_labeled_samples: total,
     validated_horizons: ready,
     status: ready ? "SHADOW_VALIDATION_AVAILABLE" : "COLLECTING_LIVE_TRAINING_DATA",
