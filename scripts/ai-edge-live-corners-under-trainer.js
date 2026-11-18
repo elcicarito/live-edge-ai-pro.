@@ -52,7 +52,13 @@ function stageEligible(stage) {
 }
 function featureVector(row, previous) {
   const stats = row?.snapshot?.stats || [];
-  const oldStats = previous?.snapshot?.stats || [];
+  const currentTime = Date.parse(row?.snapshot?.collected_at || "");
+  const previousTime = Date.parse(previous?.snapshot?.collected_at || "");
+  const comparisonMinutes = currentTime - previousTime;
+  // Never treat an old archive row as a recent activity delta.
+  const comparisonReady = Number.isFinite(comparisonMinutes) &&
+    comparisonMinutes > 0 && comparisonMinutes <= 12 * 60000;
+  const oldStats = comparisonReady ? (previous?.snapshot?.stats || []) : [];
   const corners = base.statValue(stats, PATTERNS.corners);
   const fouls = base.statValue(stats, PATTERNS.fouls);
   const shots = base.statValue(stats, PATTERNS.shots);
@@ -85,7 +91,8 @@ function featureVector(row, previous) {
     Math.min(1, delta(corners, oldCorners) / 4),
     Math.min(1, delta(shots, oldShots) / 10),
     Math.min(1, delta(sot, oldSot) / 5),
-    Math.max(0, Math.min(1, (90 - minute) / 90))
+    Math.max(0, Math.min(1, (90 - minute) / 90)),
+    comparisonReady ? 1 : 0
   ];
 }
 function hasCornerChangeInLag(rows, index, startMinute) {
@@ -193,6 +200,7 @@ async function run(dataDir = DATA, nowDate = new Date()) {
     lag_minutes: LAG_MINUTES, observation_minute_range: [MINUTE_FROM, MINUTE_TO],
     lines: LINES.map(({ key, line }) => ({ key, side: "UNDER", line })),
     training_policy: "Only snapshots captured at or after activation. One latest sample per five-minute decision window. Requires confirmed final Flashscore corners, a complete regular-time timeline, monotonic corner totals and full five-minute lag coverage. No historical backfill.",
+    feature_policy: "Recent activity deltas are calculated only from the same match's previous snapshot when its timestamp is 1-12 minutes older; otherwise deltas are zero and the final feature marks comparison unavailable. This prevents stale snapshots from masquerading as current pace.",
     validation_policy: { min_train_samples: 500, min_validation_samples: 300, min_train_matches: 100, min_validation_matches: 50,
       min_relative_log_loss_gain: 0.01, min_relative_brier_gain: 0.005,
       min_effective_match_weight_per_calibration_bin: 8, max_absolute_calibration_error: 0.08, metrics_weighted_per_match: true },
