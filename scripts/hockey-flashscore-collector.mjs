@@ -39,21 +39,34 @@ const details = await Promise.all(liveRows.map(async row => {
   if (!homeName || !awayName) return null;
   const home = { id: detail.home?.id || row.home?.id || "", name: homeName, score: num(row.home_score ?? detail.home_score) };
   const away = { id: detail.away?.id || row.away?.id || "", name: awayName, score: num(row.away_score ?? detail.away_score) };
+  // Keep full-match totals separate from individual period values.
+  // The previous loop overwrote the top-level totals with the last period,
+  // which could mislead downstream live models.
   const stats = { home: {}, away: {} }, statsByPeriod = [];
+  let hasMatchTotals = false;
   for (const period of statData.periods || []) {
-    const periodStats = [];
+    const periodStats = [], periodHome = {}, periodAway = {};
     for (const group of period.groups || []) for (const stat of group.statistics || []) {
       const label = String(stat.name || "").trim();
       if (!label) continue;
       const h = stat.home_value ?? num(stat.home), a = stat.away_value ?? num(stat.away);
       const valueHome = h === null || h === undefined ? stat.home : h;
       const valueAway = a === null || a === undefined ? stat.away : a;
-      if (valueHome !== null && valueHome !== undefined) stats.home[label] = valueHome;
-      if (valueAway !== null && valueAway !== undefined) stats.away[label] = valueAway;
+      if (valueHome !== null && valueHome !== undefined) periodHome[label] = valueHome;
+      if (valueAway !== null && valueAway !== undefined) periodAway[label] = valueAway;
       periodStats.push({ category: group.category || null, label, home: valueHome ?? null, away: valueAway ?? null });
+    }
+    const periodName = String(period.period || "").trim().toLowerCase();
+    if (/^(match|full match|total|full time)$/.test(periodName)) {
+      Object.assign(stats.home, periodHome);
+      Object.assign(stats.away, periodAway);
+      hasMatchTotals = true;
     }
     statsByPeriod.push({ period: period.period ?? null, statistics: periodStats });
   }
+  // If the source does not expose a match-total tab, do not pretend that
+  // the latest period's figures are full-match totals. Period breakdown
+  // remains available in stats_by_period for diagnostics and UI.
   const stage = String(row.stage || row.status || detail.stage || "LIVE");
   return {
     id: `flashscore-${sourceId}`, source: "Flashscore", source_match_id: sourceId,
