@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - "scripts/ai-edge-live-online-trainer.js"
+      - "scripts/test-ai-edge-live-corners-under-trainer.js"
+      - "scripts/ai-edge-live-corners-under-trainer.js"
       - "scripts/test-ai-edge-live-online-trainer.js"
       - "ai-edge-selector-ui.js"
       - "scripts/ai-edge-live-late-ft-trainer.js"
@@ -16,6 +18,8 @@ on:
     paths:
       - "scripts/ai-edge-live-online-trainer.js"
       - "scripts/test-ai-edge-live-online-trainer.js"
+      - "scripts/ai-edge-live-corners-under-trainer.js"
+      - "scripts/test-ai-edge-live-corners-under-trainer.js"
       - ".github/workflows/ai-edge-live-trainer-tests.yml"
 
 permissions:
@@ -39,8 +43,10 @@ jobs:
       - name: Test forward-only LIVE trainer
         run: |
           node scripts/test-ai-edge-live-online-trainer.js
+          node scripts/test-ai-edge-live-corners-under-trainer.js
           node scripts/test-ai-edge-live-late-ft-trainer.js
           node scripts/test-ai-edge-live-prediction-ledger.js
           node scripts/test-ai-edge-top-opportunity-ledger.js
           node --check scripts/ai-edge-top-opportunity-ledger.js
+          node --check scripts/ai-edge-live-corners-under-trainer.js
           node --check ai-edge-selector-ui.js
