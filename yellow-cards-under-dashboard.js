@@ -87,9 +87,12 @@
     }).join("");
     const updated = new Date(model.updated_at || "");
     const updatedText = Number.isNaN(updated.getTime()) ? "čas reportu neznámy" : updated.toLocaleString("sk-SK");
+    const reportAge = Number.isNaN(updated.getTime()) ? null : Math.max(0, Math.floor((Date.now() - updated.getTime()) / 60000));
+    const reportAgeText = reportAge === null ? "vek neznámy" : reportAge + " min";
     const excluded = model.excluded || {};
     const excludedTotal = Object.values(excluded).reduce((sum, value) => sum + Number(value || 0), 0);
     meta.innerHTML = "<b>Report:</b> " + esc(updatedText) +
+      " · <b>Vek reportu:</b> " + esc(reportAgeText) +
       " · <b>Vzorky:</b> " + number(model.total_labeled_samples) +
       " · <b>Nezávislé zápasy:</b> " + number(model.total_labeled_matches) +
       " · <b>Validované hranice:</b> " + number(model.validated_lines) + "/6" +
