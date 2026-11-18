@@ -1125,20 +1125,25 @@
       return;
     }
     const heading = document.createElement("div");
+    heading.className = "half-period-heading";
     heading.textContent = "POROVNANIE POLČASOV";
     heading.style.cssText = "font-size:12px;font-weight:900;color:#dbeafe;margin:14px 0 8px;";
     target.appendChild(heading);
     const grid = document.createElement("div");
+    grid.className = "half-period-grid";
     grid.style.cssText = "display:grid;grid-template-columns:repeat(" + (data.length === 2 ? "2" : "1") + ",minmax(0,1fr));gap:8px;";
     data.forEach(period => {
       const panel = document.createElement("div");
+      panel.className = "half-period-panel";
       panel.style.cssText = "min-width:0;padding:9px;background:#101b2b;border:1px solid #293d55;border-radius:10px;";
       const title = document.createElement("div");
+      title.className = "half-period-panel-title";
       title.textContent = period.label;
       title.style.cssText = "font-size:11px;font-weight:900;color:#39e6a5;margin-bottom:7px;";
       panel.appendChild(title);
       period.stats.forEach(item => {
         const row = document.createElement("div");
+        row.className = "half-period-stat-row";
         row.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:5px;align-items:center;padding:5px 0;border-top:1px solid #26384d;";
         const home = document.createElement("strong");
         home.textContent = String(item.home) + item.suffix;
@@ -1174,11 +1179,13 @@
       }).filter(Boolean);
       if (comparisons.length) {
         const subheading = document.createElement("div");
-        subheading.textContent = "ZÁMENA INTENZITY · 2. POLČAS VOČI 1.";
+        subheading.className = "half-period-change-heading";
+        subheading.textContent = "ZMENА INTENZITY · 2. POLČAS VOČI 1.";
         subheading.style.cssText = "font-size:10px;font-weight:900;letter-spacing:.35px;color:#cbd5e1;margin:12px 0 5px;";
         target.appendChild(subheading);
         comparisons.forEach(item => {
           const row = document.createElement("div");
+          row.className = "half-period-change-row";
           row.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;align-items:center;padding:6px 8px;margin:4px 0;background:#101b2b;border-radius:7px;";
           const format = value => value > 0 ? "+" + value : String(value);
           const home = document.createElement("strong");
