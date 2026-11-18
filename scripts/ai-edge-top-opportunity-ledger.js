@@ -41,7 +41,7 @@ function buildTopLedger(dataDir=DATA,nowDate=new Date()){
   entries.push(entry);byKey.set(key,entry);
  }
  const predictionById=new Map(prediction.predictions.map(x=>[String(x.id||""),x]));
- for(const entry of entries){const p=predictionById.get(entry.predictionId);if(!p)continue;if(["HIT","MISS","UNRESOLVED"].includes(p.status)){entry.status=p.status;entry.resultScore=p.resultScore||null;entry.settledAt=p.checkedAt||null;entry.resultMinute=p.resultMinute??null;}}
+ for(const entry of entries){const p=predictionById.get(entry.predictionId);if(!p)continue;if(!Number.isFinite(Number(entry.calibrationMatchesWeight))&&Number.isFinite(Number(p.modelCalibrationMatchesWeight)))entry.calibrationMatchesWeight=Number(p.modelCalibrationMatchesWeight);if(["HIT","MISS","UNRESOLVED"].includes(p.status)){entry.status=p.status;entry.resultScore=p.resultScore||null;entry.settledAt=p.checkedAt||null;entry.resultMinute=p.resultMinute??null;}}
  const summary={MODEL_25:summarize(entries,"MODEL_25"),MODEL_FT:summarize(entries,"MODEL_FT")};
  const output={schema_version:1,source:"Flashscore",mode:"TOP_OPPORTUNITY_LEDGER",retention_policy:"permanent",updated_at:nowDate.toISOString(),feed_collected_at:feed.collected_at||null,total_entries:entries.length,summary,entries:entries.slice().sort((a,b)=>stamp(b.capturedAt)-stamp(a.capturedAt))};
  const tmp=file+".tmp";fs.writeFileSync(tmp,JSON.stringify(output,null,2)+"\n");fs.renameSync(tmp,file);
