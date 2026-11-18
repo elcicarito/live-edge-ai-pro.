@@ -7,6 +7,7 @@
   if (!root) return;
   const liveList = document.getElementById("hockey-matches");
   const liveMeta = document.getElementById("hockey-meta");
+  const dataQuality = document.getElementById("hockey-data-quality");
   const archiveList = document.getElementById("hockey-archive");
   const archiveMeta = document.getElementById("hockey-archive-meta");
   const leagueFilter = document.getElementById("hockey-archive-league");
@@ -101,10 +102,24 @@
       const espnCount = (current.matches || []).length, flashCount = (flashCurrent.matches || []).length;
       liveMeta.textContent = `ESPN + Flashscore · ${matches.length} unikátnych LIVE zápasov (ESPN: ${espnCount}, Flashscore: ${flashCount}) · Zber: ${dateText(latestCollected)}`;
       liveList.innerHTML = matches.length ? matches.map(m => card(m,false)).join("") : '<p>ESPN ani Flashscore momentálne nevracajú prebiehajúci hokejový zápas.</p>';
+      if (dataQuality) {
+        const espnMatches = current.matches || [], flashMatches = flashCurrent.matches || [];
+        const espnStats = espnMatches.filter(m => Object.keys(m.stats?.home || {}).length || Object.keys(m.stats?.away || {}).length).length;
+        const flashStats = flashMatches.filter(m => m.has_statistics && (Object.keys(m.stats?.home || {}).length || Object.keys(m.stats?.away || {}).length)).length;
+        const knownPeriods = matches.filter(m => Number.isInteger(Number(m.period)) && Number(m.period) >= 1 && Number(m.period) <= 3).length;
+        const knownClocks = matches.filter(m => String(m.clock || "").trim()).length;
+        const archiveCount = archiveMatches.length;
+        dataQuality.innerHTML = `<div class="hockey-quality-grid">
+          <div class="hockey-quality-cell"><b>${espnStats + flashStats}</b><span>LIVE zápasy so štatistikami<br>ESPN ${espnStats} · Flashscore ${flashStats}</span></div>
+          <div class="hockey-quality-cell"><b>${knownPeriods}/${matches.length}</b><span>Zápasy s rozpoznanou tretinou</span></div>
+          <div class="hockey-quality-cell"><b>${knownClocks}/${matches.length}</b><span>Zápasy s dostupným časom</span></div>
+        </div><div class="hockey-quality-note">Archív: ${archiveCount} ukončených záznamov. Toto je kontrola dostupnosti dát, nie presnosť predikcie. AI HOCKEY zostáva v prípravnej fáze; model zatiaľ nevydáva tipy.</div>`;
+      }
       renderArchive();
     } catch (error) {
       liveMeta.textContent = error.message;
       liveList.innerHTML = '<p>Čakám na prvý úspešný ESPN zber hokejových dát.</p>';
+      if (dataQuality) dataQuality.innerHTML = '<p class="hockey-meta">Kontrola dát momentálne nie je dostupná.</p>';
       archiveMeta.textContent = "Archív zatiaľ nie je dostupný.";
     }
   }
