@@ -62,4 +62,16 @@ const mismatch = corners.buildSamples([row("bad",55,6,4),row("bad",60,6,4),row("
   { matches: { bad: { ...outcome, final_corners: { home_corners: 3, away_corners: 2, total_corners: 5 } } } },
   Date.parse("2026-11-17T00:00:00.000Z"));
 assert.equal(mismatch.excluded.invalid_corner_sequence,1);
+const outcomeHigherThanSnapshot = corners.buildSamples(
+  [row("higher",55,3,2),row("higher",60,3,2),row("higher",90,4,4)],
+  { matches: { higher: { ...outcome, final_corners: { home_corners: 5, away_corners: 4, total_corners: 9 } } } },
+  Date.parse("2026-11-17T00:00:00.000Z"));
+assert.equal(outcomeHigherThanSnapshot.excluded.invalid_corner_sequence,1,
+  "final outcome must exactly match the last snapshot, not merely be greater");
+const outcomeTeamMismatch = corners.buildSamples(
+  [row("teams",55,3,2),row("teams",60,3,2),row("teams",90,5,4)],
+  { matches: { teams: { ...outcome, final_corners: { home_corners: 4, away_corners: 5, total_corners: 9 } } } },
+  Date.parse("2026-11-17T00:00:00.000Z"));
+assert.equal(outcomeTeamMismatch.excluded.invalid_corner_sequence,1,
+  "matching total with swapped team counts must be rejected");
 console.log("AI EDGE live corners UNDER trainer tests passed.");
