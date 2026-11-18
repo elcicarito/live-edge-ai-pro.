@@ -139,7 +139,11 @@ function buildSamples(rows, outcomes, startedAt) {
     if (lastMinute === null || lastMinute < 90) { excluded.incomplete_timeline++; continue; }
     const finalTotal = outcome.final_yellow_cards.total_yellow_cards;
     const finalObservedCards = cardValue(matchRows[matchRows.length - 1]);
-    if (!finalObservedCards || finalTotal < finalObservedCards.home + finalObservedCards.away) {
+    const finalHomeCards = outcome.final_yellow_cards.home_yellow_cards;
+    const finalAwayCards = outcome.final_yellow_cards.away_yellow_cards;
+    if (!finalObservedCards || !Number.isInteger(finalHomeCards) || !Number.isInteger(finalAwayCards) ||
+        finalHomeCards + finalAwayCards !== finalTotal ||
+        finalObservedCards.home !== finalHomeCards || finalObservedCards.away !== finalAwayCards) {
       excluded.invalid_card_sequence++;
       continue;
     }
