@@ -6,17 +6,6 @@ const now = new Date().toISOString();
 const readJson = async (path, fallback = null) => {
   try { return JSON.parse(await fs.readFile(path, "utf8")); } catch { return fallback; }
 };
-const readJsonLines = async path => {
-  try {
-    const text = await fs.readFile(path, "utf8");
-    return text.split("\n").filter(Boolean).map(line => {
-      try { return JSON.parse(line); } catch { return null; }
-    }).filter(Boolean);
-  } catch (error) {
-    if (error.code === "ENOENT") return [];
-    throw error;
-  }
-};
 const comparable = value => {
   if (Array.isArray(value)) return value.map(comparable);
   if (value && typeof value === "object") {
@@ -177,34 +166,6 @@ if (previousCurrent && sameData(previousCurrent, current)) {
 }
 await fs.writeFile("data/hockey-current.json", JSON.stringify(current, null, 2));
 
-// Keep a timestamped, forward-only ESPN live timeline. Final scores are
-// joined later from the finished archive; they are never used as live features.
-const historyPath = "data/hockey-live-history.jsonl";
-const historyRows = await readJsonLines(historyPath);
-for (const match of live) {
-  historyRows.push({
-    collected_at: now,
-    match_id: `espn:${match.league_slug}:${match.id}`,
-    league_slug: match.league_slug,
-    league_name: match.league_name,
-    match_name: match.name,
-    date: match.date,
-    status: match.status,
-    status_text: match.status_text,
-    period: match.period,
-    clock: match.clock,
-    home_score: match.home.score,
-    away_score: match.away.score,
-    periods: match.periods,
-    stats: match.stats
-  });
-}
-const historyRetention = Date.now() - 7 * 24 * 60 * 60 * 1000;
-const retainedHistory = historyRows
-  .filter(row => Date.parse(row.collected_at || "") >= historyRetention)
-  .slice(-50000);
-await fs.writeFile(historyPath, retainedHistory.map(row => JSON.stringify(row)).join("\n") + (retainedHistory.length ? "\n" : ""));
-
 const stored = await readJson("data/hockey-archive.json", {});
 let archive = Array.isArray(stored) ? stored : Array.isArray(stored.matches) ? stored.matches : [];
 const byId = new Map(archive.map(x => [`${x.league_slug}:${x.id}`, x]));
@@ -232,7 +193,6 @@ const summary = {
   live_count: live.length,
   finished_seen: finished.length,
   archive_count: archive.length,
-  live_history_snapshots_7d: retainedHistory.length,
   errors: settled.filter(x => !x.ok).map(x => ({ league: x.league.slug, error: x.error }))
 };
 const previousSummary = await readJson("data/hockey-collector-status.json", null);
