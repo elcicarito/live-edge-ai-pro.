@@ -802,6 +802,61 @@
             matchNode.content.appendChild(panel);
           }
 
+          // Porovnanie prvého a posledného dostupného merania – iba spoločné štatistiky.
+          if (items.length >= 2) {
+            const firstStats = Array.isArray(items[0].snapshot?.stats) ? items[0].snapshot.stats : [];
+            const lastStats = Array.isArray(items[items.length - 1].snapshot?.stats) ? items[items.length - 1].snapshot.stats : [];
+            const statKey = stat => String(stat.name || stat.label || "").trim().toLocaleLowerCase("sk-SK")
+              .replace(/\\s+/g, " ") + "|" + String(stat.period || "").trim().toLocaleLowerCase("sk-SK");
+            const firstByKey = new Map(firstStats.map(stat => [statKey(stat), stat]));
+            const comparisons = lastStats.filter(stat => firstByKey.has(statKey(stat))).slice(0, 10);
+            if (comparisons.length) {
+              const panel = document.createElement("div");
+              panel.style.cssText = "margin:9px 0 11px;padding:10px 11px;border:1px solid #29435d;border-radius:10px;background:#101f31;";
+              const heading = document.createElement("div");
+              heading.textContent = "📊 POROVNANIE ŠTATISTÍK · PRVÁ → POSLEDNÁ SNÍMKA";
+              heading.style.cssText = "font-size:10px;font-weight:900;letter-spacing:.45px;color:#b9d8f4;margin-bottom:3px;";
+              panel.appendChild(heading);
+              const firstTime = items[0].snapshot?.live_clock || items[0].snapshot?.stage || "prvá";
+              const lastTime = items[items.length - 1].snapshot?.live_clock || items[items.length - 1].snapshot?.stage || "posledná";
+              const caption = document.createElement("div");
+              caption.textContent = String(firstTime) + " → " + String(lastTime) + " · porovnávajú sa len štatistiky dostupné v oboch snímkach";
+              caption.style.cssText = "font-size:9px;color:#829bb4;margin-bottom:7px;";
+              panel.appendChild(caption);
+              const numericValue = value => {
+                if (value === null || value === undefined || value === "") return null;
+                const parsed = Number(String(value).replace(",", ".").replace(/[^0-9.+-]/g, ""));
+                return Number.isFinite(parsed) ? parsed : null;
+              };
+              const displayValue = value => value === null || value === undefined || value === "" ? "–" : String(value);
+              for (const lastStat of comparisons) {
+                const firstStat = firstByKey.get(statKey(lastStat));
+                const row = document.createElement("div");
+                row.style.cssText = "display:grid;grid-template-columns:minmax(90px,1fr) auto auto;gap:7px;align-items:center;padding:6px 0;border-top:1px solid #263b52;font-size:10px;";
+                const name = document.createElement("span");
+                name.textContent = String(lastStat.name || lastStat.label || "Štatistika") + (lastStat.period ? " · " + lastStat.period : "");
+                name.style.cssText = "color:#cbd8e6;font-weight:700;";
+                const home = document.createElement("span");
+                const away = document.createElement("span");
+                const formatSide = (side, firstValue, lastValue) => {
+                  const a = numericValue(firstValue);
+                  const b = numericValue(lastValue);
+                  const delta = a === null || b === null ? "" : " (" + (b - a > 0 ? "+" : "") + (b - a) + ")";
+                  return side + " " + displayValue(firstValue) + " → " + displayValue(lastValue) + delta;
+                };
+                home.textContent = formatSide("D", firstStat.home_numeric ?? firstStat.home, lastStat.home_numeric ?? lastStat.home);
+                away.textContent = formatSide("H", firstStat.away_numeric ?? firstStat.away, lastStat.away_numeric ?? lastStat.away);
+                home.style.cssText = "color:#7dd3fc;text-align:right;white-space:nowrap;";
+                away.style.cssText = "color:#fcd34d;text-align:right;white-space:nowrap;";
+                row.appendChild(name);
+                row.appendChild(home);
+                row.appendChild(away);
+                panel.appendChild(row);
+              }
+              matchNode.content.appendChild(panel);
+            }
+          }
+
           for (const entry of items.slice().reverse()) {
             const snapshot = entry.snapshot || {};
             const row = document.createElement("div");
