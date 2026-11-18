@@ -106,14 +106,16 @@
         const espnMatches = current.matches || [], flashMatches = flashCurrent.matches || [];
         const espnStats = espnMatches.filter(m => Object.keys(m.stats?.home || {}).length || Object.keys(m.stats?.away || {}).length).length;
         const flashStats = flashMatches.filter(m => m.has_statistics && (Object.keys(m.stats?.home || {}).length || Object.keys(m.stats?.away || {}).length)).length;
-        const knownPeriods = matches.filter(m => Number.isInteger(Number(m.period)) && Number(m.period) >= 1 && Number(m.period) <= 3).length;
-        const knownClocks = matches.filter(m => String(m.clock || "").trim()).length;
-        const archiveCount = archiveMatches.length;
+        // Model readiness is intentionally Flashscore-only. ESPN remains
+        // visible in the live overview but must never inflate model data counts.
+        const flashPeriods = flashMatches.filter(m => Number.isInteger(Number(m.period)) && Number(m.period) >= 1 && Number(m.period) <= 3).length;
+        const flashClocks = flashMatches.filter(m => String(m.clock || "").trim()).length;
+        const archiveCount = flashArchiveMatches.length;
         dataQuality.innerHTML = `<div class="hockey-quality-grid">
-          <div class="hockey-quality-cell"><b>${espnStats + flashStats}</b><span>LIVE zápasy so štatistikami<br>ESPN ${espnStats} · Flashscore ${flashStats}</span></div>
-          <div class="hockey-quality-cell"><b>${knownPeriods}/${matches.length}</b><span>Zápasy s rozpoznanou tretinou</span></div>
-          <div class="hockey-quality-cell"><b>${knownClocks}/${matches.length}</b><span>Zápasy s dostupným časom</span></div>
-        </div><div class="hockey-quality-note">Archív: ${archiveCount} ukončených záznamov. Toto je kontrola dostupnosti dát, nie presnosť predikcie. AI HOCKEY zostáva v prípravnej fáze; model zatiaľ nevydáva tipy.</div>`;
+          <div class="hockey-quality-cell"><b>${flashStats}</b><span>Flashscore LIVE zápasy so štatistikami<br>ESPN oddelené: ${espnStats}</span></div>
+          <div class="hockey-quality-cell"><b>${flashPeriods}/${flashMatches.length}</b><span>Flashscore zápasy s rozpoznanou tretinou</span></div>
+          <div class="hockey-quality-cell"><b>${flashClocks}/${flashMatches.length}</b><span>Flashscore zápasy s dostupným časom</span></div>
+        </div><div class="hockey-quality-note">Flashscore archív: ${archiveCount} záznamov. Tieto počty merajú dostupnosť dát, nie presnosť predikcie. ESPN je iba oddelený zobrazovací zdroj; do hokejového modelu nevstupuje. AI HOCKEY zostáva v prípravnej fáze.</div>`;
       }
       renderArchive();
     } catch (error) {
