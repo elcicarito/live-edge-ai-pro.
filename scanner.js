@@ -741,7 +741,7 @@
         const raw = snapshot.live_minute ?? snapshot.live_clock;
         if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 && raw <= 130) return raw;
         const textValue = String(raw ?? "").trim();
-        const match = textValue.match(/^(\\d{1,3})(?:\\+(\\d{1,2}))?\\s*'?$/);
+        const match = textValue.match(/^(\d{1,3})(?:\+(\d{1,2}))?\s*'?$/);
         if (!match) return null;
         const minute = Number(match[1]);
         const added = Number(match[2] || 0);
