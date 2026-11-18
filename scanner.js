@@ -869,8 +869,15 @@
             }
           }
 
-          for (const entry of items.slice().reverse()) {
+          const newestFirstItems = items.slice().reverse();
+          let newerSnapshotTime = null;
+          for (const entry of newestFirstItems) {
             const snapshot = entry.snapshot || {};
+            const snapshotTime = Date.parse(snapshot.collected_at || "");
+            const gapMinutes = Number.isFinite(snapshotTime) && Number.isFinite(newerSnapshotTime)
+              ? Math.max(0, Math.round((newerSnapshotTime - snapshotTime) / 60000))
+              : null;
+            if (Number.isFinite(snapshotTime)) newerSnapshotTime = snapshotTime;
             const row = document.createElement("div");
             row.style.cssText = "margin:7px 0;padding:9px 10px;border:1px solid #263b52;border-radius:8px;background:#0c1726;";
             const line = document.createElement("div");
@@ -886,6 +893,12 @@
             line.appendChild(time);
             line.appendChild(score);
             row.appendChild(line);
+            const interval = document.createElement("div");
+            interval.textContent = gapMinutes === null
+              ? "Najnovšia dostupná snímka"
+              : "Rozostup od novšej snímky: " + gapMinutes + " min";
+            interval.style.cssText = "margin-top:3px;font-size:9px;color:#8295aa;";
+            row.appendChild(interval);
 
             const stats = Array.isArray(snapshot.stats) ? snapshot.stats : [];
             const statDetails = document.createElement("details");
