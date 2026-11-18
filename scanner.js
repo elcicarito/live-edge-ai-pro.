@@ -1180,7 +1180,7 @@
       if (comparisons.length) {
         const subheading = document.createElement("div");
         subheading.className = "half-period-change-heading";
-        subheading.textContent = "ZMENА INTENZITY · 2. POLČAS VOČI 1.";
+        subheading.textContent = "ZMENA INTENZITY · 2. POLČAS VOČI 1.";
         subheading.style.cssText = "font-size:10px;font-weight:900;letter-spacing:.35px;color:#cbd5e1;margin:12px 0 5px;";
         target.appendChild(subheading);
         comparisons.forEach(item => {
