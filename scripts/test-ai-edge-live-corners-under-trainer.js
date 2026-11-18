@@ -42,6 +42,13 @@ assert.ok(built.byLine.UNDER_9_5.every(sample => sample.y === 1));
 assert.ok(built.byLine.UNDER_8_5.every(sample => sample.y === 0));
 assert.ok(built.byLine.UNDER_10_5.every(sample => sample.y === 1));
 assert.ok(built.byLine.UNDER_11_5.every(sample => sample.y === 1));
+const summary = corners.summarizeSamples(built.byLine.UNDER_9_5);
+assert.equal(summary.samples, built.byLine.UNDER_9_5.length);
+assert.equal(summary.matches, 1, "dataset summary counts independent matches, not repeated snapshots");
+assert.equal(summary.train_matches + summary.validation_matches, summary.matches,
+  "a match belongs to exactly one split");
+assert.equal(summary.positive_matches + summary.negative_matches, summary.matches);
+
 const lag = [row("lag",55,3,2),row("lag",58,3,2),row("lag",61,4,2),row("lag",66,4,2),row("lag",70,4,2),row("lag",75,4,2),row("lag",80,5,4),row("lag",90,5,4)];
 const excluded = corners.buildSamples(lag, { matches: { lag: outcome } }, Date.parse("2026-11-17T00:00:00.000Z"));
 assert.ok(excluded.excluded.lag_ambiguous > 0);
