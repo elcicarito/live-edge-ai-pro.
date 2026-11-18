@@ -954,6 +954,51 @@ details>summary{outline-offset:4px}
 .corners-lab-foot strong{color:#dce8f6}
 @media(max-width:430px){.corners-lab{padding:12px}.corners-lab-grid{gap:7px}.corners-line-card{padding:9px}.corners-line-name{font-size:14px}.corners-line-stat{padding:6px}.corners-line-stat b{font-size:14px}.corners-line-stat span{font-size:8px}.corners-lab-badge{font-size:8px;padding:5px 7px}}
 
+
+/* FUTBAL – jednotná navigácia a čitateľná hierarchia celej obrazovky */
+.football-quick-nav{
+  position:sticky;top:0;z-index:20;display:flex;gap:7px;overflow-x:auto;
+  padding:9px 2px;margin:0 0 12px;background:rgba(8,14,25,.94);
+  border-bottom:1px solid #26394f;scrollbar-width:thin;backdrop-filter:blur(12px);
+}
+.football-quick-nav a{
+  flex:0 0 auto;display:inline-flex;align-items:center;min-height:35px;padding:7px 11px;
+  border:1px solid #30465f;border-radius:999px;background:#122238;color:#dceafa;
+  text-decoration:none;font-size:10px;font-weight:800;letter-spacing:.15px;
+}
+.football-quick-nav a:focus-visible{outline:2px solid #39e6a5;outline-offset:2px}
+.football-quick-nav a:hover{border-color:#39e6a5;background:#173329;color:#bfffe4}
+#football-view{min-width:0}
+#football-view > .dashboard-grid{margin-top:4px}
+#football-view > #dashboard-updated{padding:0 3px}
+#football-view > #live-data-health{border-radius:11px;line-height:1.45}
+#football-view > #ai-edge-top-opportunities,
+#football-view > #live-pressure-overview,
+#football-view > #corners-under-lab,
+#football-view > #ai-edge-selector-panel{
+  scroll-margin-top:62px;border-radius:16px!important;margin:13px 0!important;
+}
+#football-view > #ai-edge-top-opportunities{border-left-width:4px!important}
+#football-view > #live-pressure-overview{padding:13px 14px;border:1px solid #29445e;background:linear-gradient(135deg,#13243a,#101b2a)}
+#football-view > #corners-under-lab{border-color:#31506b}
+#football-view > #ai-edge-selector-panel{border-color:#31506b}
+#matches{scroll-margin-top:62px}
+#football-view .section-kicker{display:flex;align-items:center;gap:8px}
+#football-view .live-filter-bar{position:sticky;top:52px;z-index:15;padding:7px 0;background:rgba(8,14,25,.94);backdrop-filter:blur(10px)}
+#football-view .live-filter-btn{min-height:38px;border-radius:10px}
+#football-view .card{border-radius:15px}
+#football-view details.card > summary{line-height:1.4}
+#football-view #flashscore-match-archive-card,
+#football-view #flashscore-btts-archive-card{scroll-margin-top:62px}
+@media(max-width:560px){
+  .football-quick-nav{margin-inline:-2px;padding:8px 2px}
+  .football-quick-nav a{min-height:34px;padding:7px 9px;font-size:9px}
+  #football-view > #ai-edge-top-opportunities,
+  #football-view > #live-pressure-overview,
+  #football-view > #corners-under-lab,
+  #football-view > #ai-edge-selector-panel{margin:10px 0!important}
+}
+
 </style>
 </head>
 
@@ -973,6 +1018,16 @@ details>summary{outline-offset:4px}
 </div>
 
 <div id="football-view">
+<nav class="football-quick-nav" aria-label="Rýchla navigácia futbal">
+  <a href="#ai-edge-top-opportunities">🎯 TOP príležitosti</a>
+  <a href="#live-pressure-overview">🔥 Tlak</a>
+  <a href="#corners-under-lab">🚩 Rohy UNDER</a>
+  <a href="#ai-edge-selector-panel">🧠 AI analýza</a>
+  <a href="#matches">⚽ LIVE zápasy</a>
+  <a href="#system-stats-card">📊 Štatistiky</a>
+  <a href="#flashscore-match-archive-card">🗂 Archív</a>
+</nav>
+
 <div class="dashboard-grid" aria-label="LIVE prehľad" style="grid-template-columns:repeat(2,minmax(0,1fr))">
   <div class="metric"><div class="metric-value" id="dashboard-live-count">—</div><div class="metric-label">Sledované zápasy</div></div>
   <div class="metric metric-status"><div class="metric-value" id="dashboard-data-status">ČAKÁM</div><div class="metric-label">Stav dát</div></div>
