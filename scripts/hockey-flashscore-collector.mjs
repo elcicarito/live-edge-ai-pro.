@@ -83,12 +83,32 @@ const details = await Promise.all(liveRows.map(async row => {
   const periodSource = explicitPeriod ? "match_status" : null;
   const rawClock = row.time ?? row.clock ?? detail.time ?? detail.clock ?? detail.status?.display_clock ?? "";
   const clock = typeof rawClock === "string" || typeof rawClock === "number" ? String(rawClock) : String(rawClock?.display || rawClock?.text || rawClock?.value || "");
+  // Preserve a compact diagnostic of the actual live status payload. This lets
+  // us add a precise period/clock parser later without guessing field names or
+  // deriving the active period from completed-period score lines.
+  const statusDiagnostics = {
+    row_keys: Object.keys(row || {}).filter(key => /status|stage|period|time|clock|timer/i.test(key)),
+    detail_keys: Object.keys(detail || {}).filter(key => /status|stage|period|time|clock|timer/i.test(key)),
+    row_status: row.status ?? null,
+    row_stage: row.stage ?? null,
+    row_period: row.period ?? null,
+    row_current_period: row.current_period ?? null,
+    row_time: row.time ?? null,
+    row_clock: row.clock ?? null,
+    detail_status: detail.status ?? null,
+    detail_stage: detail.stage ?? null,
+    detail_period: detail.period ?? null,
+    detail_current_period: detail.current_period ?? null,
+    detail_time: detail.time ?? null,
+    detail_clock: detail.clock ?? null
+  };
   return {
     id: `flashscore-${sourceId}`, source: "Flashscore", source_match_id: sourceId,
     league_slug: String((detail.competition?.name || row.competition?.name || "hockey").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")),
     league_name: detail.competition?.name || row.competition?.name || "Hokej",
     name: `${homeName} – ${awayName}`, date: row.start_time || detail.start_time || null,
     status: "live", status_text: stage, period, period_source: periodSource, clock,
+    status_diagnostics: statusDiagnostics,
     home, away, periods: { home: periodScores.map(p => p.home), away: periodScores.map(p => p.away) },
     period_scores: periodScores, stats, stats_by_period: statsByPeriod,
     available_tabs: detail.available_tabs || [], has_statistics: Boolean(detail.has_statistics || statsByPeriod.some(p => p.statistics.length)),
@@ -107,7 +127,8 @@ const current = {
     matches_with_clock: matches.filter(match => Boolean(match.clock)).length,
     matches_with_match_totals: matches.filter(match => Object.keys(match.stats.home).length || Object.keys(match.stats.away).length).length,
     matches_with_period_stats: matches.filter(match => match.stats_by_period.some(period => period.statistics.length)).length,
-    warning: "Statistics tabs are not used to infer the current period."
+    matches_with_status_diagnostics: matches.filter(match => match.status_diagnostics).length,
+    warning: "Statistics tabs and completed-period score lines are not used to infer the current period."
   },
   matches
 };
