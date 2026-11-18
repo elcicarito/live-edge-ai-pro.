@@ -817,10 +817,22 @@
               heading.textContent = "📊 POROVNANIE ŠTATISTÍK · PRVÁ → POSLEDNÁ SNÍMKA";
               heading.style.cssText = "font-size:10px;font-weight:900;letter-spacing:.45px;color:#b9d8f4;margin-bottom:3px;";
               panel.appendChild(heading);
-              const firstTime = items[0].snapshot?.live_clock || items[0].snapshot?.stage || "prvá";
-              const lastTime = items[items.length - 1].snapshot?.live_clock || items[items.length - 1].snapshot?.stage || "posledná";
-              const caption = document.createElement("div");
-              caption.textContent = String(firstTime) + " → " + String(lastTime) + " · porovnávajú sa len štatistiky dostupné v oboch snímkach";
+              const firstSnapshot = items[0].snapshot || {};
+              const lastSnapshot = items[items.length - 1].snapshot || {};
+              const firstTime = firstSnapshot.live_clock || firstSnapshot.stage || "čas nezistený";
+              const lastTime = lastSnapshot.live_clock || lastSnapshot.stage || "čas nezistený";
+              const firstCollected = Date.parse(firstSnapshot.collected_at || "");
+              const lastCollected = Date.parse(lastSnapshot.collected_at || "");
+              const collectedLabel = timestamp => Number.isFinite(timestamp)
+                ? new Date(timestamp).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" })
+                : "—";
+              const elapsedMinutes = Number.isFinite(firstCollected) && Number.isFinite(lastCollected)
+                ? Math.max(0, Math.round((lastCollected - firstCollected) / 60000))
+                : null;
+              caption.textContent = "Zápas: " + String(firstTime) + " → " + String(lastTime) +
+                " · zber: " + collectedLabel(firstCollected) + " → " + collectedLabel(lastCollected) +
+                (elapsedMinutes === null ? "" : " (" + elapsedMinutes + " min)") +
+                " · len spoločné štatistiky";
               caption.style.cssText = "font-size:9px;color:#829bb4;margin-bottom:7px;";
               panel.appendChild(caption);
               const numericValue = value => {
