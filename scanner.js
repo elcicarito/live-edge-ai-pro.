@@ -356,6 +356,8 @@
   const flashscoreArchiveStatusEl = document.getElementById("flashscore-archive-status");
   const flashscoreArchiveResultsEl = document.getElementById("flashscore-archive-results");
   const flashscoreArchiveCountEl = document.getElementById("flashscore-archive-count");
+  const flashscoreArchiveFilterButtons = Array.from(document.querySelectorAll("[data-flashscore-filter]"));
+  let flashscoreArchiveFilter = "all";
   let flashscoreArchiveRows = [];
   let flashscoreArchiveIndex = null;
   let flashscoreArchiveLoadedWeek = "";
@@ -516,9 +518,32 @@
       if (!matchGroups.has(key)) matchGroups.set(key, []);
       matchGroups.get(key).push(entry);
     }
-    const matches = [...matchGroups.values()].map(items => items.sort((a, b) =>
+    const allMatches = [...matchGroups.values()].map(items => items.sort((a, b) =>
       Date.parse(a.snapshot?.collected_at || 0) - Date.parse(b.snapshot?.collected_at || 0)
     ));
+    const hasScoreChange = items => {
+      const first = items[0]?.snapshot || {};
+      const last = items[items.length - 1]?.snapshot || {};
+      const values = [first.home_score, first.away_score, last.home_score, last.away_score].map(Number);
+      return values.every(Number.isFinite) && (values[0] !== values[2] || values[1] !== values[3]);
+    };
+    const hasStats = items => items.some(entry =>
+      Array.isArray(entry.snapshot?.stats) && entry.snapshot.stats.some(stat =>
+        (stat.home_numeric ?? stat.home) !== null && (stat.home_numeric ?? stat.home) !== undefined ||
+        (stat.away_numeric ?? stat.away) !== null && (stat.away_numeric ?? stat.away) !== undefined
+      )
+    );
+    const matches = allMatches.filter(items => {
+      if (flashscoreArchiveFilter === "score") return hasScoreChange(items);
+      if (flashscoreArchiveFilter === "multiple") return items.length > 1;
+      if (flashscoreArchiveFilter === "stats") return hasStats(items);
+      return true;
+    });
+    flashscoreArchiveFilterButtons.forEach(button => {
+      const active = button.dataset.flashscoreFilter === flashscoreArchiveFilter;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
 
     const countryGroups = new Map();
     for (const items of matches) {
@@ -590,14 +615,18 @@
     flashscoreArchiveResultsEl.innerHTML = "";
     if (flashscoreArchiveCountEl) flashscoreArchiveCountEl.textContent = String(matches.length);
     if (!matches.length) {
-      addText(flashscoreArchiveResultsEl, "Pre tento dátum a vyhľadávanie zatiaľ nie sú uložené žiadne zápasy.");
+      const emptyMessage = flashscoreArchiveFilter === "all"
+        ? "Pre tento dátum a vyhľadávanie zatiaľ nie sú uložené žiadne zápasy."
+        : "Žiadny zápas v aktuálnom výbere nespĺňa zvolený filter. Skús inú kategóriu.";
+      addText(flashscoreArchiveResultsEl, emptyMessage);
       return;
     }
 
     const totalLeagues = countries.reduce((sum, country) => sum + country.leagues.length, 0);
     const overview = document.createElement("div");
     overview.style.cssText = "margin:8px 0 12px;padding:11px 13px;border:1px solid #31445c;border-radius:10px;background:linear-gradient(110deg,#172b43,#122238);color:#d6e1ee;font-size:13px;line-height:1.6;";
-    overview.textContent = matches.length + (matches.length === 1 ? " zápas" : " zápasov") +
+    overview.textContent = (flashscoreArchiveFilter === "all" ? matches.length : matches.length + " z " + allMatches.length) +
+      (matches.length === 1 ? " zápas" : " zápasov") +
       " · " + countries.length + (countries.length === 1 ? " krajina" : " krajín") +
       " · " + totalLeagues + (totalLeagues === 1 ? " liga" : " líg") +
       " · " + rows.length + (rows.length === 1 ? " snímka" : " snímok");
@@ -1009,6 +1038,10 @@
   if (flashscoreArchiveLoadEl) flashscoreArchiveLoadEl.addEventListener("click", loadFlashscoreArchive);
   if (flashscoreArchiveDateEl) flashscoreArchiveDateEl.addEventListener("change", loadFlashscoreArchive);
   if (flashscoreArchiveSearchEl) flashscoreArchiveSearchEl.addEventListener("input", renderFlashscoreArchive);
+  flashscoreArchiveFilterButtons.forEach(button => button.addEventListener("click", () => {
+    flashscoreArchiveFilter = button.dataset.flashscoreFilter || "all";
+    renderFlashscoreArchive();
+  }));
   loadFlashscoreArchive();
 
 
