@@ -671,6 +671,68 @@
           );
           matchNode.details.open = Boolean(query);
 
+          // Mini graf je odvodený výhradne zo skutočných Flashscore snímok daného zápasu.
+          const trendPoints = items.map(entry => {
+            const snapshot = entry.snapshot || {};
+            const stats = Array.isArray(snapshot.stats) ? snapshot.stats : [];
+            const shotStat = stats.find(stat => /shots? on target|strely na bránu|strely na branu/i.test(String(stat.name || stat.label || "")));
+            const numeric = value => {
+              const parsed = Number(String(value ?? "").replace(",", ".").replace(/[^0-9.-]/g, ""));
+              return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+            };
+            const home = numeric(shotStat?.home_numeric ?? shotStat?.home);
+            const away = numeric(shotStat?.away_numeric ?? shotStat?.away);
+            return { time: Date.parse(snapshot.collected_at || ""), home, away };
+          }).filter(point => Number.isFinite(point.time) && point.home !== null && point.away !== null);
+          if (trendPoints.length >= 2) {
+            const panel = document.createElement("div");
+            panel.style.cssText = "margin:9px 0 11px;padding:10px 11px;border:1px solid #29435d;border-radius:10px;background:linear-gradient(120deg,#14263b,#0e1a2a);";
+            const title = document.createElement("div");
+            title.textContent = "📈 VÝVOJ STRELEC NA BRÁNU";
+            title.style.cssText = "font-size:10px;font-weight:900;letter-spacing:.6px;color:#b9d8f4;margin-bottom:5px;";
+            panel.appendChild(title);
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute("viewBox", "0 0 320 104");
+            svg.setAttribute("width", "100%");
+            svg.setAttribute("role", "img");
+            svg.setAttribute("aria-label", "Vývoj kumulatívnych striel na bránu podľa uložených Flashscore snímok");
+            svg.style.cssText = "display:block;width:100%;max-width:520px;";
+            const maxValue = Math.max(1, ...trendPoints.flatMap(point => [point.home, point.away]));
+            [25, 52, 79].forEach(y => {
+              const gridLine = document.createElementNS(svgNS, "line");
+              gridLine.setAttribute("x1", "8"); gridLine.setAttribute("x2", "312");
+              gridLine.setAttribute("y1", String(y)); gridLine.setAttribute("y2", String(y));
+              gridLine.setAttribute("stroke", "#64748b"); gridLine.setAttribute("opacity", ".22");
+              svg.appendChild(gridLine);
+            });
+            const makeLine = (key, color) => {
+              const points = trendPoints.map((point, index) => {
+                const x = 10 + (trendPoints.length === 1 ? 0 : index * 300 / (trendPoints.length - 1));
+                const y = 82 - point[key] / maxValue * 65;
+                return x.toFixed(1) + "," + y.toFixed(1);
+              }).join(" ");
+              const line = document.createElementNS(svgNS, "polyline");
+              line.setAttribute("points", points);
+              line.setAttribute("fill", "none");
+              line.setAttribute("stroke", color);
+              line.setAttribute("stroke-width", "2.8");
+              line.setAttribute("stroke-linecap", "round");
+              line.setAttribute("stroke-linejoin", "round");
+              svg.appendChild(line);
+            };
+            makeLine("home", "#38bdf8");
+            makeLine("away", "#fbbf24");
+            panel.appendChild(svg);
+            const legend = document.createElement("div");
+            legend.textContent = "Domáci " + trendPoints[trendPoints.length - 1].home +
+              " · Hostia " + trendPoints[trendPoints.length - 1].away +
+              " · " + trendPoints.length + " meraní";
+            legend.style.cssText = "font-size:10px;color:#a8bdd2;line-height:1.5;";
+            panel.appendChild(legend);
+            matchNode.content.appendChild(panel);
+          }
+
           for (const entry of items.slice().reverse()) {
             const snapshot = entry.snapshot || {};
             const row = document.createElement("div");
