@@ -1684,6 +1684,56 @@ details>summary{outline-offset:4px}
 .cards-lab-foot p{margin:6px 0 0}
 @media(max-width:430px){.cards-lab{padding:12px}.cards-lab-grid{gap:7px}.cards-line-card{padding:9px}.cards-line-top>b{font-size:13px}.cards-line-stats>div{padding:6px}.cards-line-stats strong{font-size:14px}.cards-line-stats small{font-size:8px}.cards-line-state{font-size:7px;padding:4px}.cards-progress-label{font-size:7px}}
 
+
+/* LIVE EDGE visual refinement v2 – jednotný povrch, kontrast a mobilná čitateľnosť. */
+:root{color-scheme:dark;--le-bg:#080f1b;--le-panel:#111e2e;--le-panel-2:#15263a;--le-line:#2b4059;--le-muted:#91a5bd;--le-text:#eef5fc;--le-green:#39e6a5;--le-blue:#65c8f3}
+body{background:radial-gradient(ellipse at 50% -18%,#19314a 0%,#0b1422 42%,#080e19 78%);color:var(--le-text);font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;letter-spacing:.05px}
+.app-header{position:relative;padding:14px 14px 17px;margin:0 0 10px;border:1px solid #263d56;border-radius:17px;background:linear-gradient(115deg,rgba(20,39,59,.96),rgba(11,22,36,.96));box-shadow:0 12px 30px #0003;overflow:hidden}
+.app-header:after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,#39e6a5,#58bde9 55%,transparent)}
+.brand h1{font-size:clamp(19px,3vw,24px);letter-spacing:1px;text-shadow:0 0 22px #39e6a522}
+.brand small{font-size:9px;letter-spacing:1.45px;color:#a4b8ce}
+.live-indicator{padding:7px 10px;border-radius:9px;background:#102a27;border-color:#286b5b;font-size:9px;letter-spacing:.45px}
+.sport-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0 14px;padding:6px;border:1px solid #263b53;border-radius:14px;background:#0d1928;box-shadow:inset 0 1px 0 #ffffff08}
+.sport-switch .sport-tab{min-width:0;min-height:42px;margin:0;padding:10px 7px;border:1px solid transparent;border-radius:10px;background:transparent;color:#a9bbcf;font-size:11px;font-weight:900;letter-spacing:.35px;transition:background .18s,border-color .18s,transform .18s}
+.sport-switch .sport-tab.active{border-color:#36765f;background:linear-gradient(145deg,#174235,#102b2b);color:#a5f5d7;box-shadow:inset 0 1px 0 #ffffff10,0 4px 12px #0002}
+.sport-switch .sport-tab:hover{border-color:#45617d;color:#f0f6fc}
+.football-quick-nav{top:0;margin:0 -2px 14px;padding:9px 2px;background:rgba(8,15,27,.94);border-bottom:1px solid #30445a}
+.football-quick-nav a{min-height:36px;padding:8px 12px;border-radius:10px;background:linear-gradient(145deg,#172b41,#101e30);border-color:#344b65;font-size:10px;transition:all .18s}
+.football-quick-nav a:hover{transform:translateY(-1px);box-shadow:0 5px 14px #0003}
+.dashboard-grid{gap:10px}
+.metric{position:relative;overflow:hidden;border-color:#30445d;border-radius:14px;background:linear-gradient(145deg,#172a40,#101c2c);box-shadow:inset 0 1px 0 #ffffff0a,0 7px 18px #0002}
+.metric:after{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:#54718e;opacity:.75}
+.metric.green:after,.football-overview-signals:after{background:#39e6a5}
+.metric.blue:after,.football-overview-live:after{background:#65c8f3}
+.metric-value{font-variant-numeric:tabular-nums;letter-spacing:-.6px}
+.metric-label{letter-spacing:.7px;line-height:1.35}
+.card{border-color:#2a4059;background:linear-gradient(150deg,#142337,#0f1a29);box-shadow:0 9px 24px #0003}
+.card h3{letter-spacing:.1px}
+#matches .priority-match-card,#matches .compact-match-card,#matches .no-signal-match-card{box-shadow:0 8px 20px #0003}
+#corners-under-lab,#yellow-cards-under-lab{scroll-margin-top:68px}
+#ai-edge-top-opportunities,#live-pressure-overview,#matches,#system-stats-card,#flashscore-match-archive-card{scroll-margin-top:68px}
+#corners-under-lab,#yellow-cards-under-lab{box-shadow:0 10px 26px #0003}
+button{transition:filter .16s,transform .16s,box-shadow .16s}
+button:hover{filter:brightness(1.08)}
+button:active{transform:translateY(1px)}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #65c8f3;outline-offset:3px}
+input,select,textarea{border-color:#344b65!important;background:#0d1928!important;color:#eef5fc!important;border-radius:9px!important}
+::selection{background:#287a62;color:#fff}
+@media(max-width:560px){
+ body{padding:9px;background:radial-gradient(ellipse at 50% -12%,#183149 0%,#0b1422 40%,#080e19 78%)}
+ .app-header{padding:12px 11px 14px;border-radius:14px}
+ .brand small{font-size:8px;letter-spacing:1px}
+ .live-indicator{padding:6px 8px;font-size:8px}
+ .sport-switch{gap:5px;padding:5px;border-radius:12px}
+ .sport-switch .sport-tab{min-height:40px;padding:9px 4px;font-size:10px}
+ .football-quick-nav{margin-inline:-1px;padding-block:8px;gap:6px}
+ .football-quick-nav a{min-height:34px;padding:7px 10px;font-size:9px}
+ .metric{padding:11px 9px;border-radius:12px}
+ .metric-value{font-size:21px}
+ .card{padding:12px;border-radius:13px}
+}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
 </style>
 </head>
 
