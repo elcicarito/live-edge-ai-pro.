@@ -1067,6 +1067,87 @@ details>summary{outline-offset:4px}
   #matches .no-signal-match-card{padding:8px!important}
 }
 
+
+/* MATCH DETAIL V2 — čitateľná analýza zápasu, bez zmeny výpočtov */
+#matches .match-deep-view-button{
+  min-height:42px!important;
+  display:flex!important;align-items:center!important;justify-content:space-between!important;
+  gap:10px!important;padding:10px 12px!important;border-radius:10px!important;
+  font-size:10px!important;line-height:1.35!important;letter-spacing:.45px!important;
+  box-shadow:inset 0 1px 0 #ffffff0b,0 4px 12px #0002!important;
+  transition:background .18s ease,border-color .18s ease,transform .18s ease;
+}
+#matches .match-deep-view-button:hover,
+#matches .match-deep-view-button:focus-visible{
+  background:linear-gradient(100deg,#17415a,#19334e)!important;
+  border-color:#55b9d9!important;outline:none;
+}
+#matches .match-deep-view-button:active{transform:translateY(1px)}
+#matches .priority-match-card > details,
+#matches .compact-match-card > details,
+#matches .no-signal-match-card > details{
+  margin-top:8px!important;padding-top:9px!important;
+  border-top:1px solid #30445d!important;
+}
+#matches .priority-match-card > details > details,
+#matches .compact-match-card > details > details,
+#matches .no-signal-match-card > details > details{
+  margin:9px 0!important;padding:11px 12px!important;
+  border:1px solid #2c425d!important;border-radius:11px!important;
+  background:linear-gradient(145deg,#14243a,#101b2b)!important;
+  box-shadow:inset 0 1px 0 #ffffff08;
+}
+#matches .priority-match-card > details > details[open],
+#matches .compact-match-card > details > details[open],
+#matches .no-signal-match-card > details > details[open]{
+  border-color:#3c6682!important;background:linear-gradient(145deg,#172d45,#111e30)!important;
+}
+#matches .priority-match-card > details > details > summary,
+#matches .compact-match-card > details > details > summary,
+#matches .no-signal-match-card > details > details > summary{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  min-height:28px;padding:2px 1px!important;color:#e5f1fc!important;
+  font-size:11px!important;font-weight:900!important;letter-spacing:.3px;
+}
+#matches .priority-match-card > details > details > summary::after,
+#matches .compact-match-card > details > details > summary::after,
+#matches .no-signal-match-card > details > details > summary::after{
+  content:"＋";flex:0 0 auto;color:#69c9e8;font-size:16px;font-weight:500;
+}
+#matches .priority-match-card > details > details[open] > summary::after,
+#matches .compact-match-card > details > details[open] > summary::after,
+#matches .no-signal-match-card > details > details[open] > summary::after{content:"−"}
+#matches .match-timeline-rail{
+  display:flex!important;gap:7px!important;overflow-x:auto!important;
+  padding:3px 1px 9px!important;scroll-snap-type:x proximity;
+  scrollbar-width:thin;scrollbar-color:#42617e #14243a;
+}
+#matches .match-timeline-point{
+  flex:0 0 78px;min-height:76px;scroll-snap-align:start;
+  display:flex;flex-direction:column;justify-content:center;
+  border-radius:10px!important;background:#14263b!important;
+  border-color:#304c69!important;
+}
+#matches .match-timeline-point:last-child{
+  box-shadow:0 0 0 1px #2c8b6b inset,0 4px 12px #0002;
+}
+#matches .momentum-chart-legend{gap:7px!important;margin:8px 0!important}
+#matches .momentum-legend-item{flex:1 1 115px;justify-content:center;min-height:30px}
+#matches .momentum-chart-range{padding:6px 8px;border-left:2px solid #3d7894;background:#102238;border-radius:0 7px 7px 0;line-height:1.45}
+#matches .match-data-stamp{
+  display:block;padding:6px 8px!important;border:1px solid #293f57;
+  border-radius:7px;background:#0d1928;font-size:9px!important;
+}
+#matches .match-quick-stat{box-shadow:inset 0 1px 0 #ffffff08}
+@media(max-width:560px){
+  #matches .match-deep-view-button{font-size:9px!important;padding:9px 10px!important}
+  #matches .priority-match-card > details > details,
+  #matches .compact-match-card > details > details,
+  #matches .no-signal-match-card > details > details{padding:9px!important;margin:7px 0!important}
+  #matches .match-timeline-point{flex-basis:72px;min-height:70px}
+  #matches .momentum-legend-item{flex-basis:calc(50% - 7px);font-size:9px!important}
+}
+
 </style>
 </head>
 
