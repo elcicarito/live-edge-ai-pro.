@@ -5830,9 +5830,13 @@
     const updated = Number.isFinite(collectedAt)
       ? new Date(collectedAt).toLocaleString("sk-SK")
       : "nedostupná";
+    const signalCount = fresh ? document.querySelectorAll("#matches .priority-match-card").length : 0;
+    const pressureCount = fresh ? document.querySelectorAll("#matches .compact-match-card").length : 0;
     set("dashboard-live-count", fresh ? liveCount : 0);
+    set("dashboard-signal-count", signalCount);
+    set("dashboard-pressure-count", pressureCount);
     set("dashboard-data-status", status);
-    set("dashboard-updated", "Posledný zber dát: " + updated + " · " + status);
+    set("dashboard-updated", "Flashscore · posledný zber: " + updated + " · " + status);
     const statusElement = document.getElementById("dashboard-data-status");
     if (statusElement) statusElement.style.color = !fresh ? "#f87171" : status === "KOMPLETNÉ" ? "#39e6a5" : "#fbbf24";
   }
@@ -5910,7 +5914,6 @@
           }))
           .filter(item => item.match && isLive(item.match));
 
-        updateDashboard(current, 0, signalArchive, bttsArchive, false, false);
         addText(engine, "LIVE zápasy: 0 – aktuálny feed nie je potvrdený");
         addText(engine, `Posledné uložené zápasy: ${staleMatches.length}`);
         addText(engine, "Zobrazenie je iba archívny náhľad. Žiadne signály, vyhodnocovanie ani aktualizácia skóre sa z neho nevykonáva.");
@@ -5920,6 +5923,7 @@
         } else {
           addText(matchesEl, "Nie sú dostupné ani posledné uložené LIVE zápasy.");
         }
+        updateDashboard(current, 0, signalArchive, bttsArchive, false, false);
 
         renderSummary();
         if (signalArchive !== lastRenderedSignalArchive) {
@@ -5979,7 +5983,6 @@
         .filter(item => isLive(item.match));
 
       const actualMatches = matches.map(item => item.match);
-      updateDashboard(current, matches.length, signalArchive, bttsArchive, true, current.collection_complete === true);
 
       // Legacy green-signal settlement is disabled during the Flashscore-only transition.
 
@@ -6072,6 +6075,7 @@
       }
 
       renderMatchesGrouped(matches, historyData, allowSignals, false, signalArchive, bttsArchive);
+      updateDashboard(current, matches.length, signalArchive, bttsArchive, true, current.collection_complete === true);
 
       renderSummary();
       if (signalArchive !== lastRenderedSignalArchive) {
