@@ -736,6 +736,100 @@
       note.style.cssText = "margin-top:7px;color:#829bb2;";
       note.textContent = "Porovnanie vychádza z prvej a poslednej dostupnej snímky. Neznamená odhad chýbajúcich udalostí ani presný čas gólu.";
       comparisonResult.appendChild(note);
+
+      const activityPoints = items => {
+        const valid = items.map(entry => {
+          const snapshot = entry.snapshot || {};
+          const onTarget = statValue(snapshot.stats, "shots on target");
+          const offTarget = statValue(snapshot.stats, "shots off target");
+          const time = Date.parse(snapshot.collected_at || "");
+          if (!onTarget || !offTarget || !Number.isFinite(time)) return null;
+          return {
+            time,
+            value: (onTarget.home + onTarget.away) * 3 + offTarget.home + offTarget.away
+          };
+        }).filter(Boolean);
+        if (valid.length < 2) return [];
+        const start = valid[0].time, end = valid[valid.length - 1].time;
+        return valid.map(point => ({
+          x: end > start ? (point.time - start) / (end - start) : 0,
+          value: point.value
+        }));
+      };
+      const pointsA = activityPoints(a), pointsB = activityPoints(b);
+      const graphPanel = document.createElement("section");
+      graphPanel.style.cssText = "margin-top:10px;padding:10px;border:1px solid #29435d;border-radius:10px;background:#0b1928;";
+      const graphTitle = document.createElement("div");
+      graphTitle.textContent = "📈 ČASOVÉ POROVNANIE STRELECKEJ AKTIVITY";
+      graphTitle.style.cssText = "font-size:11px;font-weight:900;color:#dff6ff;margin-bottom:4px;";
+      graphPanel.appendChild(graphTitle);
+      const graphCaption = document.createElement("div");
+      graphCaption.textContent = "Kumulatívny index = strely na bránu × 3 + strely mimo brány · súčet oboch tímov";
+      graphCaption.style.cssText = "font-size:10px;color:#91a9bf;line-height:1.5;margin-bottom:7px;";
+      graphPanel.appendChild(graphCaption);
+      if (pointsA.length >= 2 && pointsB.length >= 2) {
+        const svgNS = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(svgNS, "svg");
+        svg.setAttribute("viewBox", "0 0 340 150");
+        svg.setAttribute("width", "100%");
+        svg.setAttribute("role", "img");
+        svg.setAttribute("aria-label", "Porovnanie kumulatívneho indexu striel v dvoch zápasoch podľa uložených Flashscore snímok");
+        svg.style.cssText = "display:block;width:100%;max-width:620px;";
+        const maxValue = Math.max(1, ...pointsA.map(p => p.value), ...pointsB.map(p => p.value));
+        [25, 65, 105].forEach(y => {
+          const line = document.createElementNS(svgNS, "line");
+          line.setAttribute("x1", "30"); line.setAttribute("x2", "330");
+          line.setAttribute("y1", String(y)); line.setAttribute("y2", String(y));
+          line.setAttribute("stroke", "#64748b"); line.setAttribute("opacity", ".25");
+          svg.appendChild(line);
+        });
+        const makePolyline = (points, color) => {
+          const coords = points.map(point => {
+            const x = 30 + point.x * 300;
+            const y = 108 - point.value / maxValue * 82;
+            return x.toFixed(1) + "," + y.toFixed(1);
+          }).join(" ");
+          const line = document.createElementNS(svgNS, "polyline");
+          line.setAttribute("points", coords);
+          line.setAttribute("fill", "none");
+          line.setAttribute("stroke", color);
+          line.setAttribute("stroke-width", "3");
+          line.setAttribute("stroke-linecap", "round");
+          line.setAttribute("stroke-linejoin", "round");
+          svg.appendChild(line);
+          points.forEach(point => {
+            const dot = document.createElementNS(svgNS, "circle");
+            dot.setAttribute("cx", String(30 + point.x * 300));
+            dot.setAttribute("cy", String(108 - point.value / maxValue * 82));
+            dot.setAttribute("r", "2.5");
+            dot.setAttribute("fill", color);
+            svg.appendChild(dot);
+          });
+        };
+        makePolyline(pointsA, "#38bdf8");
+        makePolyline(pointsB, "#fbbf24");
+        const xLabel = document.createElementNS(svgNS, "text");
+        xLabel.setAttribute("x", "180"); xLabel.setAttribute("y", "137");
+        xLabel.setAttribute("fill", "#8fa6bd"); xLabel.setAttribute("font-size", "9");
+        xLabel.setAttribute("text-anchor", "middle");
+        xLabel.textContent = "Priebeh zachyteného úseku: začiatok → koniec";
+        svg.appendChild(xLabel);
+        graphPanel.appendChild(svg);
+        const legend = document.createElement("div");
+        legend.style.cssText = "display:flex;flex-wrap:wrap;gap:12px;font-size:10px;color:#c7d8e8;";
+        const legendA = document.createElement("span");
+        legendA.textContent = "● Zápas A"; legendA.style.color = "#38bdf8";
+        const legendB = document.createElement("span");
+        legendB.textContent = "● Zápas B"; legendB.style.color = "#fbbf24";
+        legend.append(legendA, legendB);
+        graphPanel.appendChild(legend);
+      } else {
+        const unavailable = document.createElement("div");
+        unavailable.textContent = "Graf sa zobrazí, keď oba zápasy majú aspoň dve snímky s dostupnými strelami na bránu aj mimo brány.";
+        unavailable.style.cssText = "font-size:11px;color:#9fb4c9;line-height:1.5;";
+        graphPanel.appendChild(unavailable);
+      }
+      comparisonResult.appendChild(graphPanel);
     };
     compareButton.addEventListener("click", renderComparison);
     if (matches.length < 2) {
