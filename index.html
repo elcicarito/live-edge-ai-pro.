@@ -1187,6 +1187,24 @@ details>summary{outline-offset:4px}
   }
 }
 
+
+/* Futbalový prehľad: štyri rýchle ukazovatele */
+#football-view .football-overview-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px;margin:8px 0 7px}
+#football-view .football-overview-grid .metric{position:relative;min-width:0;padding:11px 9px;border:1px solid #2b4058;border-radius:11px;background:linear-gradient(145deg,#17283b,#101b2a);overflow:hidden}
+#football-view .football-overview-grid .metric:before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:#5b7896}
+#football-view .football-overview-grid .football-overview-live:before{background:#38bdf8}
+#football-view .football-overview-grid .football-overview-signals:before{background:#39d6a0}
+#football-view .football-overview-grid .football-overview-pressure:before{background:#f4bd55}
+#football-view .football-overview-grid .football-overview-status:before{background:#8295aa}
+#football-view .football-overview-grid .metric-value{font-size:23px;font-weight:950;line-height:1.15;font-variant-numeric:tabular-nums}
+#football-view .football-overview-grid .metric-label{font-size:9px;line-height:1.25;letter-spacing:.35px;text-transform:uppercase;color:#9fb1c6;margin-top:5px}
+#dashboard-updated{padding:0 3px}
+@media(max-width:560px){
+ #football-view .football-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px}
+ #football-view .football-overview-grid .metric{padding:10px 9px}
+ #football-view .football-overview-grid .metric-value{font-size:21px}
+}
+
 </style>
 </head>
 
@@ -1216,9 +1234,11 @@ details>summary{outline-offset:4px}
   <a href="#flashscore-match-archive-card">🗂 Archív</a>
 </nav>
 
-<div class="dashboard-grid" aria-label="LIVE prehľad" style="grid-template-columns:repeat(2,minmax(0,1fr))">
-  <div class="metric"><div class="metric-value" id="dashboard-live-count">—</div><div class="metric-label">Sledované zápasy</div></div>
-  <div class="metric metric-status"><div class="metric-value" id="dashboard-data-status">ČAKÁM</div><div class="metric-label">Stav dát</div></div>
+<div class="dashboard-grid football-overview-grid" aria-label="Futbalový LIVE prehľad">
+  <div class="metric football-overview-live"><div class="metric-value" id="dashboard-live-count">—</div><div class="metric-label">LIVE zápasy</div></div>
+  <div class="metric football-overview-signals"><div class="metric-value" id="dashboard-signal-count">—</div><div class="metric-label">Potvrdené signály</div></div>
+  <div class="metric football-overview-pressure"><div class="metric-value" id="dashboard-pressure-count">—</div><div class="metric-label">Zvýšený tlak</div></div>
+  <div class="metric football-overview-status metric-status"><div class="metric-value" id="dashboard-data-status">ČAKÁM</div><div class="metric-label">Stav dát</div></div>
 </div>
 <p id="dashboard-updated">Posledná aktualizácia: čakám na prvý zber</p>
 <details id="ai-edge-top-simulation" class="card ai-edge-top-simulation-card" aria-live="polite" aria-label="Simulácia AI EDGE pri individuálnom minimálnom kurze"><summary class="ai-edge-top-simulation-heading"><span>AI EDGE · SIMULÁCIA MINIMÁLNYCH KURZOV</span><small>1 jednotka / zápas</small></summary><div class="ai-edge-top-simulation-content"><div id="ai-edge-top-simulation-summary" class="ai-edge-top-simulation-summary"><span>Načítavam vyhodnotené predikcie…</span></div><p class="ai-edge-top-simulation-note">Samostatné výsledky AI EDGE 25 a GÓL DO KONCA ZÁPASU. Hypotetická simulácia podľa minimálneho kurzu modelu, nie potvrdený reálny zisk.</p></div></details>
