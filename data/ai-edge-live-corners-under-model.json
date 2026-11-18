@@ -3,7 +3,7 @@
   "source": "Flashscore",
   "mode": "FORWARD_ONLY_LIVE_CORNERS_UNDER_SHADOW",
   "started_at": "2026-11-17T19:17:08.445Z",
-  "updated_at": "2026-11-18T04:38:43.377Z",
+  "updated_at": "2026-11-18T04:41:07.150Z",
   "target": "Final total match corners (home + away) UNDER during regular time including stoppage; extra time and penalties excluded.",
   "lag_minutes": 5,
   "observation_minute_range": [
@@ -33,6 +33,7 @@
     }
   ],
   "training_policy": "Only snapshots captured at or after activation. One latest sample per five-minute decision window. Requires confirmed final Flashscore corners, a complete regular-time timeline, monotonic corner totals and full five-minute lag coverage. No historical backfill.",
+  "feature_policy": "Recent activity deltas are calculated only from the same match's previous snapshot when its timestamp is 1-12 minutes older; otherwise deltas are zero and the final feature marks comparison unavailable. This prevents stale snapshots from masquerading as current pace.",
   "validation_policy": {
     "min_train_samples": 500,
     "min_validation_samples": 300,
