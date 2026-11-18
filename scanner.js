@@ -702,17 +702,19 @@
           : 0;
         const firstStats = statMap(first), lastStats = statMap(last);
         const deltas = [];
+        let commonStats = 0;
         for (const [name, end] of lastStats) {
           const start = firstStats.get(name);
           if (!start) continue;
+          commonStats++;
           const dh = end[0] - start[0], da = end[1] - start[1];
-          if (dh || da) deltas.push(name + ": " + (dh > 0 ? "+" : "") + dh + " : " + (da > 0 ? "+" : "") + da);
+          if (dh || da) deltas.push({ name, home: dh, away: da });
         }
         const card = document.createElement("div");
-        card.style.cssText = "padding:10px;border:1px solid #2b455f;border-radius:9px;background:#0c1928;min-width:0;";
+        card.style.cssText = "padding:11px;border:1px solid #2b455f;border-radius:9px;background:#0c1928;min-width:0;overflow:hidden;";
         const heading = document.createElement("strong");
         heading.textContent = label;
-        heading.style.color = "#e6f5ff";
+        heading.style.cssText = "display:block;color:#e6f5ff;font-size:11px;letter-spacing:.05em;margin-bottom:7px;";
         card.appendChild(heading);
         const lines = [
           "Skóre: " + scoreOf(first) + " → " + scoreOf(last),
@@ -722,11 +724,37 @@
         for (const value of lines) {
           const line = document.createElement("div");
           line.textContent = value;
+          line.style.cssText = "font-size:10px;line-height:1.55;color:#c2d1e0;overflow-wrap:anywhere;";
           card.appendChild(line);
         }
         const stats = document.createElement("div");
-        stats.style.cssText = "margin-top:5px;color:#a9c6d9;";
-        stats.textContent = deltas.length ? deltas.join(" · ") : "Bez spoločných štatistík s merateľnou zmenou.";
+        stats.style.cssText = "display:grid;gap:5px;margin-top:9px;padding-top:8px;border-top:1px solid #263d55;";
+        const statsTitle = document.createElement("div");
+        statsTitle.textContent = "ZMENY SPOLOČNÝCH ŠTATISTÍK";
+        statsTitle.style.cssText = "font-size:9px;font-weight:900;letter-spacing:.06em;color:#8faec8;";
+        stats.appendChild(statsTitle);
+        if (deltas.length) {
+          deltas.forEach(delta => {
+            const row = document.createElement("div");
+            row.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:7px;padding:5px 7px;border-radius:6px;background:#13243a;";
+            const name = document.createElement("span");
+            name.textContent = delta.name;
+            name.style.cssText = "min-width:0;color:#c7d8e8;font-size:10px;overflow-wrap:anywhere;";
+            const values = document.createElement("span");
+            const format = value => (value > 0 ? "+" : "") + value;
+            values.textContent = "D " + format(delta.home) + " · H " + format(delta.away);
+            values.style.cssText = "white-space:nowrap;color:#a8d8ef;font-size:9px;font-weight:800;font-variant-numeric:tabular-nums;";
+            row.append(name, values);
+            stats.appendChild(row);
+          });
+        } else {
+          const empty = document.createElement("div");
+          empty.textContent = commonStats
+            ? "V spoločných štatistikách nebola zachytená zmena."
+            : "Prvá a posledná snímka nemajú spoločné číselné štatistiky.";
+          empty.style.cssText = "font-size:10px;color:#91a9bf;line-height:1.5;";
+          stats.appendChild(empty);
+        }
         card.appendChild(stats);
         return card;
       };
