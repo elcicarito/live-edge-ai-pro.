@@ -137,7 +137,7 @@ for (const payload of finishedPayloads.filter(Boolean)) {
     const homeScore = num(row.home_score), awayScore = num(row.away_score);
     if (!sourceId || !homeName || !awayName || homeScore === null || awayScore === null) continue;
     const periods = Array.isArray(row.periods) ? row.periods : [];
-    const firstThree = [1, 2, 3].map(n => periods.find(p => new RegExp(`(?:period\\s*)?${n}\\b`, "i").test(String(p.name || p.period || ""))));
+    const firstThree = [1, 2, 3].map(n => periods.find(p => periodNumber(p.name || p.period) === n));
     const regulationValid = firstThree.every(p => p && num(p.home) !== null && num(p.away) !== null);
     const record = {
       id: `flashscore-${sourceId}`, source: "Flashscore", source_match_id: sourceId,
