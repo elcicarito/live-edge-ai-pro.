@@ -1427,6 +1427,67 @@ details>summary{outline-offset:4px}
  #matches .half-period-stat-row{grid-template-columns:minmax(42px,.7fr) minmax(90px,1.3fr) minmax(42px,.7fr)!important}
 }
 
+
+
+/* Časová os LIVE snímok: jasná postupnosť, skóre a čas záznamu. */
+#matches .match-timeline-rail{
+  display:flex!important;
+  align-items:stretch!important;
+  gap:9px!important;
+  overflow-x:auto!important;
+  overscroll-behavior-x:contain;
+  padding:7px 3px 12px!important;
+  scroll-padding-inline:8px;
+  scrollbar-width:thin;
+}
+#matches .match-timeline-point{
+  flex:0 0 88px!important;
+  min-height:88px!important;
+  padding:9px 7px!important;
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:center!important;
+  border-radius:11px!important;
+  background:linear-gradient(160deg,#172b42,#101d2e)!important;
+  border:1px solid #344d69!important;
+  box-shadow:inset 0 1px 0 #ffffff0a!important;
+  transition:border-color .15s ease,background .15s ease;
+}
+#matches .match-timeline-point:first-child{
+  border-left:2px solid #5b91b8!important;
+}
+#matches .match-timeline-point > div:first-child{
+  display:inline-flex;
+  align-self:center;
+  align-items:center;
+  justify-content:center;
+  min-height:19px;
+  padding:2px 6px;
+  border-radius:5px;
+  background:#203b56;
+  color:#c4e6fb!important;
+  font-size:10px!important;
+}
+#matches .match-timeline-point > div:nth-child(2){
+  font-size:17px!important;
+  letter-spacing:.2px;
+  line-height:1.15;
+  margin:7px 0!important;
+}
+#matches .match-timeline-point > div:last-child{
+  padding-top:5px;
+  border-top:1px solid #ffffff12;
+  font-size:9px!important;
+}
+#matches .match-timeline-point:last-child{
+  border:1px solid #39a982!important;
+  background:linear-gradient(160deg,#153b35,#102b29)!important;
+  box-shadow:0 0 0 1px #39a98222,inset 0 1px 0 #ffffff0c!important;
+}
+@media(max-width:560px){
+  #matches .match-timeline-point{flex-basis:82px!important;min-height:82px!important}
+}
+
 </style>
 </head>
 
