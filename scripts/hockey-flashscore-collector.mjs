@@ -23,6 +23,7 @@ const num = value => {
 };
 const allMatches = payload => (payload?.competitions || []).flatMap(group => (group?.matches || []).map(match => ({ ...match, competition: match.competition || group.competition })));
 const periodNumber = value => {
+  if (Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 3) return Number(value);
   const m = String(value || "").match(/(?:period|third|tretin[ay])\s*([1-3])|([1-3])(?:st|nd|rd)?\s*(?:period|third)/i);
   return m ? Number(m[1] || m[2]) : null;
 };
@@ -68,12 +69,17 @@ const details = await Promise.all(liveRows.map(async row => {
   // the latest period's figures are full-match totals. Period breakdown
   // remains available in stats_by_period for diagnostics and UI.
   const stage = String(row.stage || row.status || detail.stage || "LIVE");
+  const explicitPeriod = periodNumber(detail.period ?? detail.current_period ?? row.period ?? row.current_period ?? stage);
+  const statsPeriods = statsByPeriod.map(item => periodNumber(item.period)).filter(Boolean);
+  const period = explicitPeriod || (statsPeriods.length ? Math.max(...statsPeriods) : null);
+  const periodSource = explicitPeriod ? "match_status" : statsPeriods.length ? "statistics_tabs" : null;
+  const clock = String(row.time || row.clock || detail.time || detail.clock || detail.status?.display_clock || "");
   return {
     id: `flashscore-${sourceId}`, source: "Flashscore", source_match_id: sourceId,
     league_slug: String((detail.competition?.name || row.competition?.name || "hockey").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")),
     league_name: detail.competition?.name || row.competition?.name || "Hokej",
     name: `${homeName} – ${awayName}`, date: row.start_time || detail.start_time || null,
-    status: "live", status_text: stage, period: periodNumber(stage), clock: String(row.time || row.clock || ""),
+    status: "live", status_text: stage, period, period_source: periodSource, clock,
     home, away, periods: { home: [], away: [] }, stats, stats_by_period: statsByPeriod,
     available_tabs: detail.available_tabs || [], has_statistics: Boolean(detail.has_statistics || statsByPeriod.some(p => p.statistics.length)),
     collected_at: now
@@ -90,7 +96,7 @@ const historyRows = await readLines(paths.history);
 for (const match of matches) {
   const key = String(match.source_match_id), old = archiveMap.get(key);
   archiveMap.set(key, old ? { ...old, ...match } : match);
-  historyRows.push({ collected_at: now, match_id: key, match_name: match.name, stage: match.status_text, period: match.period, home_score: match.home.score, away_score: match.away.score, stats: match.stats, stats_by_period: match.stats_by_period });
+  historyRows.push({ collected_at: now, match_id: key, match_name: match.name, stage: match.status_text, period: match.period, period_source: match.period_source || null, clock: match.clock || "", home_score: match.home.score, away_score: match.away.score, stats: match.stats, stats_by_period: match.stats_by_period });
 }
 const archiveMatches = [...archiveMap.values()].sort((a,b) => Date.parse(b.date || b.collected_at || 0) - Date.parse(a.date || a.collected_at || 0)).slice(0, 1500);
 await fs.writeFile(paths.archive, JSON.stringify({ source: "Flashscore", updated_at: now, count: archiveMatches.length, matches: archiveMatches }, null, 2));
