@@ -76,12 +76,11 @@ const details = await Promise.all(liveRows.map(async row => {
     name: String(item.name || item.period || `Period ${index + 1}`),
     home: num(item.home), away: num(item.away)
   }));
-  const breakState = /break|intermission|prest[aá]v|pause/i.test(stage);
+  // Period score lines are retained as evidence, but never treated as
+  // proof of the currently active period: the feed may include partial lines.
   const explicitPeriod = periodNumber(detail.period ?? detail.current_period ?? row.period ?? row.current_period ?? stage);
-  const inferredPeriod = !explicitPeriod && !breakState && periodScores.length > 0
-    ? Math.min(3, periodScores.length + 1) : null;
-  const period = explicitPeriod || inferredPeriod;
-  const periodSource = explicitPeriod ? "match_status" : (inferredPeriod ? "completed_period_scores" : null);
+  const period = explicitPeriod;
+  const periodSource = explicitPeriod ? "match_status" : null;
   const rawClock = row.time ?? row.clock ?? detail.time ?? detail.clock ?? detail.status?.display_clock ?? "";
   const clock = typeof rawClock === "string" || typeof rawClock === "number" ? String(rawClock) : String(rawClock?.display || rawClock?.text || rawClock?.value || "");
   return {
@@ -104,7 +103,7 @@ const current = {
   data_quality: {
     matches_with_period: matches.filter(match => match.period !== null).length,
     matches_with_explicit_period: matches.filter(match => match.period_source === "match_status").length,
-    matches_with_period_score_progression: matches.filter(match => match.period_source === "completed_period_scores").length,
+    matches_with_period_score_lines: matches.filter(match => match.period_scores.length > 0).length,
     matches_with_clock: matches.filter(match => Boolean(match.clock)).length,
     matches_with_match_totals: matches.filter(match => Object.keys(match.stats.home).length || Object.keys(match.stats.away).length).length,
     matches_with_period_stats: matches.filter(match => match.stats_by_period.some(period => period.statistics.length)).length,
