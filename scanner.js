@@ -1798,6 +1798,7 @@
     });
     const activityCoverage = reconcileActivityCoverage(records, intervalRows, statDefinitions, getCumulativeStat, unassignedActivityPairs, unassignedActivityNotes);
     const diagnosticPanel = document.createElement("div");
+    diagnosticPanel.className = "activity-diagnostic-panel";
     diagnosticPanel.style.cssText = "padding:8px 9px;margin:7px 0 10px;background:#0d1a2a;border:1px solid #30445d;border-radius:8px;";
     const diagnosticTitle = document.createElement("div");
     diagnosticTitle.textContent = "KONTROLA PÁROVANIA MERANÍ";
@@ -1842,6 +1843,7 @@
     }
     target.appendChild(diagnosticPanel);
     const coveragePanel = document.createElement("div");
+    coveragePanel.className = "activity-coverage-panel";
     coveragePanel.style.cssText = "padding:9px 10px;margin:8px 0 10px;background:#102337;border:1px solid #36516b;border-radius:9px;";
     const coverageTitle = document.createElement("div");
     coverageTitle.textContent = "KONTROLA POKRYTIA ZACHYTENEJ AKTIVITY";
@@ -1906,6 +1908,7 @@
     } else {
       intervalRows.forEach(interval => {
         const panel = document.createElement("div");
+        panel.className = "activity-interval-panel";
         panel.style.cssText = "padding:8px 9px;margin:5px 0;background:#101f31;border:1px solid #293d55;border-radius:8px;";
         const title = document.createElement("div");
         title.textContent = interval.label + " · " + interval.count + (interval.count === 1 ? " platný interval merania" : " platné intervaly merania");
@@ -1959,6 +1962,7 @@
         if (!points.length) return;
         const maximum = Math.max(1, ...points.map(interval => Math.max(interval.values[definition.key].home, interval.values[definition.key].away)));
         const metricPanel = document.createElement("div");
+        metricPanel.className = "activity-trend-panel";
         metricPanel.style.cssText = "padding:8px 9px;margin:6px 0;background:#101f31;border:1px solid #293d55;border-radius:8px;";
         const metricTitle = document.createElement("div");
         metricTitle.textContent = definition.label.toUpperCase();
