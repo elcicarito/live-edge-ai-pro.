@@ -235,7 +235,10 @@
       const groupId=String(row.matchId||"")+"|"+row.target;
       if(candidateKeys.has(groupId))return;
       candidateKeys.add(groupId);
-      candidates.push({row,current,minute,conservative,after,deadline,target:row.target,market,oddsKey,entered,ev,min});
+      const fx=current.fx||{};
+      const statsFreshness=Number.isFinite(Number(fx.age))?Number(fx.age):Infinity;
+      const coreStats=Object.values(fx.values||{}).filter(value=>value&&Number.isFinite(Number(value.home))&&Number.isFinite(Number(value.away))).length;
+      candidates.push({row,current,minute,conservative,after,deadline,target:row.target,market,oddsKey,entered,ev,min,statsFreshness,coreStats,activityReady:fx.delta?.ready===true});
     };
     // Zobraziť už zachytené otvorené TOP tipy; register nesmie skryť aktívnu príležitosť.
     for(const entry of topLedger?.entries||[]){
@@ -252,7 +255,16 @@
       const current=live.get(String(row.matchId||""));if(!current)continue;
       addCandidate(row,current);
     }
-    candidates.sort((a,b)=>(b.ev===null?-1:b.ev)-(a.ev===null?-1:a.ev)||b.conservative-a.conservative||Number(b.row.modelCalibrationMatchesWeight)-Number(a.row.modelCalibrationMatchesWeight));
+    // Optional manually entered odds must not distort model ranking.
+    // Rank by conservative probability, calibration quality, then current Flashscore data quality.
+    candidates.sort((a,b)=>
+      b.conservative-a.conservative||
+      Number(a.row.modelCalibrationError)-Number(b.row.modelCalibrationError)||
+      Number(b.row.modelCalibrationMatchesWeight)-Number(a.row.modelCalibrationMatchesWeight)||
+      a.statsFreshness-b.statsFreshness||
+      Number(b.activityReady)-Number(a.activityReady)||
+      b.coreStats-a.coreStats
+    );
     const top=candidates;
     const cards=top.map((item,index)=>{
       const r=item.row,m=item.current.record.match||{},entered=item.entered,v=Number(entered.replace(",",".")),p=Number(r.modelProbability),fair=1/p,min=item.min,error=Number(r.modelCalibrationError),conservative=item.conservative;
@@ -262,8 +274,9 @@
       const timing=item.minute<item.after?"ČAKÁ NA OKNO od "+item.after+"′":"OKNO AKTÍVNE";
       const color=meets?"#39d98a":ev!==null&&ev>0?"#f4d27a":"#f08b8b";
       const horizon=item.target==="MODEL_25"?"AI EDGE 25 · GÓL V NASLEDUJÚCICH 25 MIN":"MODEL_FT · GÓL DO KONCA RIADNEHO ČASU";
+      const fx=item.current.fx||{},statsQuality="ŠTATISTIKY "+(Number.isFinite(item.statsFreshness)?item.statsFreshness.toFixed(1)+" min":"—")+" · "+item.coreStats+"/10 ukazovateľov"+(item.activityReady?" · NOVÁ AKTIVITA Z MERANÍ":" · BEZ POROVNANIA MERANÍ");
       const marketHint=item.target==="MODEL_25"?"Nie je to automaticky OVER do konca zápasu.":"Trh OVER podľa aktuálneho skóre.";
-      return "<article class='ai-edge-match' style='border-color:"+color+"'><div class='ai-edge-match-head'><span>"+(index+1)+". "+esc(m.home)+" – "+esc(m.away)+"</span><span>"+esc(m.live_minute)+"′ · "+esc(m.home_score)+":"+esc(m.away_score)+"</span></div><div class='ai-edge-match-sub'>"+esc(m.competition||m.league||"")+" · <span style='color:"+color+";font-weight:900'>"+horizon+"</span> · "+timing+"</div><div style='font-size:11px;font-weight:900;color:#d7f2ff;margin-top:5px'>TRH / CIEĽ: "+esc(item.market)+"</div><div class='ai-edge-model-numbers' style='margin-top:8px'><b>"+(p*100).toFixed(1)+" %</b><span>modelová pravdepodobnosť</span><b>"+(conservative*100).toFixed(1)+" %</b><span>konzervatívna pravdepodobnosť</span><b>"+fair.toFixed(2)+"</b><span>férový kurz</span><b>"+min.toFixed(2)+"</b><span>minimálny kurz pre EV +5 %</span></div><div class='ai-edge-model-time'>Zachytené: "+fmt(r.startMinute)+"′ pri skóre "+fmt(r.startHome)+":"+fmt(r.startAway)+" · "+esc(dateTime(r.createdAt))+" · rozhodovacie okno "+fmt(item.after)+"′–"+fmt(item.deadline)+"′</div><div class='ai-edge-odds-check'><label>DOPLNKOVÝ SKUTOČNÝ KURZ (NEPOVINNÝ)<input type='number' min='1.01' step='0.01' inputmode='decimal' placeholder='napr. 2.10' value='"+esc(entered)+"' data-ai-edge-odds='"+esc(item.oddsKey)+"' data-min-odds='"+min+"' data-conservative-probability='"+conservative+"'></label>"+comparison+"<span class='ai-edge-model-time' data-ev-output='' style='color:"+color+";font-weight:900'>"+(ev===null?"Odhadované EV pri zadanom kurze: —":"Odhadované EV pri zadanom kurze: "+(ev>=0?"+":"")+ev.toFixed(1)+" % na vklad")+"</span></div><div class='ai-edge-model-foot'>"+marketHint+" Výpočet EV = (skutočný kurz × konzervatívna pravdepodobnosť) − 1. Použitá P = modelová P − chyba kalibrácie ("+(error*100).toFixed(1)+" %); bezpečnostná rezerva minimálneho kurzu je 5 %. Vzorka kalibrácie: "+(Number.isFinite(Number(r.modelCalibrationMatchesWeight))?fmt(r.modelCalibrationMatchesWeight):"údaj nie je uložený")+" vážených zápasov. Je to odhad podľa modelu, nie dôkaz ziskovosti.</div></article>";
+      return "<article class='ai-edge-match' style='border-color:"+color+"'><div class='ai-edge-match-head'><span>"+(index+1)+". "+esc(m.home)+" – "+esc(m.away)+"</span><span>"+esc(m.live_minute)+"′ · "+esc(m.home_score)+":"+esc(m.away_score)+"</span></div><div class='ai-edge-match-sub'>"+esc(m.competition||m.league||"")+" · <span style='color:"+color+";font-weight:900'>"+horizon+"</span> · "+timing+"</div><div class='ai-edge-model-time'>"+esc(statsQuality)+"</div><div style='font-size:11px;font-weight:900;color:#d7f2ff;margin-top:5px'>TRH / CIEĽ: "+esc(item.market)+"</div><div class='ai-edge-model-numbers' style='margin-top:8px'><b>"+(p*100).toFixed(1)+" %</b><span>modelová pravdepodobnosť</span><b>"+(conservative*100).toFixed(1)+" %</b><span>konzervatívna pravdepodobnosť</span><b>"+fair.toFixed(2)+"</b><span>férový kurz</span><b>"+min.toFixed(2)+"</b><span>minimálny kurz pre EV +5 %</span></div><div class='ai-edge-model-time'>Zachytené: "+fmt(r.startMinute)+"′ pri skóre "+fmt(r.startHome)+":"+fmt(r.startAway)+" · "+esc(dateTime(r.createdAt))+" · rozhodovacie okno "+fmt(item.after)+"′–"+fmt(item.deadline)+"′</div><div class='ai-edge-odds-check'><label>DOPLNKOVÝ SKUTOČNÝ KURZ (NEPOVINNÝ)<input type='number' min='1.01' step='0.01' inputmode='decimal' placeholder='napr. 2.10' value='"+esc(entered)+"' data-ai-edge-odds='"+esc(item.oddsKey)+"' data-min-odds='"+min+"' data-conservative-probability='"+conservative+"'></label>"+comparison+"<span class='ai-edge-model-time' data-ev-output='' style='color:"+color+";font-weight:900'>"+(ev===null?"Odhadované EV pri zadanom kurze: —":"Odhadované EV pri zadanom kurze: "+(ev>=0?"+":"")+ev.toFixed(1)+" % na vklad")+"</span></div><div class='ai-edge-model-foot'>"+marketHint+" Výpočet EV = (skutočný kurz × konzervatívna pravdepodobnosť) − 1. Použitá P = modelová P − chyba kalibrácie ("+(error*100).toFixed(1)+" %); bezpečnostná rezerva minimálneho kurzu je 5 %. Vzorka kalibrácie: "+(Number.isFinite(Number(r.modelCalibrationMatchesWeight))?fmt(r.modelCalibrationMatchesWeight):"údaj nie je uložený")+" vážených zápasov. Je to odhad podľa modelu, nie dôkaz ziskovosti.</div></article>";
     }).join("");
     const summaryRows=["MODEL_25","MODEL_FT"].map(target=>{
       const x=topLedger?.summary?.[target]||{},label=target==="MODEL_25"?"AI EDGE 25":"MODEL_FT";
