@@ -292,6 +292,8 @@
     const eligibleLeagues = [...leagueCounts.values()].filter(n => n >= 10).length;
     const baselineSettled = settled.filter(p => p.model_version === 3);
     const challengerSettled = settled.filter(p => p.model_version === 5);
+    const fullGameSettled = settled.filter(p => p.model_version === 6);
+    const fullGameMae = fullGameSettled.length ? fullGameSettled.reduce((sum,p) => sum + Number(p.absolute_error),0) / fullGameSettled.length : null;
     const mae = baselineSettled.length ? baselineSettled.reduce((sum,p) => sum + Number(p.absolute_error),0) / baselineSettled.length : null;
     const covered = baselineSettled.filter(p => Number.isFinite(Number(p.actual_total)) &&
       Number.isFinite(Number(p.range_low)) && Number.isFinite(Number(p.range_high)) &&
@@ -301,7 +303,9 @@
       ["Kompletné zápasy podľa formátu", completeMatches.length],
       ["Ligy s min. 10 zápasmi", eligibleLeagues],
       ["Vyhodnotené predikcie v3", baselineSettled.length],
-      ["Priemerná absolútna chyba", mae === null ? "—" : mae.toFixed(1) + " b."]
+      ["V6 · vyhodnotené full-game", fullGameSettled.length],
+      ["V6 · priemerná chyba", fullGameMae === null ? "—" : fullGameMae.toFixed(1) + " b."],
+      ["Priemerná absolútna chyba V3", mae === null ? "—" : mae.toFixed(1) + " b."]
     ];
     const grid = document.createElement("div");
     grid.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0";
@@ -330,6 +334,12 @@
     const compareValue=document.createElement("strong");compareValue.textContent=challengerMae===null?"Zatiaľ čaká na vyhodnotenie":challengerMae.toFixed(1)+" b. · n="+challengerSettled.length;
     compareValue.style.color=challengerSettled.length>=30?"#39e6a5":"#f2c66d";
     compareRow.append(compareLabel,compareValue);performanceContent.appendChild(compareRow);
+    const fullGameRow=document.createElement("div");
+    fullGameRow.style.cssText="display:flex;justify-content:space-between;gap:10px;padding:9px 2px;border-bottom:1px solid #263b55;font-size:11px";
+    const fullGameLabel=document.createElement("span");fullGameLabel.textContent="V6 · celkový počet bodov do konca";
+    const fullGameValue=document.createElement("strong");fullGameValue.textContent=fullGameMae===null?"Zatiaľ čaká na vyhodnotenie":fullGameMae.toFixed(1)+" b. · n="+fullGameSettled.length;
+    fullGameValue.style.color=fullGameSettled.length>=30?"#55d9f4":"#f2c66d";
+    fullGameRow.append(fullGameLabel,fullGameValue);performanceContent.appendChild(fullGameRow);
     const qTitle=document.createElement("div");
     qTitle.textContent="PRESNOSŤ PODĽA OBDOBIA";
     qTitle.style.cssText="font-size:11px;font-weight:900;color:#39e6a5;margin:15px 0 7px";
@@ -401,16 +411,21 @@
         const card = document.createElement("div");
         card.style.cssText = "background:#0d1929;border:1px solid #354d69;border-radius:9px;padding:11px;margin:8px 0";
         const name = document.createElement("div");
-        name.textContent = (p.league || "Liga neznáma") + " · " + p.home + " – " + p.away + " · " + (p.model_version===4?"H"+p.target_half+" · V4":"Q"+p.target_quarter+(p.model_version===5?" · V5 test":" · V3"));
+        name.textContent = (p.league || "Liga neznáma") + " · " + p.home + " – " + p.away + " · " +
+          (p.model_version===6 ? "FULL GAME · V6 · po Q"+p.checkpoint_period :
+           p.model_version===4 ? "H"+p.target_half+" · V4" :
+           "Q"+p.target_quarter+(p.model_version===5?" · V5 test":" · V3"));
         name.style.cssText = "font-size:12px;color:#a9bdd4;line-height:1.4";
         const value = document.createElement("div");
-        value.textContent = p.predicted_total + " bodov";
+        value.textContent = p.predicted_total + (p.model_version===6 ? " bodov do konca zápasu" : " bodov");
         value.style.cssText = "font-size:23px;font-weight:900;color:#fff;margin:5px 0";
         const range = document.createElement("div");
         range.textContent = "Orientačné rozpätie " + p.range_low + "–" + p.range_high + " bodov · vzorka n=" + p.training_sample + " (iba rovnaká liga)";
         range.style.cssText = "font-size:11px;color:#9baabe;line-height:1.4";
         const note = document.createElement("div");
-        note.textContent = "Odhad sa počíta iba z ukončených predchádzajúcich štvrtín. Zber môže meškať približne 5 minút.";
+        note.textContent = p.model_version===6
+          ? "Shadow test V6: dokončené štvrtiny + historické finálne skóre rovnakej ligy. Aktuálna štvrtina sa bez spoľahlivého času nezapočítava; nejde o stávkový signál."
+          : "Odhad sa počíta iba z ukončených predchádzajúcich štvrtín. Zber môže meškať približne 5 minút.";
         note.style.cssText = "font-size:10px;color:#8296ad;margin-top:5px";
         card.append(name,value,range,note);
         predictorList.appendChild(card);
@@ -424,7 +439,8 @@
           const row = document.createElement("div");
           row.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:8px 2px;border-bottom:1px solid #263b55;font-size:11px";
           const label = document.createElement("span");
-          label.textContent = p.home + " – " + p.away + " · " + (p.model_version===4?"H"+p.target_half:"Q"+p.target_quarter);
+          label.textContent = p.home + " – " + p.away + " · " +
+            (p.model_version===6 ? "FULL GAME V6" : p.model_version===4 ? "H"+p.target_half : "Q"+p.target_quarter);
           const result = document.createElement("strong");
           result.textContent = "Odhad " + p.predicted_total + " / skutočnosť " + p.actual_total + " · ±" + p.absolute_error;
           result.style.color = p.absolute_error <= 5 ? "#39e6a5" : "#f2c66d";
