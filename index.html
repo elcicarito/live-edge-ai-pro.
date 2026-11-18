@@ -1858,6 +1858,25 @@ input,select,textarea{border-color:#344b65!important;background:#0d1928!importan
 .flashscore-archive-filter{border:1px solid #344b65;border-radius:999px;padding:7px 11px;background:#13243a;color:#aebfd2;font-size:11px;font-weight:800;cursor:pointer;transition:background .18s,border-color .18s,color .18s}
 .flashscore-archive-filter:hover{border-color:#4c829a;color:#e5f7ff}
 .flashscore-archive-filter.active{background:linear-gradient(120deg,#174b60,#1b3b59);border-color:#36a6b5;color:#e7fbff;box-shadow:0 0 0 1px #36a6b522}
+
+/* Flashscore archive: mobile-first chart and match-comparison layout */
+#flashscore-archive-results{min-width:0;overflow:hidden}
+#flashscore-archive-results svg{display:block;max-width:100%;height:auto}
+#flashscore-archive-results *{min-width:0}
+@media(max-width:600px){
+  #flashscore-archive-results{font-size:12px}
+  #flashscore-archive-results section{max-width:100%;overflow:hidden}
+  #flashscore-archive-results button,#flashscore-archive-results select{max-width:100%;white-space:normal}
+  #flashscore-archive-results svg{width:100%!important;max-width:100%!important}
+  #flashscore-archive-results details{max-width:100%;overflow:hidden}
+  #flashscore-archive-results details>summary{overflow-wrap:anywhere;line-height:1.45}
+  #flashscore-archive-results [role="group"]{display:flex;flex-wrap:wrap;gap:6px}
+}
+@media(max-width:380px){
+  #flashscore-archive-results{font-size:11px}
+  #flashscore-archive-results svg{max-height:170px}
+  #flashscore-archive-results button{font-size:10px;padding:7px 8px}
+}
 </style>
 </head>
 
