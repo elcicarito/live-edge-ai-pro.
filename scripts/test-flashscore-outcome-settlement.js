@@ -100,7 +100,24 @@ const server = http.createServer((req, res) => {
     assert.equal(settlement.extractFinalYellowCards({periods:[{period:"ALL",groups:[{statistics:[{name:"Yellow cards",home_value:"2",away_value:null}]}]}]}), null, "incomplete yellow cards must never be confirmed");
     assert.equal(settlement.extractFinalYellowCards({periods:[{period:"2ND",groups:[{statistics:[{name:"Yellow cards",home_value:"2",away_value:"1"}]}]}]}), null, "period-only yellow cards must not be treated as full match total");
 
-    const cooldown = await settlement.settleOutcomes(dataDir, new Date(now.getTime() + 60 * 1000));
+    // A second explicit full-time score correction must append another audit revision
+    // while preserving already confirmed full-time statistics.
+    apiMatches[0].home_score = 3;
+    apiMatches[0].away_score = 2;
+    const secondCorrectionAt = new Date(now.getTime() + 16 * 60 * 1000);
+    const secondCorrection = await settlement.settleOutcomes(dataDir, secondCorrectionAt);
+    const afterSecondCorrection = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+    const correctedAgain = afterSecondCorrection.matches["finished-corrected"];
+    assert.equal(secondCorrection.corrected_scores, 1, "a second changed finished score must also be audited");
+    assert.equal(correctedAgain.final_score, "3 : 2");
+    assert.equal(correctedAgain.revisions.length, 2, "each superseded final score must remain in the revision history");
+    assert.equal(correctedAgain.revisions[1].final_score, "2 : 1", "the immediately previous score must be recorded");
+    assert.deepEqual(correctedAgain.final_corners, output.matches["finished-corrected"].final_corners,
+      "a score correction must not erase previously confirmed corner totals");
+    assert.deepEqual(correctedAgain.final_yellow_cards, output.matches["finished-corrected"].final_yellow_cards,
+      "a score correction must not erase previously confirmed yellow-card totals");
+
+    const cooldown = await settlement.settleOutcomes(dataDir, new Date(secondCorrectionAt.getTime() + 60 * 1000));
     assert.equal(cooldown.checked_dates, 0, "date checks must respect the 15-minute cooldown");
 
     process.stdout.write("Flashscore outcome settlement tests passed: explicit FINISHED status, valid score, pending matches, correction audit and check cooldown.\\n");
