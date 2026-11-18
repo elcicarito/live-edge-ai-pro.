@@ -54,7 +54,12 @@
       "<div class='cards-progress'><i style='width:" + matchReady.toFixed(1) + "%'></i></div>" +
       "<div class='cards-progress-label'><span>Pokrytie nezávislými zápasmi</span><span>" + matchReady.toFixed(0) + " %</span></div>" +
       "<p>Pripravenosť sa počíta podľa najslabšie pokrytej hranice, nie súčtom opakovaných vzoriek.</p></section>";
-    overview.innerHTML = summary + lines.map(([key, label]) => {
+    overview.innerHTML = summary + lines.map(([key, label], index) => {
+      const groupHeading = index === 0
+        ? "<div class='cards-group-heading'><b>UNDER · nižší celkový počet kariet</b><span>3 hranice</span></div>"
+        : index === 3
+          ? "<div class='cards-group-heading'><b>OVER · vyšší celkový počet kariet</b><span>3 hranice</span></div>"
+          : "";
       const trained = model.models?.[key] || {};
       const counts = trained.counts || {};
       const [state, stateClass] = stateOf(trained);
@@ -70,7 +75,7 @@
         esc(Number(metrics.log_loss).toFixed(3)) + " · <b>Brier</b> " +
         esc(Number(metrics.brier).toFixed(3)) + " · <b>Kalibrácia ECE</b> " +
         esc(pct(metrics.calibration?.expected_calibration_error)) + "</div>" : "";
-      return "<article class='cards-line-card'>" +
+      return groupHeading + "<article class='cards-line-card'>" +
         "<div class='cards-line-top'><b>" + label + "</b><span class='cards-line-state " + stateClass + "'>" + state + "</span></div>" +
         "<div class='cards-line-stats'>" +
           "<div><strong>" + number(counts.train) + "</strong><small>tréningové vzorky</small></div>" +
@@ -80,7 +85,7 @@
         "</div>" +
         "<div class='cards-progress'><i style='width:" + sampleProgress.toFixed(1) + "%'></i></div>" +
         "<div class='cards-progress-label'><span>Vzorky · tréning " + number(counts.train) + "/" + minTrain +
-          "</span><span>validácia " + number(counts.validation) + "/" + minValidation + "</span></div>" +
+          "</span><span>validácia " + number(counts.validation) + "/" + minValidation + " · " + sampleProgress.toFixed(0) + " % minima</span></div>" +
         "<div class='cards-progress'><i style='width:" + matchProgress.toFixed(1) + "%'></i></div>" +
         "<div class='cards-progress-label'><span>Nezávislé zápasy</span><span>" + matchProgress.toFixed(0) + " % minima</span></div>" +
         performance + "</article>";
