@@ -134,7 +134,11 @@ function buildSamples(rows, outcomes, startedAt) {
     if (lastMinute === null || lastMinute < 90) { excluded.incomplete_timeline++; continue; }
     const finalTotal = outcome.final_corners.total_corners;
     const finalObserved = cornerValue(matchRows[matchRows.length - 1]);
-    if (!finalObserved || finalTotal < finalObserved.home + finalObserved.away) {
+    const finalHome = outcome.final_corners.home_corners;
+    const finalAway = outcome.final_corners.away_corners;
+    if (!finalObserved || !Number.isInteger(finalHome) || !Number.isInteger(finalAway) ||
+        finalHome + finalAway !== finalTotal ||
+        finalObserved.home !== finalHome || finalObserved.away !== finalAway) {
       excluded.invalid_corner_sequence++;
       continue;
     }
