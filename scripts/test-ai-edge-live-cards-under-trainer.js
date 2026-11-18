@@ -51,4 +51,18 @@ const finalCardsMismatch = cards.buildSamples(
   Date.parse("2026-11-17T00:00:00.000Z")
 );
 assert.equal(finalCardsMismatch.excluded.invalid_card_sequence, 1);
+const finalCardsHigherThanSnapshot = cards.buildSamples(
+  [row("higher", 55, 1, 1), row("higher", 60, 1, 1), row("higher", 90, 2, 1)],
+  { matches: { higher: { ...outcome, final_yellow_cards: { home_yellow_cards: 2, away_yellow_cards: 2, total_yellow_cards: 4 } } } },
+  Date.parse("2026-11-17T00:00:00.000Z")
+);
+assert.equal(finalCardsHigherThanSnapshot.excluded.invalid_card_sequence, 1,
+  "final outcome must exactly match the last snapshot, not merely be greater");
+const finalCardsTeamMismatch = cards.buildSamples(
+  [row("teams", 55, 1, 1), row("teams", 60, 1, 1), row("teams", 90, 2, 2)],
+  { matches: { teams: { ...outcome, final_yellow_cards: { home_yellow_cards: 3, away_yellow_cards: 1, total_yellow_cards: 4 } } } },
+  Date.parse("2026-11-17T00:00:00.000Z")
+);
+assert.equal(finalCardsTeamMismatch.excluded.invalid_card_sequence, 1,
+  "matching total with mismatched team counts must be rejected");
 process.stdout.write("AI EDGE live cards shadow trainer tests passed.\n");
