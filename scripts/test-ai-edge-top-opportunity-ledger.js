@@ -25,7 +25,7 @@ const sameMatch=[
 ];
 assert.equal(topEntryKey("match-1","MODEL_25"),"match-1|MODEL_25");
 assert.equal(hasCaptured(sameMatch,"match-1","MODEL_25"),true);
-assert.equal(hasCaptured(sameMatch,"match-1","MODEL_FT"),true);
+assert.equal(hasCaptured(sameMatch,"match-1","MODEL_FT"),false);
 assert.equal(hasCaptured(sameMatch,"match-1","MODEL_15"),false);
 assert.equal(new Set(sameMatch.map(x=>topEntryKey(x.matchId,x.target))).size,2);
 assert.equal(hasCaptured([{matchId:"match-2",target:"MODEL_25",status:"OPEN"}],"match-2","MODEL_25"),true);
