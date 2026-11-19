@@ -305,7 +305,12 @@
       ?"<div style='padding:10px;border:1px solid rgba(244,210,125,.3);border-radius:9px;color:#f4d27d;font-size:11px'>Aktívne LIVE predikcie už majú v tomto zápase uzavretý TOP záznam. Pravidlo jedného tipu na zápas a model bráni duplicitnému zaradeniu: "+suppressed.slice(0,3).map(x=>esc(x.current.record.match?.home||x.prior.home)+" – "+esc(x.current.record.match?.away||x.prior.away)+" · prvý TOP "+fmt(x.prior.capturedMinute)+"′ · "+esc(x.prior.status)).join(" | ")+". Nový tip v tom istom zápase sa nevytvorí.</div>"
       :"";
     const noCandidate=cards||suppressedNote||"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#c3d2e1;font-size:11px'>Momentálne nie je kandidát z AI EDGE 25 ani MODEL_FT, ktorý súčasne spĺňa vlastnú validáciu, kalibráciu, čerstvosť dát a aktívne časové okno. Žiadny tip sa nebude vytvárať nasilu.</div>";
-    panel.innerHTML=title+note+noCandidate+(topLedger?topStats:"<div style='margin-top:12px;padding:9px;color:#f4d28d;font-size:11px'>Samostatný TOP register sa ešte pripravuje; štatistika sa zobrazí po prvom úspešnom behu kolektora.</div>");
+    const liveCount=usable.length,readyCount=usable.filter(x=>x.fx?.ready===true).length,waitingCount=Math.max(0,liveCount-readyCount);
+    const openCount=capturedEntries.filter(x=>x.status==="OPEN"&&["MODEL_25","MODEL_FT"].includes(x.target)).length;
+    const diagnostics="<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:6px;margin:8px 0 10px'>"+
+      [["LIVE ZÁPASY",liveCount],["ČERSTVÉ ŠTATISTIKY",readyCount],["ČAKÁ NA MERANIA",waitingCount],["OTVORENÉ TOP TIPY",openCount]].map(([label,value])=>"<div style='padding:8px;border:1px solid rgba(137,165,194,.17);border-radius:9px;background:rgba(9,19,31,.45)'><div style='font-size:16px;font-weight:900;color:#e8f1fa;font-variant-numeric:tabular-nums'>"+fmt(value)+"</div><div style='font-size:9px;color:#8fa6bc;letter-spacing:.5px;margin-top:3px'>"+label+"</div></div>").join("")+
+      "</div><div style='font-size:10px;color:#829bb2;line-height:1.45;margin-bottom:8px'>Čerstvé štatistiky = zápas prešiel aktuálnym filtrom použiteľnosti dát. Čakanie na merania nie je zamietnutie predikcie; model sa zobrazí až po splnení všetkých vlastných podmienok.</div>";
+    panel.innerHTML=title+note+diagnostics+noCandidate+(topLedger?topStats:"<div style='margin-top:12px;padding:9px;color:#f4d28d;font-size:11px'>Samostatný TOP register sa ešte pripravuje; štatistika sa zobrazí po prvom úspešnom behu kolektora.</div>");
   }
 
   function render(data,ledger,model,lateFtModel,topLedger){
