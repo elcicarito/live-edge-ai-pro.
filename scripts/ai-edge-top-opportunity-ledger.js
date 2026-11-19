@@ -6,7 +6,7 @@ function read(file,fallback){try{return JSON.parse(fs.readFileSync(file,"utf8"))
 function readHistory(file){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code!=="ENOENT")throw e;}try{return JSON.parse(zlib.gunzipSync(fs.readFileSync(file+".gz")).toString("utf8"));}catch(e){if(e.code==="ENOENT")return null;throw e;}}
 function stamp(v){const n=Number(v);if(Number.isFinite(n))return n;const p=Date.parse(v||"");return Number.isFinite(p)?p:NaN;}
 function topEntryKey(matchId,target){return String(matchId)+"|"+String(target);}
-function hasCaptured(entries,matchId,target){return entries.some(x=>x.matchId!==undefined&&topEntryKey(x.matchId,x.target)===topEntryKey(matchId,target));}
+function hasCaptured(entries,matchId,target){return entries.some(x=>x.status==="OPEN"&&x.matchId!==undefined&&topEntryKey(x.matchId,x.target)===topEntryKey(matchId,target));}
 function summarize(rows,target){
  const list=rows.filter(x=>x.target===target),counts={HIT:0,MISS:0,OPEN:0,UNRESOLVED:0};for(const x of list)if(counts[x.status]!==undefined)counts[x.status]++;
  const settled=list.filter(x=>x.status==="HIT"||x.status==="MISS").sort((a,b)=>stamp(a.capturedAt)-stamp(b.capturedAt));
@@ -35,9 +35,9 @@ function buildTopLedger(dataDir=DATA,nowDate=new Date()){
   if(!Number.isFinite(min)||min<1||min>110||!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after||min>deadline||!Number.isFinite(created)||created>now||now-created>8*60000)continue;
   if(!Number.isFinite(probability)||probability<=0||probability>=1||!Number.isFinite(calibrationError)||calibrationError>0.08||!Number.isFinite(calibrationWeight)||calibrationWeight<8||!Number.isFinite(minimumOdds)||minimumOdds<=1)continue;
   const fx=features(m,feed.recent_history||[],rec.collected_at||feed.collected_at,now);if(!fx.ready)continue;
-  const key=topEntryKey(row.matchId,row.target);if(byKey.has(key)||hasCaptured(entries,row.matchId,row.target))continue;
+  const predictionId=String(row.id||row.matchId+"|"+row.target),key=topEntryKey(row.matchId,row.target)+"|"+predictionId;if(byKey.has(key)||hasCaptured(entries,row.matchId,row.target))continue;
   const conservative=Math.max(.01,Number(row.modelProbability)-Number(row.modelCalibrationError));
-  const entry={key,predictionId:String(row.id||row.matchId+"|"+row.target),matchId:String(row.matchId),target:row.target,home:row.home||m.home,away:row.away||m.away,competition:row.competition||m.competition||"",capturedAt:now,sourcePredictionAt:created,capturedMinute:min,capturedScore:(Number(m.home_score)||0)+":"+(Number(m.away_score)||0),actionableAfterMinute:after,deadlineMinute:deadline,modelProbability:probability,conservativeProbability:Number(conservative.toFixed(6)),calibrationError,calibrationMatchesWeight:calibrationWeight,minimumOdds,stake:1,status:"OPEN",resultScore:null,settledAt:null};
+  const entry={key,predictionId,matchId:String(row.matchId),target:row.target,home:row.home||m.home,away:row.away||m.away,competition:row.competition||m.competition||"",capturedAt:now,sourcePredictionAt:created,capturedMinute:min,capturedScore:(Number(m.home_score)||0)+":"+(Number(m.away_score)||0),actionableAfterMinute:after,deadlineMinute:deadline,modelProbability:probability,conservativeProbability:Number(conservative.toFixed(6)),calibrationError,calibrationMatchesWeight:calibrationWeight,minimumOdds,stake:1,status:"OPEN",resultScore:null,settledAt:null};
   entries.push(entry);byKey.set(key,entry);
  }
  const predictionById=new Map(prediction.predictions.map(x=>[String(x.id||""),x]));
