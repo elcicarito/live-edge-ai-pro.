@@ -172,7 +172,7 @@
     const model = data.model;
     renderModel(grid, model, 15);
     renderModel(grid, model, 25);
-    ["15", "25", "MODEL_15", "MODEL_25", "MODEL_FT", "FT", "NEXT_TEAM", "BTTS", "RESULT_1X2"].forEach(key => renderLedgerTarget(grid, data.ledger, key));
+    ["MODEL_25", "MODEL_15", "MODEL_FT", "BTTS", "NEXT_TEAM", "RESULT_1X2"].forEach(key => renderLedgerTarget(grid, data.ledger, key));
     renderLate(grid, data.late);
     renderThresholdModel(grid, data.corners, "AI CORNERS · CELKOVÉ ROHY");
     renderThresholdModel(grid, data.cards, "AI CARDS · ŽLTÉ KARTY");
