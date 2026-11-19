@@ -359,7 +359,7 @@
       const readinessCounts=readinessModel.counts||{},readinessPolicy=target==="MODEL_25"?(model?.validation_policy||{}):(lateFtModel?.validation_policy||{});
       const readinessStatus=readinessModel.status||"WARMUP";
       const readinessText=readinessStatus==="SHADOW_VALIDATED"?"SHADOW VALIDATED":readinessStatus==="NOT_VALIDATED"?"NOT VALIDATED":"WARMUP";
-      const readinessDetail="Validácia: "+fmt(readinessCounts.validation||0)+"/"+fmt(readinessPolicy.min_validation_samples||300)+" vzoriek · "+fmt(readinessCounts.validation_matches||0)+"/"+fmt(readinessPolicy.min_validation_matches||50)+" zápasov";
+      const readinessDetail="Tréning: "+fmt(readinessCounts.train||0)+"/"+fmt(readinessPolicy.min_train_samples||500)+" vzoriek · "+fmt(readinessCounts.train_matches||0)+"/"+fmt(readinessPolicy.min_train_matches||100)+" zápasov | validácia: "+fmt(readinessCounts.validation||0)+"/"+fmt(readinessPolicy.min_validation_samples||300)+" vzoriek · "+fmt(readinessCounts.validation_matches||0)+"/"+fmt(readinessPolicy.min_validation_matches||50)+" zápasov";
       const hitRate=decided?wins/decided*100:null,roi=x.roi===null||x.roi===undefined?null:Number(x.roi),net=x.netProfit===null||x.netProfit===undefined?null:Number(x.netProfit),draw=x.maxDrawdown===null||x.maxDrawdown===undefined?null:Number(x.maxDrawdown);
       const positive=net!==null&&net>0,negative=net!==null&&net<0,accent=positive?"#48d69a":negative?"#ff7185":"#8eb5d8",roiColor=roi===null?"#9fb2c6":roi>0?"#48d69a":roi<0?"#ff7185":"#d8e5f2";
       const pct=hitRate===null?0:Math.max(0,Math.min(100,hitRate));
