@@ -3,7 +3,7 @@
   "source": "Flashscore",
   "mode": "FORWARD_ONLY_LIVE_TRAINING",
   "started_at": "2026-11-12T21:44:46.455Z",
-  "updated_at": "2026-11-19T17:56:05.716Z",
+  "updated_at": "2026-11-19T17:58:12.295Z",
   "lag_minutes": 5,
   "horizons_minutes": [
     15,
@@ -26,26 +26,26 @@
     "max_absolute_error": 0.08,
     "abstain_outside_reliable_bins": true
   },
-  "total_labeled_samples": 50950,
+  "total_labeled_samples": 51078,
   "validated_horizons": 1,
   "status": "SHADOW_VALIDATION_AVAILABLE",
   "models": {
     "15": {
       "status": "NOT_VALIDATED",
       "counts": {
-        "train": 21121,
+        "train": 21186,
         "validation": 5329,
-        "train_matches": 737,
+        "train_matches": 739,
         "validation_matches": 192,
-        "train_positive": 8018,
-        "train_negative": 13103,
+        "train_positive": 8035,
+        "train_negative": 13151,
         "validation_positive": 2019,
         "validation_negative": 3310
       },
       "metrics": {
         "count": 5329,
         "matches": 192,
-        "accuracy": 0.585,
+        "accuracy": 0.5853,
         "brier": 0.2419,
         "baseline_brier": 0.2443,
         "log_loss": 0.6767,
@@ -54,32 +54,32 @@
           "method": "equal_width_probability_bins_match_weighted",
           "bin_count": 10,
           "populated_bins": 3,
-          "expected_calibration_error": 0.0141,
-          "maximum_calibration_error": 0.0868,
+          "expected_calibration_error": 0.0136,
+          "maximum_calibration_error": 0.0893,
           "bins": [
             {
               "range": "30-40",
-              "count": 2326,
-              "matches_weight": 83.7027,
-              "mean_predicted": 0.3754,
-              "observed_rate": 0.3936,
-              "absolute_error": 0.0182
+              "count": 2345,
+              "matches_weight": 84.4101,
+              "mean_predicted": 0.375,
+              "observed_rate": 0.3927,
+              "absolute_error": 0.0176
             },
             {
               "range": "40-50",
-              "count": 2799,
-              "matches_weight": 99.4893,
+              "count": 2778,
+              "matches_weight": 98.7264,
               "mean_predicted": 0.439,
-              "observed_rate": 0.4349,
-              "absolute_error": 0.0041
+              "observed_rate": 0.4357,
+              "absolute_error": 0.0034
             },
             {
               "range": "50-60",
-              "count": 204,
-              "matches_weight": 8.8079,
+              "count": 206,
+              "matches_weight": 8.8635,
               "mean_predicted": 0.5203,
-              "observed_rate": 0.6072,
-              "absolute_error": 0.0868
+              "observed_rate": 0.6096,
+              "absolute_error": 0.0893
             }
           ]
         },
@@ -92,8 +92,8 @@
         "passing_bins": 2,
         "failed_bins": 1,
         "min_passing_bins": 2,
-        "max_reliable_error": 0.0868,
-        "max_passing_error": 0.0182,
+        "max_reliable_error": 0.0893,
+        "max_passing_error": 0.0176,
         "reason": null
       },
       "validation_note": "Performance gate failed: both relative Log Loss and Brier improvements are required.",
@@ -112,12 +112,12 @@
     "25": {
       "status": "SHADOW_VALIDATED",
       "counts": {
-        "train": 19553,
+        "train": 19616,
         "validation": 4947,
-        "train_matches": 734,
+        "train_matches": 736,
         "validation_matches": 190,
-        "train_positive": 11221,
-        "train_negative": 8332,
+        "train_positive": 11248,
+        "train_negative": 8368,
         "validation_positive": 2854,
         "validation_negative": 2093
       },
@@ -133,32 +133,32 @@
           "method": "equal_width_probability_bins_match_weighted",
           "bin_count": 10,
           "populated_bins": 3,
-          "expected_calibration_error": 0.0187,
-          "maximum_calibration_error": 0.1415,
+          "expected_calibration_error": 0.0188,
+          "maximum_calibration_error": 0.1389,
           "bins": [
             {
               "range": "50-60",
-              "count": 2584,
-              "matches_weight": 97.6375,
-              "mean_predicted": 0.5581,
-              "observed_rate": 0.5734,
-              "absolute_error": 0.0153
+              "count": 2596,
+              "matches_weight": 98.0892,
+              "mean_predicted": 0.5577,
+              "observed_rate": 0.5735,
+              "absolute_error": 0.0159
             },
             {
               "range": "60-70",
-              "count": 2108,
-              "matches_weight": 81.46,
-              "mean_predicted": 0.6412,
-              "observed_rate": 0.6349,
-              "absolute_error": 0.0063
+              "count": 2095,
+              "matches_weight": 80.9798,
+              "mean_predicted": 0.6413,
+              "observed_rate": 0.6353,
+              "absolute_error": 0.0061
             },
             {
               "range": "70-80",
-              "count": 255,
-              "matches_weight": 10.9025,
-              "mean_predicted": 0.7245,
-              "observed_rate": 0.866,
-              "absolute_error": 0.1415
+              "count": 256,
+              "matches_weight": 10.9311,
+              "mean_predicted": 0.7248,
+              "observed_rate": 0.8637,
+              "absolute_error": 0.1389
             }
           ]
         },
@@ -171,8 +171,8 @@
         "passing_bins": 2,
         "failed_bins": 1,
         "min_passing_bins": 2,
-        "max_reliable_error": 0.1415,
-        "max_passing_error": 0.0153,
+        "max_reliable_error": 0.1389,
+        "max_passing_error": 0.0159,
         "reason": null
       },
       "validation_note": null,
@@ -187,23 +187,23 @@
         "metrics_weighted_per_match": true
       },
       "weights": [
-        0.07863596,
-        0.21946364,
-        0.1878928,
-        0.07875973,
-        0.00097624,
-        0.23300465,
-        0.03911452,
-        0.29291898,
-        -0.01989153,
-        0.22551009,
-        0.06352689,
-        0.05784,
-        0.04049107,
-        -0.00713673,
-        0.0103129,
-        0.01876636,
-        0.02398384
+        0.07498168,
+        0.22221957,
+        0.18882122,
+        0.07968504,
+        0.00025481,
+        0.23235929,
+        0.0398836,
+        0.29454477,
+        -0.02048209,
+        0.2273777,
+        0.06437828,
+        0.05833618,
+        0.04478756,
+        -0.00642317,
+        0.00919835,
+        0.01796244,
+        0.02439189
       ]
     }
   }
