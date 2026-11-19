@@ -6,6 +6,7 @@ function read(file,fallback){try{return JSON.parse(fs.readFileSync(file,"utf8"))
 function readHistory(file){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code!=="ENOENT")throw e;}try{return JSON.parse(zlib.gunzipSync(fs.readFileSync(file+".gz")).toString("utf8"));}catch(e){if(e.code==="ENOENT")return null;throw e;}}
 function stamp(v){const n=Number(v);if(Number.isFinite(n))return n;const p=Date.parse(v||"");return Number.isFinite(p)?p:NaN;}
 function topEntryKey(matchId,target){return String(matchId)+"|"+String(target);}
+// A settled entry remains in the permanent history but must not block a later opportunity.
 function hasCaptured(entries,matchId,target){return entries.some(x=>x.status==="OPEN"&&x.matchId!==undefined&&topEntryKey(x.matchId,x.target)===topEntryKey(matchId,target));}
 function summarize(rows,target){
  const list=rows.filter(x=>x.target===target),counts={HIT:0,MISS:0,OPEN:0,UNRESOLVED:0};for(const x of list)if(counts[x.status]!==undefined)counts[x.status]++;
