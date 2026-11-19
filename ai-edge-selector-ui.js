@@ -147,6 +147,18 @@
     }
     const counts=ledger.counts||{};
     const groups=Object.entries(ledger.by_target||{});
+    const accuracyPanel=$("ai-edge-accuracy-engine");
+    if(accuracyPanel){
+      const tracked=groups.filter(([id])=>["MODEL_15","MODEL_25","MODEL_FT","BTTS","RESULT_1X2","NEXT_TEAM"].includes(id));
+      const cards=tracked.map(([id,g])=>{
+        const decided=Number(g.decided||0),accuracy=Number(g.accuracy);
+        const enough=decided>=100,stable=decided>=300;
+        const status=decided===0?"ČAKÁ NA VÝSLEDKY":!enough?"MALÁ VZORKA":!stable?"PREDbežné VYHODNOTENIE":"VZORKA NA PODROBNÚ VALIDÁCIU";
+        const pct=Number.isFinite(accuracy)?(accuracy*100).toFixed(1)+" %":"—";
+        return "<div class='ai-edge-accuracy-item'><strong>"+esc(g.label||id)+"</strong><b>"+pct+"</b><span>"+fmt(g.HIT||0)+" HIT · "+fmt(g.MISS||0)+" MISS · "+fmt(decided)+" rozhodnutých</span><small>"+status+"</small></div>";
+      }).join("");
+      accuracyPanel.innerHTML="<div class='ai-edge-accuracy-head'><strong>AI ACCURACY &amp; CONFIDENCE ENGINE</strong><span>Meraná úspešnosť podľa trhu</span></div>"+(cards||"<p>Zatiaľ nie sú dostupné vyhodnotené skupiny modelov.</p>")+"<p class='ai-edge-note'>Úspešnosť je podiel HIT z rozhodnutých predikcií; otvorené a nevyhodnotiteľné záznamy sa nezapočítavajú. Každý trh sa vyhodnocuje samostatne. 100/300 prípadov sú orientačné hranice pre veľkosť vzorky, nie dôkaz ziskovosti ani štatistickej istoty. Pravdepodobnosť modelu sa považuje za dôveryhodnú až po samostatnej kalibrácii a teste na nových zápasoch.</p>";
+    }
     if(summary){
       const totals=[["Všetky predikcie",ledger.total_predictions||0],["HIT",counts.HIT||0],["MISS",counts.MISS||0],["Nevyhodnotiteľné",counts.UNRESOLVED||0],["Otvorené",counts.OPEN||0]];
       const cards=totals.map(x=>"<div><span>"+esc(x[0])+"</span><b>"+fmt(x[1])+"</b></div>").join("");
