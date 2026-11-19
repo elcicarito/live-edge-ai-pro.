@@ -188,14 +188,60 @@
   async function loadStrategy(){const res=await fetch(SIMULATION+"?t="+Date.now(),{cache:"no-store",headers:{Accept:"application/json"}});if(!res.ok)throw new Error("Simulátor HTTP "+res.status);const data=await res.json();if(data.source!=="Flashscore"||data.mode!=="AI_EDGE_STRATEGY_SIMULATION_DATA"||!Array.isArray(data.predictions))throw new Error("Neplatné dáta simulátora");return data;}
   function runStrategySimulation(data){
     const out=$("ai-edge-strategy-results");if(!out)return;
-    const odds=Number($("ai-edge-sim-odds")?.value),bankroll=Number($("ai-edge-sim-bankroll")?.value),stake=Number($("ai-edge-sim-stake")?.value);
-    if(![odds,bankroll,stake].every(Number.isFinite)||odds<=1||bankroll<=0||stake<=0){out.textContent="Zadaj kurz vyšší ako 1, kladný bankroll a kladný rovný vklad.";return;}
-    const all=(data.predictions||[]).filter(r=>r.target==="MODEL_FT"&&(r.status==="HIT"||r.status==="MISS"));
-    const money=x=>x.toLocaleString("sk-SK",{minimumFractionDigits:2,maximumFractionDigits:2});
-    const run=(rows,scenarioOdds=odds)=>{let balance=bankroll,peak=bankroll,drawdown=0,wins=0,losses=0,skippedOdds=0,duplicate=0,staked=0;const used=new Set();for(const row of rows.slice().sort((a,b)=>Number(a.createdAt)-Number(b.createdAt))){if(scenarioOdds+1e-9<Number(row.minimumOdds)){skippedOdds++;continue;}const key=String(row.matchId||row.id||"");if(used.has(key)){duplicate++;continue;}used.add(key);const wager=Math.min(balance,stake);if(wager<=0)break;staked+=wager;if(row.status==="HIT"){balance+=wager*(scenarioOdds-1);wins++;}else{balance-=wager;losses++;}peak=Math.max(peak,balance);drawdown=Math.max(drawdown,peak-balance);}return{bets:wins+losses,wins,losses,skippedOdds,duplicate,net:balance-bankroll,end:balance,drawdown,staked};};
-    const base=run(all),card="<div class='ai-edge-sim-result'><strong>ROVNÝ VKLAD · IBA MODEL GÓL DO KONCA</strong><b>"+(base.net>=0?"+":"")+money(base.net)+" jednotiek</b><span>Konečný bankroll: "+money(base.end)+" · stávky: "+base.bets+" (HIT "+base.wins+" / MISS "+base.losses+")</span><span>Max. prepad od maxima: "+money(base.drawdown)+" · vsadené spolu: "+money(base.staked)+" · vynechané pre kurz: "+base.skippedOdds+" · duplicity: "+base.duplicate+"</span></div>";
-    const oddsGrid=[2,2.25,2.5,2.75,3],sensitivity="<div class='ai-edge-section-title'>CITLIVOSŤ NA HYPOTETICKÝ KURZ · VŽDY ROVNAKÝ VKLAD</div><div class='ai-edge-sim-table-wrap'><table class='ai-edge-sim-table'><thead><tr><th>kurz</th><th>stávky</th><th>HIT / MISS</th><th>čistý výsledok</th><th>max. prepad</th></tr></thead><tbody>"+oddsGrid.map(q=>{const x=run(all,q);return "<tr><td>"+money(q)+"</td><td>"+x.bets+"</td><td>"+x.wins+" / "+x.losses+"</td><td>"+(x.net>=0?"+":"")+money(x.net)+"</td><td>"+money(x.drawdown)+"</td></tr>";}).join("")+"</tbody></table></div>";
-    out.innerHTML="<div class='ai-edge-sim-meta'>Samostatné vyhodnotenie full-time OVER modelu · hypotetický kurz: "+money(odds)+" · počiatočný bankroll: "+money(bankroll)+" · rovnaký vklad: "+money(stake)+" · uzavreté predikcie: "+fmt(all.length)+" · dáta: "+esc(date(data.updated_at))+"</div>"+card+sensitivity+"<p class='ai-edge-note'>Počíta sa najviac jedna stávka na zápas, iba ak hypotetický kurz dosahuje individuálny minimálny kurz. Ide o spätný modelový test pri rovnakom hypotetickom kurze, nie o skutočné historické kurzy ani potvrdený zisk. OPEN a UNRESOLVED sú vylúčené.</p>";
+    const odds=Number($("ai-edge-sim-odds")?.value),bankroll=Number($("ai-edge-sim-bankroll")?.value),baseStake=Number($("ai-edge-sim-stake")?.value);
+    if(![odds,bankroll,baseStake].every(Number.isFinite)||odds<=1||bankroll<=0||baseStake<=0){out.textContent="Zadaj kurz vyšší ako 1, kladný bankroll a kladný základný vklad.";return;}
+    const money=x=>Number(x||0).toLocaleString("sk-SK",{minimumFractionDigits:2,maximumFractionDigits:2});
+    const targets=[{id:"MODEL_25",label:"AI EDGE 25 · GÓL V NASLEDUJÚCICH 25 MIN"},{id:"MODEL_15",label:"AI EDGE 15 · GÓL V NASLEDUJÚCICH 15 MIN"}];
+    const simulate=(sourceRows,progressive,scenarioOdds=odds)=>{
+      let balance=bankroll,peak=bankroll,maxDrawdown=0,stake=baseStake,lossStreak=0,wins=0,losses=0,skippedOdds=0,duplicate=0,staked=0,maxStake=0,progressionSteps=0,stopped=false;
+      const used=new Set();
+      for(const row of sourceRows.slice().sort((a,b)=>Number(a.createdAt)-Number(b.createdAt))){
+        const minimum=Number(row.minimumOdds);
+        if(!Number.isFinite(minimum)||minimum<=1||scenarioOdds+1e-9<minimum){skippedOdds++;continue;}
+        const key=String(row.matchId||row.id||"");
+        if(!key||used.has(key)){duplicate++;continue;}
+        used.add(key);
+        if(balance<=0){stopped=true;break;}
+        const wager=Math.min(balance,progressive?stake:baseStake);
+        if(wager<=0){stopped=true;break;}
+        staked+=wager;maxStake=Math.max(maxStake,wager);
+        if(row.status==="HIT"){
+          balance+=wager*(scenarioOdds-1);wins++;lossStreak=0;stake=baseStake;
+        }else if(row.status==="MISS"){
+          balance-=wager;losses++;lossStreak++;
+          if(progressive&&lossStreak%3===0){
+            const next=Math.min(baseStake*3,stake*1.5);
+            if(next>stake+1e-9){stake=next;progressionSteps++;}
+          }
+        }else continue;
+        peak=Math.max(peak,balance);maxDrawdown=Math.max(maxDrawdown,peak-balance);
+      }
+      const bets=wins+losses,net=balance-bankroll;
+      return {bets,wins,losses,hitRate:bets?wins/bets:null,skippedOdds,duplicate,net,end:balance,drawdown:maxDrawdown,staked,roi:staked?net/staked*100:null,maxStake,progressionSteps,stopped};
+    };
+    const metric=(label,value)=>"<div style='padding:8px 9px;border:1px solid rgba(137,165,194,.15);border-radius:9px;background:rgba(9,19,31,.48)'><div style='font-size:15px;font-weight:900;color:#edf6ff;font-variant-numeric:tabular-nums'>"+value+"</div><div style='font-size:9px;color:#91a8bd;margin-top:3px'>"+label+"</div></div>";
+    const sections=targets.map(target=>{
+      const rows=(data.predictions||[]).filter(r=>r.target===target.id&&(r.status==="HIT"||r.status==="MISS"));
+      const flat=simulate(rows,false),progression=simulate(rows,true);
+      const fmtNet=x=>(x>=0?"+":"")+money(x)+" €";
+      const fmtRoi=x=>x===null?"—":(x>=0?"+":"")+money(x)+" %";
+      const tableRows=[
+        ["Čistý výsledok",fmtNet(flat.net),fmtNet(progression.net)],
+        ["ROI",fmtRoi(flat.roi),fmtRoi(progression.roi)],
+        ["Konečný bankroll",money(flat.end)+" €",money(progression.end)+" €"],
+        ["Počet tipov",fmt(flat.bets),fmt(progression.bets)],
+        ["HIT / MISS",fmt(flat.wins)+" / "+fmt(flat.losses),fmt(progression.wins)+" / "+fmt(progression.losses)],
+        ["Úspešnosť",flat.hitRate===null?"—":(flat.hitRate*100).toFixed(1)+" %",progression.hitRate===null?"—":(progression.hitRate*100).toFixed(1)+" %"],
+        ["Max. prepad od maxima",money(flat.drawdown)+" €",money(progression.drawdown)+" €"],
+        ["Vsadené spolu",money(flat.staked)+" €",money(progression.staked)+" €"],
+        ["Najvyšší vklad",money(flat.maxStake)+" €",money(progression.maxStake)+" €"],
+        ["Navýšenia", "—",fmt(progression.progressionSteps)]
+      ];
+      const body=tableRows.map(r=>"<tr><td>"+r[0]+"</td><td>"+r[1]+"</td><td>"+r[2]+"</td></tr>").join("");
+      const sampleNote=flat.bets<100?"<div style='margin-top:8px;color:#f2ce82;font-size:10px'>MALÁ VZORKA · výsledok tohto trhu zatiaľ nemožno považovať za stabilný.</div>":"";
+      return "<section class='ai-edge-sim-result' style='margin:10px 0'><strong>"+target.label+"</strong><div style='font-size:10px;color:#91a8bd;margin:5px 0 9px'>Rozhodnuté záznamy: "+fmt(rows.length)+" · unikátne započítané zápasy: "+fmt(flat.bets)+" · vynechané pre minimálny kurz: "+fmt(flat.skippedOdds)+"</div><div class='ai-edge-sim-table-wrap'><table class='ai-edge-sim-table'><thead><tr><th>Ukazovateľ</th><th>Rovný vklad</th><th>AI PROGRESSION</th></tr></thead><tbody>"+body+"</tbody></table></div>"+sampleNote+"</section>";
+    }).join("");
+    out.innerHTML="<div class='ai-edge-sim-meta'>Flashscore backtest · hypotetický kurz "+money(odds)+" · počiatočný bankroll "+money(bankroll)+" € · základný vklad "+money(baseStake)+" € · progresia +50 % po každej ďalšej sérii 3 prehier · strop "+money(baseStake*3)+" € · výhra resetuje vklad · dáta aktualizované "+esc(dateTime(data.updated_at))+"</div>"+sections+"<p class='ai-edge-note'>Metodika: iba uzavreté HIT/MISS predikcie; najviac jeden prvý kurzovo oprávnený tip na zápas a model; tip sa započíta len ak zadaný hypotetický kurz dosahuje uložený individuálny minimálny kurz. Kurz nie je skutočný historický kurz stávkovej kancelárie. Ide o spätnú simuláciu, nie dôkaz budúcej ziskovosti. Modely 15 a 25 minút sa vyhodnocujú oddelene.</p>";
   }
 
   async function loadLedger(){
