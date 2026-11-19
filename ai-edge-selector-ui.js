@@ -153,7 +153,7 @@
       const cards=tracked.map(([id,g])=>{
         const decided=Number(g.decided||0),accuracy=Number(g.accuracy);
         const enough=decided>=100,stable=decided>=300;
-        const status=decided===0?"ČAKÁ NA VÝSLEDKY":!enough?"MALÁ VZORKA":!stable?"PREDbežné VYHODNOTENIE":"VZORKA NA PODROBNÚ VALIDÁCIU";
+        const status=decided===0?"ČAKÁ NA VÝSLEDKY":!enough?"MALÁ VZORKA":!stable?"PREDČASNÉ VYHODNOTENIE":"VZORKA NA PODROBNÚ VALIDÁCIU";
         const pct=Number.isFinite(accuracy)?(accuracy*100).toFixed(1)+" %":"—";
         return "<div class='ai-edge-accuracy-item'><strong>"+esc(g.label||id)+"</strong><b>"+pct+"</b><span>"+fmt(g.HIT||0)+" HIT · "+fmt(g.MISS||0)+" MISS · "+fmt(decided)+" rozhodnutých</span><small>"+status+"</small></div>";
       }).join("");
