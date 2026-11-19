@@ -20,13 +20,15 @@ assert.equal(s.maxDrawdown,1);
 assert.equal(s.stakePerPick,1);
 assert.equal(summarize(rows,"MODEL_FT").netProfit,1.2);
 const sameMatch=[
- {matchId:"match-1",target:"MODEL_25"},
- {matchId:"match-1",target:"MODEL_FT"}
+ {matchId:"match-1",target:"MODEL_25",status:"OPEN"},
+ {matchId:"match-1",target:"MODEL_FT",status:"HIT"}
 ];
 assert.equal(topEntryKey("match-1","MODEL_25"),"match-1|MODEL_25");
 assert.equal(hasCaptured(sameMatch,"match-1","MODEL_25"),true);
 assert.equal(hasCaptured(sameMatch,"match-1","MODEL_FT"),true);
 assert.equal(hasCaptured(sameMatch,"match-1","MODEL_15"),false);
 assert.equal(new Set(sameMatch.map(x=>topEntryKey(x.matchId,x.target))).size,2);
-assert.equal(hasCaptured([{matchId:"match-2",target:"MODEL_25"}],"match-2","MODEL_25"),true);
+assert.equal(hasCaptured([{matchId:"match-2",target:"MODEL_25",status:"OPEN"}],"match-2","MODEL_25"),true);
+assert.equal(hasCaptured([{matchId:"match-3",target:"MODEL_25",status:"HIT"}],"match-3","MODEL_25"),false);
+assert.equal(hasCaptured([{matchId:"match-3",target:"MODEL_25",status:"UNRESOLVED"}],"match-3","MODEL_25"),false);
 console.log("AI Edge TOP opportunity ledger tests passed.");
