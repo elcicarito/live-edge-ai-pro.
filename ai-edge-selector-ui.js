@@ -127,7 +127,8 @@
     const ftValidationGap=Math.max(0,ftValidationSamples-Number(ftCounts.validation||0));
     const ftTrainGap=Math.max(0,ftTrainSamples-Number(ftCounts.train||0));
     const ftMatchGap=Math.max(0,ftValidationMatches-Number(ftCounts.validation_matches||0));
-    const ftClassBalance=" · pozitívne/negatívne: tréning "+fmt(ftCounts.train_positive||0)+"/"+fmt(ftCounts.train_negative||0)+" · validácia "+fmt(ftCounts.validation_positive||0)+"/"+fmt(ftCounts.validation_negative||0);
+    const ftRate=(positive,negative)=>{const total=Number(positive||0)+Number(negative||0);return total?(Number(positive||0)/total*100).toFixed(1)+" %":"—";};
+    const ftClassBalance=" · pozitívne/negatívne: tréning "+fmt(ftCounts.train_positive||0)+"/"+fmt(ftCounts.train_negative||0)+" ("+ftRate(ftCounts.train_positive,ftCounts.train_negative)+" pozitívnych) · validácia "+fmt(ftCounts.validation_positive||0)+"/"+fmt(ftCounts.validation_negative||0)+" ("+ftRate(ftCounts.validation_positive,ftCounts.validation_negative)+" pozitívnych)";
     const ftProgress=ftValidationGap===0&&ftTrainGap===0&&ftMatchGap===0
       ?" · minimálne počty vzoriek a zápasov splnené; pokračuje kontrola kvality a kalibrácie"
       :" · do minima chýba: "+(ftValidationGap?fmt(ftValidationGap)+" validačných vzoriek":"0 validačných vzoriek")+", "+(ftTrainGap?fmt(ftTrainGap)+" tréningových vzoriek":"0 tréningových vzoriek")+", "+(ftMatchGap?fmt(ftMatchGap)+" validačných zápasov":"0 validačných zápasov");
