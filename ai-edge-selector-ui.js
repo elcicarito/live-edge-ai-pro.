@@ -279,7 +279,7 @@
       if(!previous||Number(row.createdAt)>Number(previous.createdAt))latest.set(id,row);
     }
     // Najviac jeden súčasne otvorený TOP záznam na zápas a model.
-    // Po vyhodnotení predchádzajúceho tipu môže vzniknúť nová príležitosť.
+    // Po vyhodnotení predchádzajúceho tipu môže vzniknúť nová príležitosť; otvorený tip sa nikdy neduplikuje.
     const capturedEntries=topLedger?.entries||[];
     const alreadyCaptured=new Set(capturedEntries
       .filter(x=>x.status==="OPEN"&&["MODEL_25","MODEL_FT"].includes(x.target))
