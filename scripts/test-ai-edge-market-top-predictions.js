@@ -41,7 +41,7 @@ assert.equal(calibrationGate({metrics:{calibration:{bins:[{range:"50-60",matches
 const entries=[...predictions];
 const outcomes={matches:{"match-1":{
  source:"Flashscore",status:"CONFIRMED",status_confirmation:"confirmed_finished",final_status:"FINISHED",
- corners_status:"CONFIRMED",final_corners:{total_corners:8},
+ corners_status:"CONFIRMED",final_corners:{total_corners:9},
  yellow_cards_status:"CONFIRMED",final_yellow_cards:{total_yellow_cards:4},
  home_score:2,away_score:1,confirmed_at:now.toISOString(),final_match:{status_text:"Finished"}
 }}};
