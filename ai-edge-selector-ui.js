@@ -373,7 +373,7 @@
       const isCorners=target==="CORNERS_UNDER",isCards=target==="CARDS_OU";
       const x=topLedger?.summary?.[target]||{},label=target==="MODEL_25"?"AI EDGE 25":target==="MODEL_FT"?"MODEL_FT":isCorners?"AI CORNERS UNDER":"AI CARDS OVER / UNDER";
       const decided=Number(x.decided||0),wins=Number(x.HIT||0),losses=Number(x.MISS||0),total=Number(x.total||0),open=Number(x.OPEN||0),unresolved=Number(x.UNRESOLVED||0);
-      const readinessModel=isCorners?cornersModel:isCards?cardsModel:target==="MODEL_25"?(model?.models?.["25"]||{}):(lateFtModel?.model||{});
+      const readinessModel=(isCorners?cornersModel:isCards?cardsModel:target==="MODEL_25"?(model?.models?.["25"]||{}):(lateFtModel?.model||{}))||{};
       const readinessCounts=readinessModel.counts||{},readinessPolicy=target==="MODEL_25"?(model?.validation_policy||{}):target==="MODEL_FT"?(lateFtModel?.validation_policy||{}):(readinessModel.validation_policy||{});
       const readyLines=Number(readinessModel.validated_lines||0),lineTotal=isCorners?4:6;
       const readinessStatus=isCorners||isCards?(readyLines===lineTotal?"SHADOW_VALIDATED":readyLines>0?"PARTIAL":readinessModel.status||"WARMUP"):readinessModel.status||"WARMUP";
