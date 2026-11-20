@@ -18,7 +18,7 @@
       const m = mr.ok ? await mr.json() : {matches:[]};
       const matches = Array.isArray(m.matches) ? m.matches : [];
       const stale = !s.checked_at || Date.now() - new Date(s.checked_at).getTime() > 12 * 60 * 1000;
-      const state = stale ? 'ONESKORENÉ' : s.state === 'ok' ? 'FEED PRIPOJENÝ' : s.state === 'no_matching_events' ? 'BEZ eSOCCER ZÁPASOV' : 'CHYBA ZDROJA';
+      const state = !s.checked_at ? 'ČAKÁ NA PRVÝ BEH' : stale ? 'ONESKORENÉ' : s.state === 'ok' ? 'FEED PRIPOJENÝ' : s.state === 'no_matching_events' ? 'BEZ eSOCCER ZÁPASOV' : 'CHYBA ZDROJA';
       statusEl.innerHTML = '<b>' + state + '</b> · ' + esc(s.message || '') +
         '<br><span style="color:#91a2b8">Posledná kontrola: ' + date(s.checked_at) +
         ' · Feed udalosti: ' + Number(s.feed_events || 0) +
