@@ -111,6 +111,7 @@ function addPredictions(items,feed,now,model=null,lateFtModel=null){const hist=f
 if(min>=1&&min<=90&&!/(half.?time|\bht\b|after extra time|penalt|abandoned|cancelled|postponed|suspended)/i.test(String(m.stage||""))){
  const vector=modelFeatureVector(m,hist,r.collected_at||collected);
  for(const horizon of [15,25]){
+  if(horizon===25&&min>75)continue;
   if(!modelIsValidated(model,horizon))continue;
   const item=model.models[String(horizon)];
   const probability=vector?modelProbability(item.weights,vector):null;
