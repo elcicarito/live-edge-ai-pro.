@@ -276,7 +276,7 @@
   function renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger){
     const panel=$("ai-edge-top-opportunities");if(!panel)return;
     const title="<div style='font-size:13px;font-weight:900;letter-spacing:.6px;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div>";
-    const note="<div style='font-size:10px;color:#9bb1c7;line-height:1.45;margin:5px 0 9px'>Panel zobrazuje dva oddelené modely: <b>AI EDGE 25</b> = gól v nasledujúcich 25 minútach po 5-minútovom oneskorení; <b>MODEL_FT</b> = gól do konca riadneho zápasu. Ich pravdepodobnosti ani trhy sa nezamieňajú. Minimálny kurz sa pri zachytení uloží natrvalo a po skončení zápasu sa vyhodnotí simulovaný zisk pri tomto individuálnom kurze. Ručne zadaný kurz je iba doplnkový.</div>";
+    const note="<div style='font-size:10px;color:#9bb1c7;line-height:1.45;margin:5px 0 9px'>Panel oddeľuje štyri analytické vetvy: <b>AI EDGE 25</b>, <b>MODEL_FT</b>, <b>AI CORNERS UNDER</b> a <b>AI CARDS OVER/UNDER</b>. Rohy a karty používajú vlastné Flashscore modely, samostatné hranice, päťminútové oneskorenie a vlastnú validáciu. Minimálny kurz sa pri zachytení uloží natrvalo a po skončení zápasu sa vyhodnotí simulovaný zisk pri tomto individuálnom kurze. Ručne zadaný kurz je iba doplnkový.</div>";
     const renderMarketLines=(model,items,policy,group)=>items.map(([key,label])=>{
       const item=model?.models?.[key]||{},c=item.counts||{},s=item.status;
       const state=s==="SHADOW_VALIDATED"?"VALIDOVANÝ":s==="NOT_VALIDATED"?"NEPREŠIEL":"ZBIERA VZORKY";
