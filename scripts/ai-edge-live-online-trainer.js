@@ -187,7 +187,11 @@ function logLoss(rows, weights, sampleWeights = rowWeights(rows)) {
 }
 
 function fit(rows, sampleWeights = rowWeights(rows)) {
-  const weights = Array(FEATURE_NAMES.length + 1).fill(0);
+  const featureCount = rows.length ? rows[0].x.length : FEATURE_NAMES.length;
+  if (rows.some(row => !Array.isArray(row.x) || row.x.length !== featureCount)) {
+    throw new Error("Inconsistent feature-vector dimensions in training rows.");
+  }
+  const weights = Array(featureCount + 1).fill(0);
   const weightTotal = sampleWeights.reduce((sum, value) => sum + value, 0);
   if (!rows.length || !weightTotal) return weights;
   const prevalence = rows.reduce((sum, row, index) => sum + sampleWeights[index] * row.y, 0) / weightTotal;
