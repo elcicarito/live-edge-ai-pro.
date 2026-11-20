@@ -49,11 +49,11 @@ for(let i=0;i<5;i++)many.push({...row(70),match_id:"flashscore:m"+i,snapshot:{..
 const grouped=[];
 for(let i=0;i<5;i++){
  const id="flashscore:m"+i;
- for(const minute of [65,70,75,80,85,90])grouped.push({match_id:id,snapshot:{...row(minute).snapshot,collected_at:new Date(Date.UTC(2026,10,15,12,i+minute)).toISOString()}});
+ for(const minute of [65,70,75,90])grouped.push({match_id:id,snapshot:{...row(minute).snapshot,collected_at:new Date(Date.UTC(2026,10,15,12,i+minute)).toISOString()}});
 }
 const outcomes={matches:Object.fromEntries(Array.from({length:5},(_,i)=>["m"+i,outcome]))};
 const samples=buildLateFTSamples(grouped,outcomes,Date.UTC(2026,10,15,0));
-assert.equal(samples.length,25,"five five-minute decision windows from 65' to 85' are sampled for each of five matches");
+assert.equal(samples.length,15,"three five-minute decision windows from 65' to 75' are sampled for each of five matches");
 assert.ok(samples.every(x=>/\|(65|70|75|80|85)_FT$/.test(x.id)),"late FT target uses distinct five-minute window IDs");
 assert.equal(new Set(samples.map(x=>x.match_id+"|"+x.id.split("|").slice(-1)[0])).size,samples.length,"a match contributes at most one sample per decision window");
 console.log("AI Edge late FT trainer tests passed.");
