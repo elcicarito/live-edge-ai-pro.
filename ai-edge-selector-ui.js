@@ -312,7 +312,7 @@
       if(!Number.isFinite(minute)||minute<1||minute>110)return;
       const deadline=Number(row.deadlineMinute),after=Number(row.actionableAfterMinute),createdRaw=row.createdAt,createdAt=typeof createdRaw==="number"?createdRaw:(Number.isFinite(Number(createdRaw))?Number(createdRaw):Date.parse(createdRaw)),rowAge=Date.now()-createdAt;
       if(!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after||minute>deadline)return;
-      if(!Number.isFinite(rowAge)||rowAge<0||rowAge>8*60000)return;
+      if(!Number.isFinite(rowAge)||rowAge<0||(!row.fromTopLedger&&rowAge>8*60000))return;
       const p=Number(row.modelProbability),error=Number(row.modelCalibrationError),calibrationWeight=Number(row.modelCalibrationMatchesWeight),conservative=Number.isFinite(Number(row.conservativeProbability))?Number(row.conservativeProbability):Math.max(0.01,p-error);
       if(!Number.isFinite(p)||p<=0||p>=1||!Number.isFinite(error)||error>0.08||!Number.isFinite(calibrationWeight)||calibrationWeight<8||!Number.isFinite(Number(row.modelMinimumOdds))||Number(row.modelMinimumOdds)<=1)return;
       const is25=row.target==="MODEL_25",isMarket=!!row.marketType;
@@ -333,7 +333,7 @@
       if(entry.status!=="OPEN"||(!["MODEL_25","MODEL_FT"].includes(entry.target)&&!isTopMarketTarget(entry.target)))continue;
       const current=live.get(String(entry.matchId||""));if(!current)continue;
       const score=String(entry.capturedScore||"0:0").split(":").map(Number);
-      const row={...entry,id:entry.predictionId,createdAt:entry.capturedAt,startMinute:entry.capturedMinute,startHome:score[0],startAway:score[1],modelCalibrationError:entry.calibrationError,modelCalibrationMatchesWeight:entry.calibrationMatchesWeight,modelMinimumOdds:entry.minimumOdds,modelProbability:entry.modelProbability,conservativeProbability:entry.conservativeProbability};
+      const row={...entry,fromTopLedger:true,id:entry.predictionId,createdAt:entry.capturedAt,startMinute:entry.capturedMinute,startHome:score[0],startAway:score[1],modelCalibrationError:entry.calibrationError,modelCalibrationMatchesWeight:entry.calibrationMatchesWeight,modelMinimumOdds:entry.minimumOdds,modelProbability:entry.modelProbability,conservativeProbability:entry.conservativeProbability};
       addCandidate(row,current);
     }
     // Nové kandidáty iba ak zápas + model ešte nie sú v TOP registri.
