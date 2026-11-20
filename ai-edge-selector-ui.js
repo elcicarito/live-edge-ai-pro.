@@ -3,6 +3,8 @@
   const FEED = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/flashscore-primary-current.json";
   const SIMULATION = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-strategy-simulation.json";
   const LATE_FT_MODEL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-live-late-ft-model.json";
+  const CORNERS_MODEL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-live-corners-under-model.json";
+  const CARDS_MODEL = "https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-live-cards-under-model.json";
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? "—").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const fmt = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString("sk-SK") : "—";
@@ -263,13 +265,32 @@
     if(data.source!=="Flashscore"||data.mode!=="TOP_OPPORTUNITY_LEDGER")throw new Error("Neplatný formát TOP histórie");
     return data;
   }
-  function renderTopOpportunities(data,ledger,model,lateFtModel,usable,topLedger){
+  async function loadMarketModel(url,expectedMode){
+    const res=await fetch(url+"?t="+Date.now(),{cache:"no-store",headers:{Accept:"application/json"}});
+    if(res.status===404)return null;
+    if(!res.ok)throw new Error("Market model HTTP "+res.status);
+    const value=await res.json();
+    if(value.source!=="Flashscore"||value.mode!==expectedMode)throw new Error("Neplatný Flashscore market model");
+    return value;
+  }
+  function renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger){
     const panel=$("ai-edge-top-opportunities");if(!panel)return;
     const title="<div style='font-size:13px;font-weight:900;letter-spacing:.6px;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div>";
     const note="<div style='font-size:10px;color:#9bb1c7;line-height:1.45;margin:5px 0 9px'>Panel zobrazuje dva oddelené modely: <b>AI EDGE 25</b> = gól v nasledujúcich 25 minútach po 5-minútovom oneskorení; <b>MODEL_FT</b> = gól do konca riadneho zápasu. Ich pravdepodobnosti ani trhy sa nezamieňajú. Minimálny kurz sa pri zachytení uloží natrvalo a po skončení zápasu sa vyhodnotí simulovaný zisk pri tomto individuálnom kurze. Ručne zadaný kurz je iba doplnkový.</div>";
+    const renderMarketLines=(model,items,policy,group)=>items.map(([key,label])=>{
+      const item=model?.models?.[key]||{},c=item.counts||{},s=item.status;
+      const state=s==="SHADOW_VALIDATED"?"VALIDOVANÝ":s==="NOT_VALIDATED"?"NEPREŠIEL":"ZBIERA VZORKY";
+      const color=s==="SHADOW_VALIDATED"?"#72e0b5":s==="NOT_VALIDATED"?"#ffadad":"#f4d28d";
+      const detail="T "+fmt(c.train||0)+"/"+fmt(policy?.min_train_samples||500)+" · V "+fmt(c.validation||0)+"/"+fmt(policy?.min_validation_samples||300)+" · zápasy "+fmt(c.train_matches||0)+"/"+fmt(policy?.min_train_matches||100)+" + "+fmt(c.validation_matches||0)+"/"+fmt(policy?.min_validation_matches||50);
+      return "<div style='display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 8px;border:1px solid rgba(137,165,194,.14);border-radius:7px;background:rgba(9,19,31,.38)'><b style='font-size:10px;color:#dceafa'>"+group+" · "+label+"</b><span style='font-size:9px;color:"+color+"'>"+state+"</span><small style='font-size:9px;color:#8fa6bc'>"+detail+"</small></div>";
+    }).join("");
+    const marketReadiness="<details style='margin:8px 0 10px;border:1px solid rgba(137,165,194,.18);border-radius:9px;padding:8px 9px;background:rgba(9,19,31,.32)'><summary style='cursor:pointer;font-size:10px;font-weight:900;color:#d7e9f8'>ROHY A KARTY · VALIDÁCIA VŠETKÝCH 10 HRANÍC</summary><div style='display:grid;gap:5px;margin-top:8px'>"+
+      renderMarketLines(cornersModel,[["UNDER_8_5","UNDER 8.5"],["UNDER_9_5","UNDER 9.5"],["UNDER_10_5","UNDER 10.5"],["UNDER_11_5","UNDER 11.5"]],cornersModel?.validation_policy,"ROHY")+
+      renderMarketLines(cardsModel,[["UNDER_3_5","UNDER 3.5"],["UNDER_4_5","UNDER 4.5"],["UNDER_5_5","UNDER 5.5"],["OVER_2_5","OVER 2.5"],["OVER_3_5","OVER 3.5"],["OVER_4_5","OVER 4.5"]],cardsModel?.validation_policy,"KARTY")+
+      "</div><div style='font-size:9px;color:#829bb2;margin-top:7px'>Flashscore · 5-minútové oneskorenie · rohy 55′–75′ · karty 55′–80′. Každá hranica sa validuje samostatne. Nevalidované hranice nevytvárajú TOP tip.</div></details>";
     const liveAt=Date.parse(data.collected_at||""),ledgerAt=Date.parse(ledger?.updated_at||"");
     if(!ledger||!Number.isFinite(liveAt)||Date.now()-liveAt>8*60000||!Number.isFinite(ledgerAt)||Date.now()-ledgerAt>6*60000){
-      panel.innerHTML=title+note+"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#f4d28d;font-size:11px'>Výber je pozastavený: čakám na čerstvé LIVE dáta a aktuálnu predikčnú históriu.</div>";return;
+      panel.innerHTML=title+note+marketReadiness+"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#f4d28d;font-size:11px'>Výber je pozastavený: čakám na čerstvé LIVE dáta a aktuálnu predikčnú históriu.</div>";return;
     }
     const live=new Map(usable.filter(x=>x.fx.ready).map(x=>[String(x.record.match?.id),x]));
     const latest=new Map();
@@ -373,10 +394,10 @@
     const diagnostics="<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:6px;margin:8px 0 10px'>"+
       [["LIVE ZÁPASY",liveCount],["ČERSTVÉ ŠTATISTIKY",readyCount],["ČAKÁ NA MERANIA",waitingCount],["OTVORENÉ TOP TIPY",openCount]].map(([label,value])=>"<div style='padding:8px;border:1px solid rgba(137,165,194,.17);border-radius:9px;background:rgba(9,19,31,.45)'><div style='font-size:16px;font-weight:900;color:#e8f1fa;font-variant-numeric:tabular-nums'>"+fmt(value)+"</div><div style='font-size:9px;color:#8fa6bc;letter-spacing:.5px;margin-top:3px'>"+label+"</div></div>").join("")+
       "</div><div style='font-size:10px;color:#829bb2;line-height:1.45;margin-bottom:8px'>Čerstvé štatistiky = zápas prešiel aktuálnym filtrom použiteľnosti dát. Čakanie na merania nie je zamietnutie predikcie; model sa zobrazí až po splnení všetkých vlastných podmienok.</div>";
-    panel.innerHTML=title+note+diagnostics+noCandidate+(topLedger?topStats:"<div style='margin-top:12px;padding:9px;color:#f4d28d;font-size:11px'>Samostatný TOP register sa ešte pripravuje; štatistika sa zobrazí po prvom úspešnom behu kolektora.</div>");
+    panel.innerHTML=title+note+marketReadiness+diagnostics+noCandidate+(topLedger?topStats:"<div style='margin-top:12px;padding:9px;color:#f4d28d;font-size:11px'>Samostatný TOP register sa ešte pripravuje; štatistika sa zobrazí po prvom úspešnom behu kolektora.</div>");
   }
 
-  function render(data,ledger,model,lateFtModel,topLedger){
+  function render(data,ledger,model,lateFtModel,cornersModel,cardsModel,topLedger){
     const records=(data.records||[]).filter(r=>r.match?.source==="Flashscore"&&r.match.status==="live");
     const history=data.recent_history||[];
     const usable=records.map(r=>({record:r,fx:features(r.match,history,r.collected_at||data.collected_at)}));
@@ -384,7 +405,7 @@
     const fresh=usable.filter(x=>x.fx.ready).length;
     renderPredictionLedger(ledger);
     renderModelStatus(model,lateFtModel);
-    renderTopOpportunities(data,ledger,model,lateFtModel,usable,topLedger);
+    renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger);
     $("ai-edge-metrics").innerHTML=[
       ["<b>"+fmt(records.length)+"</b>","LIVE zápasy"],
       ["<b>"+fmt(withStats)+"</b>","So štatistikami"],
@@ -419,7 +440,7 @@
     $("ai-edge-audit-status").textContent="LIVE analytika · trvalá história · bez kurzov";
   }
   async function refresh(){
-    const [feedResult,ledgerResult,modelResult,lateFtResult,simulationResult,topLedgerResult]=await Promise.allSettled([load(),loadLedger(),loadModel(),loadLateFTModel(),loadStrategy(),loadTopLedger()]);
+    const [feedResult,ledgerResult,modelResult,lateFtResult,cornersResult,cardsResult,simulationResult,topLedgerResult]=await Promise.allSettled([load(),loadLedger(),loadModel(),loadLateFTModel(),loadMarketModel(CORNERS_MODEL,"FORWARD_ONLY_LIVE_CORNERS_UNDER_SHADOW"),loadMarketModel(CARDS_MODEL,"FORWARD_ONLY_LIVE_CARDS_SHADOW"),loadStrategy(),loadTopLedger()]);
     if(feedResult.status!=="fulfilled"){
       const s=$("ai-edge-state");if(s){s.className="ai-edge-state bad";s.textContent="LIVE DÁTA NEDOSTUPNÉ · "+(feedResult.reason?.message||"chyba LIVE feedu");}
       const panel=$("ai-edge-top-opportunities");if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>LIVE feed sa nepodarilo načítať. Výber kandidátov je pozastavený, aby sa nezobrazovali neaktuálne údaje.</div>";
@@ -432,8 +453,10 @@
     const ledger=ledgerResult.status==="fulfilled"?ledgerResult.value:null;
     const model=modelResult.status==="fulfilled"?modelResult.value:null;
     const lateFtModel=lateFtResult.status==="fulfilled"?lateFtResult.value:null;
+    const cornersModel=cornersResult.status==="fulfilled"?cornersResult.value:null;
+    const cardsModel=cardsResult.status==="fulfilled"?cardsResult.value:null;
     const topLedger=topLedgerResult.status==="fulfilled"?topLedgerResult.value:null;
-    try{render(feedResult.value,ledger,model,lateFtModel,topLedger);}catch(e){
+    try{render(feedResult.value,ledger,model,lateFtModel,cornersModel,cardsModel,topLedger);}catch(e){
       const panel=$("ai-edge-top-opportunities");if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>Výber kandidátov sa nepodarilo spracovať: "+esc(e?.message||"neznáma chyba")+". Ostatné LIVE údaje zostávajú oddelené.</div>";
     }
     if(simulationResult.status==="fulfilled")runStrategySimulation(simulationResult.value);
@@ -442,6 +465,8 @@
     if(ledgerResult.status!=="fulfilled")warnings.push("história predikcií: "+(ledgerResult.reason?.message||"nedostupná"));
     if(modelResult.status!=="fulfilled")warnings.push("model: "+(modelResult.reason?.message||"nedostupný"));
     if(lateFtResult.status!=="fulfilled")warnings.push("model gól do FT: "+(lateFtResult.reason?.message||"nedostupný"));
+    if(cornersResult.status!=="fulfilled")warnings.push("model rohov: "+(cornersResult.reason?.message||"nedostupný"));
+    if(cardsResult.status!=="fulfilled")warnings.push("model kariet: "+(cardsResult.reason?.message||"nedostupný"));
     if(topLedgerResult.status!=="fulfilled")warnings.push("TOP register: "+(topLedgerResult.reason?.message||"nedostupný"));
     if(warnings.length){const meta=$("ai-edge-updated");if(meta)meta.textContent+=" · "+warnings.join(" · ");}
   }
