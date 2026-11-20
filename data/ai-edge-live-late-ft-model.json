@@ -4,21 +4,21 @@
   "mode": "FORWARD_ONLY_LIVE_TRAINING_LATE_FT",
   "target": "At least one goal after the 5-minute effective decision lag until confirmed regular-time full-time",
   "started_at": "2026-11-15T19:35:08.077Z",
-  "updated_at": "2026-11-20T01:26:05.678Z",
+  "updated_at": "2026-11-20T01:28:16.358Z",
   "lag_minutes": 5,
   "observation_minute_range": [
     65,
     85
   ],
-  "sample_policy": "One latest eligible snapshot per five-minute window from 65' to 85', captured after activation. No historical backfill. Ambiguous goals crossing the lag boundary and non-regular-time/abandoned matches are excluded.",
+  "sample_policy": "One latest eligible snapshot per five-minute window from 65' to 85', captured after activation. No historical backfill. Goals observed at or crossing the lag boundary and non-regular-time/abandoned matches are excluded.",
+  "feature_version": "late_ft_pressure_v2: 16 core live features plus score state, time bands, five-minute stat deltas, pressure acceleration and red-card balance; no future snapshots are used.",
   "validation_policy": {
+    "min_train_samples": 500,
+    "min_validation_samples": 300,
     "min_train_matches": 100,
     "min_validation_matches": 50,
     "min_relative_log_loss_gain": 0.01,
     "min_relative_brier_gain": 0.005,
-    "min_effective_match_weight_per_calibration_bin": 8,
-    "min_well_calibrated_bins": 2,
-    "max_absolute_calibration_error": 0.08,
     "metrics_weighted_per_match": true
   },
   "calibration_policy": {
@@ -26,85 +26,21 @@
     "max_absolute_error": 0.08,
     "abstain_outside_reliable_bins": true
   },
-  "total_labeled_samples": 1361,
+  "total_labeled_samples": 1335,
   "total_labeled_matches": 325,
   "model": {
-    "status": "NOT_VALIDATED",
+    "status": "WARMUP",
     "counts": {
-      "train": 1059,
-      "validation": 302,
+      "train": 1036,
+      "validation": 299,
       "train_matches": 253,
       "validation_matches": 72,
-      "train_positive": 348,
-      "train_negative": 711,
+      "train_positive": 338,
+      "train_negative": 698,
       "validation_positive": 120,
-      "validation_negative": 182
+      "validation_negative": 179
     },
-    "metrics": {
-      "count": 302,
-      "matches": 72,
-      "accuracy": 0.5917,
-      "brier": 0.2436,
-      "baseline_brier": 0.2416,
-      "log_loss": 0.6807,
-      "baseline_log_loss": 0.6762,
-      "calibration": {
-        "method": "equal_width_probability_bins_match_weighted",
-        "bin_count": 10,
-        "populated_bins": 3,
-        "expected_calibration_error": 0.064,
-        "maximum_calibration_error": 0.0698,
-        "bins": [
-          {
-            "range": "20-30",
-            "count": 11,
-            "matches_weight": 2.55,
-            "mean_predicted": 0.2935,
-            "observed_rate": 0.2745,
-            "absolute_error": 0.0189
-          },
-          {
-            "range": "30-40",
-            "count": 268,
-            "matches_weight": 63.6833,
-            "mean_predicted": 0.3456,
-            "observed_rate": 0.4153,
-            "absolute_error": 0.0698
-          },
-          {
-            "range": "40-50",
-            "count": 23,
-            "matches_weight": 5.7667,
-            "mean_predicted": 0.4101,
-            "observed_rate": 0.3902,
-            "absolute_error": 0.0199
-          }
-        ]
-      },
-      "relative_log_loss_gain": -0.0067,
-      "relative_brier_gain": -0.0083
-    },
-    "calibration_gate": {
-      "passed": false,
-      "reliable_bins": 1,
-      "passing_bins": 1,
-      "failed_bins": 0,
-      "min_passing_bins": 2,
-      "max_reliable_error": 0.0698,
-      "max_passing_error": 0.0698,
-      "reason": "INSUFFICIENT_WELL_CALIBRATED_BINS"
-    },
-    "validation_note": "Performance gate failed: both relative Log Loss and Brier improvements are required.",
-    "validation_policy": {
-      "min_train_matches": 100,
-      "min_validation_matches": 50,
-      "min_relative_log_loss_gain": 0.01,
-      "min_relative_brier_gain": 0.005,
-      "min_effective_match_weight_per_calibration_bin": 8,
-      "min_well_calibrated_bins": 2,
-      "max_absolute_calibration_error": 0.08,
-      "metrics_weighted_per_match": true
-    },
+    "metrics": null,
     "weights": null
   },
   "status": "COLLECTING_OR_NOT_VALIDATED"
