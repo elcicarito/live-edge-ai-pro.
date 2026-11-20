@@ -68,7 +68,7 @@ function marketRows(feed,record){
  return [...unique.values()].sort((a,b)=>Date.parse(a.snapshot.collected_at)-Date.parse(b.snapshot.collected_at));
 }
 function stageEligible(stage){
- return !/(half.?time|\\bht\\b|finished|full.?time|\\bft\\b|extra.?time|\\baet\\b|penalt|abandoned|cancelled|postponed|suspended)/i.test(String(stage||""));
+ return !/(half.?time|\bht\b|finished|full.?time|\bft\b|extra.?time|\baet\b|penalt|abandoned|cancelled|postponed|suspended)/i.test(String(stage||""));
 }
 function minimumOdds(probability,error){
  const conservative=Math.max(0.01,probability-error);
@@ -148,7 +148,7 @@ function settleMarketEntries(entries,outcomes,nowDate=new Date()){
   const outcome=outcomes?.matches?.[String(entry.matchId).replace(/^flashscore:/,"")];
   if(!outcome||outcome.source!=="Flashscore"||outcome.status!=="CONFIRMED"||outcome.status_confirmation!=="confirmed_finished"||outcome.final_status!=="FINISHED")continue;
   const statusText=[outcome.final_match?.status_text,outcome.final_match?.stage,outcome.final_match?.status].filter(Boolean).join(" ");
-  if(/extra.?time|\\baet\\b|penalt|abandoned|cancelled|postponed|suspended/i.test(statusText)){
+  if(/extra.?time|\baet\b|penalt|abandoned|cancelled|postponed|suspended/i.test(statusText)){
    entry.status="UNRESOLVED";entry.unresolvedReason="Zápas obsahoval predĺženie alebo nemá potvrdený riadny výsledok.";entry.settledAt=outcome.confirmed_at||now;continue;
   }
   const confirmed=entry.marketType==="CORNERS"?outcome.corners_status==="CONFIRMED"&&Number.isInteger(outcome.final_corners?.total_corners):outcome.yellow_cards_status==="CONFIRMED"&&Number.isInteger(outcome.final_yellow_cards?.total_yellow_cards);
