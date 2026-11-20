@@ -3,7 +3,7 @@ const cornersTrainer=require("./ai-edge-live-corners-under-trainer");
 const cardsTrainer=require("./ai-edge-live-cards-under-trainer");
 const LAG_MINUTES=5;
 const MARKET_LINES=[
- ...cornersTrainer.LINES.map(line=>({...line,marketType:"CORNERS",modelKey:line.key,target:"CORNERS_"+line.key,group:"CORNERS_UNDER",label:"Rohy "+line.side+" "+line.line})),
+ ...cornersTrainer.LINES.map(line=>({...line,side:"UNDER",marketType:"CORNERS",modelKey:line.key,target:"CORNERS_"+line.key,group:"CORNERS_UNDER",label:"Rohy UNDER "+line.line})),
  ...cardsTrainer.LINES.map(line=>({...line,marketType:"CARDS",modelKey:line.key,target:"CARDS_"+line.key,group:"CARDS_OU",label:"Karty "+line.side+" "+line.line}))
 ];
 function stamp(value){const n=Number(value);if(Number.isFinite(n))return n;const p=Date.parse(value||"");return Number.isFinite(p)?p:NaN;}
