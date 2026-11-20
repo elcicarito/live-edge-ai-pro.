@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only Flashscore eSports live probe, isolated from classic football."""
+"""Read-only Flashscore eSports probe: inspect today's schedule and live rows."""
 from __future__ import annotations
 import json, os, sys
 from datetime import datetime, timezone
@@ -25,18 +25,18 @@ def main():
     status = {
         "state": "error", "checked_at": checked,
         "source": "Flashscore Scraper · sport esports (36)",
-        "sport_id": 36, "feed_events": 0, "candidate_events": 0,
+        "sport_id": 36, "feed_events": 0, "live_events": 0,
+        "candidate_events": 0, "schedule_candidates": 0,
         "message": "Kontrola sa ešte nedokončila.", "error": None
     }
-    matches_out = []
+    live_candidates, schedule_candidates, rows = [], [], []
     try:
         if not Path(SCRAPER_PATH).exists():
             raise RuntimeError("Flashscore scraper checkout sa nenašiel.")
         sys.path.insert(0, SCRAPER_PATH)
-        from flashscore.matches import get_live_matches
-        payload = get_live_matches("esports")
+        from flashscore.matches import get_matches
+        payload = get_matches("esports")
         groups = payload.get("competitions") or []
-        rows = []
         for group in groups:
             competition = group.get("competition") or {}
             comp_name = text(competition.get("name"))
@@ -60,22 +60,32 @@ def main():
                 rows.append(row)
                 haystack = " ".join((comp_name, country, home, away)).casefold()
                 if any(term in haystack for term in TERMS):
-                    matches_out.append(row)
+                    if str(row.get("status") or "").casefold() == "live":
+                        live_candidates.append(row)
+                    else:
+                        schedule_candidates.append(row)
+        live_rows = [r for r in rows if str(r.get("status") or "").casefold() == "live"]
         status.update({
-            "state": "ok" if matches_out else "no_matching_events",
+            "state": "ok" if live_candidates else ("schedule_only" if schedule_candidates else "no_matching_events"),
             "feed_events": len(rows),
-            "candidate_events": len(matches_out),
+            "live_events": len(live_rows),
+            "candidate_events": len(live_candidates),
+            "schedule_candidates": len(schedule_candidates),
             "competition_count": len(groups),
             "message": (
-                "Flashscore eSports feed vrátil zápasy a našli sa kandidáti eSoccer/FC27."
-                if matches_out else
-                "Flashscore eSports feed odpovedal, ale nenašli sa názvy eSoccer/FC27/Volta. Samotné eSports ešte nepotvrdzuje Volta."
+                "Našli sa živé kandidátske zápasy eSoccer/FC27."
+                if live_candidates else
+                "Našli sa názvy eSoccer/FC27 v dnešnom programe, ale nie medzi živými zápasmi."
+                if schedule_candidates else
+                "Denný Flashscore eSports program odpovedal, ale neobsahuje rozpoznané eSoccer/FC27 názvy."
             ),
             "error": None
         })
         (OUT / "flashscore-live.json").write_text(json.dumps({
             "updated_at": checked, "source": status["source"],
-            "matches": matches_out, "esports_sample": rows[:40]
+            "matches": live_candidates,
+            "schedule_candidates": schedule_candidates,
+            "esports_sample": rows[:40]
         }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     except Exception as exc:
         status["state"] = "error"
@@ -84,7 +94,6 @@ def main():
     (OUT / "flashscore-status.json").write_text(
         json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(status, ensure_ascii=False))
-    # Diagnostic failures are published as status, not treated as fake matches.
 
 if __name__ == "__main__":
     main()
