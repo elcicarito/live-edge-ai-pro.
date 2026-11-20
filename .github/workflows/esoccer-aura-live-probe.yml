@@ -1,0 +1,38 @@
+name: eSoccer AURA live feed probe
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: esoccer-aura-live-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probe public virtual sports feed
+        run: python scripts/esoccer-aura-live-probe.py
+      - name: Publish live feed and diagnostic status
+        run: |
+          if git diff --quiet -- live-data-v2/esoccer-fc27/aura-live.json live-data-v2/esoccer-fc27/aura-status.json; then
+            echo "No AURA feed changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add live-data-v2/esoccer-fc27/aura-live.json live-data-v2/esoccer-fc27/aura-status.json
+          git commit -m "Update eSoccer AURA live feed status"
+          git push
