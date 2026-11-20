@@ -21,7 +21,7 @@ function labelLateFT(sample,rows,transitions,outcome){
  const effectiveStart=minute+LAG;
  for(const t of transitions){
   // A score change spanning the lag boundary cannot be assigned safely.
-  if(t.from<effectiveStart&&t.to>effectiveStart)return null;
+  if(t.from<effectiveStart&&t.to>=effectiveStart)return null;
   if(t.from>=effectiveStart)return 1;
  }
  const last=rows[rows.length-1],lastMinute=base.finite(last?.snapshot?.live_minute);
@@ -29,6 +29,64 @@ function labelLateFT(sample,rows,transitions,outcome){
  // a final timeline observation at/after 90'. Otherwise it remains unresolved.
  if(lastMinute!==null&&lastMinute>=90)return 0;
  return null;
+}
+
+const FT_STATS={
+ sot:/shots on target/i,shots:/^total shots$/i,corners:/corner kicks|^corners$/i,
+ xg:/expected goals\\s*\\(xg\\)|^expected goals$|^xg$/i,
+ big:/big chances/i,xgot:/xg on target|xgot/i,red:/red cards/i
+};
+function findPriorIndex(rows,index,minGap,maxGap){
+ const current=base.finite(rows[index]?.snapshot?.live_minute);
+ if(current===null)return -1;
+ let best=-1,bestMinute=-Infinity;
+ for(let i=0;i<index;i++){
+  const m=base.finite(rows[i]?.snapshot?.live_minute),gap=current-m;
+  if(m!==null&&gap>=minGap&&gap<=maxGap&&m>=bestMinute){best=i;bestMinute=m;}
+ }
+ return best;
+}
+function deltaStat(now,old){
+ if(!now||!old)return 0;
+ return Math.max(0,now.home-old.home)+Math.max(0,now.away-old.away);
+}
+function pressureDelta(d){
+ const shotsOff=Math.max(0,d.shots-d.sot);
+ return 3*d.sot+0.7*shotsOff+1.2*d.corners+2*d.xg;
+}
+function lateFTFeatureVector(row,rows,index){
+ const core=base.featureVector(row,rows[index-1]||null);
+ if(!core)return null;
+ const minute=base.finite(row?.snapshot?.live_minute);
+ const scoreHome=base.finite(row?.snapshot?.home_score),scoreAway=base.finite(row?.snapshot?.away_score);
+ if(minute===null||scoreHome===null||scoreAway===null)return null;
+ const currentStats=row?.snapshot?.stats||[];
+ const current=Object.fromEntries(Object.entries(FT_STATS).map(([k,p])=>[k,base.statValue(currentStats,p)]));
+ const fiveIndex=findPriorIndex(rows,index,4,8);
+ const tenIndex=findPriorIndex(rows,index,9,13);
+ const statsAt=i=>i<0?{}:Object.fromEntries(Object.entries(FT_STATS).map(([k,p])=>[k,base.statValue(rows[i]?.snapshot?.stats||[],p)]));
+ const five=statsAt(fiveIndex),ten=statsAt(tenIndex);
+ const keys=["sot","shots","corners","xg","big","xgot"];
+ const d5=Object.fromEntries(keys.map(k=>[k,deltaStat(current[k],five[k])]));
+ const dPrev=Object.fromEntries(keys.map(k=>[k,deltaStat(five[k],ten[k])]));
+ const p5=pressureDelta(d5),pPrev=pressureDelta(dPrev);
+ const lead=scoreHome>scoreAway?1:scoreAway>scoreHome?-1:0;
+ const band=Math.min(3,Math.floor((minute-65)/5));
+ const red=current.red;
+ return core.concat([
+  lead===1?1:0,lead===0?1:0,lead===-1?1:0,
+  Math.max(-1,Math.min(1,(scoreHome-scoreAway)/3)),
+  Math.min(1,Math.abs(scoreHome-scoreAway)/3),
+  Math.max(0,Math.min(1,(90-minute)/25)),
+  band===0?1:0,band===1?1:0,band===2?1:0,band===3?1:0,
+  Math.min(1,d5.sot/3),Math.min(1,d5.shots/8),Math.min(1,d5.corners/3),
+  Math.min(1,d5.xg/1.5),Math.min(1,d5.big/2),Math.min(1,d5.xgot/2),
+  Math.max(-1,Math.min(1,(d5.sot-dPrev.sot)/3)),
+  Math.max(-1,Math.min(1,(d5.shots-dPrev.shots)/8)),
+  Math.max(-1,Math.min(1,(p5-pPrev)/15)),
+  Math.min(1,p5/15),
+  red?Math.max(-1,Math.min(1,(red.home-red.away)/2)):0
+ ]);
 }
 function buildLateFTSamples(rows,outcomes,startedAt){
  const grouped=new Map();
@@ -49,14 +107,14 @@ function buildLateFTSamples(rows,outcomes,startedAt){
   const chosenByWindow=new Map();
   for(let i=0;i<matchRows.length;i++){
    const minute=base.finite(matchRows[i]?.snapshot?.live_minute);
-   if(minute>=MINUTE_FROM&&minute<=MINUTE_TO&&base.featureVector(matchRows[i],matchRows[i-1]))
+   if(minute>=MINUTE_FROM&&minute<=MINUTE_TO&&lateFTFeatureVector(matchRows[i],matchRows,i))
     chosenByWindow.set(Math.floor(minute/5)*5,i);
   }
   for(const [windowStart,chosen] of chosenByWindow){
    const row=matchRows[chosen],y=labelLateFT(row,matchRows,tr.transitions,outcome);
    if(y===null)continue;
    samples.push({id:matchId+"|"+row.snapshot.collected_at+"|"+windowStart+"_FT",match_id:matchId,
-    x:base.featureVector(row,matchRows[chosen-1]),y,
+    x:lateFTFeatureVector(row,matchRows,chosen),y,
     split:base.stableValidationMatch(matchId)?"validation":"train"});
   }
  }
@@ -85,4 +143,4 @@ async function run(dataDir=DATA,nowDate=new Date()){
  return {started_at:output.started_at,total_labeled_matches:samples.length,status:output.status,model:trained};
 }
 if(require.main===module)run().then(x=>console.log("AI EDGE LATE FT TRAINER",JSON.stringify(x))).catch(e=>{console.error("AI EDGE LATE FT TRAINER FAILED:",e.message);process.exit(1);});
-module.exports={confirmedRegular,labelLateFT,buildLateFTSamples,run};
+module.exports={confirmedRegular,labelLateFT,lateFTFeatureVector,buildLateFTSamples,run};
