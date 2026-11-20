@@ -25,7 +25,7 @@ assert.equal(labelLateFT(exactBoundaryRows[0],exactBoundaryRows,exactBoundaryTra
 const trendRows=[65,70,75,80].map((minute)=>({
  ...row(minute),
  snapshot:{...row(minute).snapshot,stats:stats.map(item=>{
-  const value=item.label==="Shots on target"?minute-65+2:item.label==="Total shots"?minute-65+8:item.label==="Expected goals (xG)"?1+(minute-65)*0.05:item.home_numeric;
+  const value=item.label==="Shots on target"?Math.floor((minute-65)/5)*2+2:item.label==="Total shots"?minute-65+8:item.label==="Expected goals (xG)"?1+(minute-65)*0.05:item.home_numeric;
   return {...item,home:value,home_numeric:value};
  })}
 }));
