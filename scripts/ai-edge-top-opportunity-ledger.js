@@ -1,6 +1,7 @@
 "use strict";
 const fs=require("node:fs"),path=require("node:path"),zlib=require("node:zlib");
 const {features}=require("./ai-edge-live-prediction-ledger");
+const marketPredictions=require("./ai-edge-market-top-predictions");
 const DATA=path.resolve(__dirname,"..","data");
 function read(file,fallback){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code==="ENOENT")return fallback;throw e;}}
 function readHistory(file){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code!=="ENOENT")throw e;}try{return JSON.parse(zlib.gunzipSync(fs.readFileSync(file+".gz")).toString("utf8"));}catch(e){if(e.code==="ENOENT")return null;throw e;}}
@@ -22,6 +23,9 @@ function buildTopLedger(dataDir=DATA,nowDate=new Date()){
  const file=path.join(dataDir,"ai-edge-top-opportunity-ledger.json"),old=read(file,{schema_version:1,source:"Flashscore",mode:"TOP_OPPORTUNITY_LEDGER",retention_policy:"permanent",entries:[]});
  if(old.source!=="Flashscore"||!Array.isArray(old.entries))throw Error("Neplatná TOP história; odmietam prepísať.");
  const entries=old.entries,byKey=new Map(entries.map(x=>[x.key||topEntryKey(x.matchId,x.target),x]));
+ const cornersModel=read(path.join(dataDir,"ai-edge-live-corners-under-model.json"),null);
+ const cardsModel=read(path.join(dataDir,"ai-edge-live-cards-under-model.json"),null);
+ const outcomes=read(path.join(dataDir,"flashscore-confirmed-outcomes.json"),{matches:{}});
  const live=new Map(feed.records.filter(r=>r?.match?.source==="Flashscore"&&r.match.status==="live").map(r=>[String(r.match.id),r]));
  const latest=new Map();
  for(const row of prediction.predictions){
@@ -29,6 +33,10 @@ function buildTopLedger(dataDir=DATA,nowDate=new Date()){
   const group=String(row.matchId)+"|"+row.target,prior=latest.get(group);if(!prior||stamp(row.createdAt)>stamp(prior.createdAt))latest.set(group,row);
  }
  const fresh=Number.isFinite(feedAt)&&now-feedAt<=8*60000&&Number.isFinite(ledgerAt)&&now-ledgerAt<=6*60000;
+ if(fresh){
+  const marketEntries=marketPredictions.buildMarketPredictions(feed,{corners:cornersModel,cards:cardsModel},entries,nowDate);
+  for(const entry of marketEntries){entries.push(entry);byKey.set(entry.key,entry);}
+ }
  if(fresh)for(const row of latest.values()){
   const rec=live.get(String(row.matchId));if(!rec)continue;
   const m=rec.match,min=Number.parseInt(m.live_minute,10),after=Number(row.actionableAfterMinute),deadline=Number(row.deadlineMinute),created=stamp(row.createdAt);
@@ -43,7 +51,8 @@ function buildTopLedger(dataDir=DATA,nowDate=new Date()){
  }
  const predictionById=new Map(prediction.predictions.map(x=>[String(x.id||""),x]));
  for(const entry of entries){const p=predictionById.get(entry.predictionId);if(!p)continue;if(!Number.isFinite(Number(entry.calibrationMatchesWeight))&&Number.isFinite(Number(p.modelCalibrationMatchesWeight)))entry.calibrationMatchesWeight=Number(p.modelCalibrationMatchesWeight);if(["HIT","MISS","UNRESOLVED"].includes(p.status)){entry.status=p.status;entry.resultScore=p.resultScore||null;entry.settledAt=p.checkedAt||null;entry.resultMinute=p.resultMinute??null;}}
- const summary={MODEL_25:summarize(entries,"MODEL_25"),MODEL_FT:summarize(entries,"MODEL_FT")};
+ marketPredictions.settleMarketEntries(entries,outcomes,nowDate);
+ const summary={MODEL_25:summarize(entries,"MODEL_25"),MODEL_FT:summarize(entries,"MODEL_FT"),CORNERS_UNDER:marketPredictions.summarizeMarketGroup(entries,"CORNERS_UNDER"),CARDS_OU:marketPredictions.summarizeMarketGroup(entries,"CARDS_OU")};
  const output={schema_version:1,source:"Flashscore",mode:"TOP_OPPORTUNITY_LEDGER",retention_policy:"permanent",updated_at:nowDate.toISOString(),feed_collected_at:feed.collected_at||null,total_entries:entries.length,summary,entries:entries.slice().sort((a,b)=>stamp(b.capturedAt)-stamp(a.capturedAt))};
  const tmp=file+".tmp";fs.writeFileSync(tmp,JSON.stringify(output,null,2)+"\n");fs.renameSync(tmp,file);
  return{total:entries.length,summary,updated_at:output.updated_at};
