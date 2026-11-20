@@ -1,11 +1,11 @@
 "use strict";
 // Independent forward-only model: probability of >=1 goal after the 5-minute
-// observation lag from a LIVE snapshot at 65'-75' until regulation full-time.
+// observation lag from a LIVE snapshot at 65'-85' until regulation full-time.
 const fs=require("node:fs"),path=require("node:path");
 const base=require("./ai-edge-live-online-trainer");
 const DATA=path.resolve(__dirname,"..","data");
 const FILE="ai-edge-live-late-ft-model.json";
-const LAG=5,MINUTE_FROM=65,MINUTE_TO=75;
+const LAG=5,MINUTE_FROM=65,MINUTE_TO=85;
 function read(file,fallback){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code==="ENOENT")return fallback;throw e;}}
 function write(file,value){const tmp=file+".tmp";fs.writeFileSync(tmp,JSON.stringify(value,null,2)+"\n");fs.renameSync(tmp,file);}
 function validStage(stage){return !/(half.?time|\bht\b|finished|full.?time|\bft\b|after extra time|penalt|abandoned|cancelled|postponed|suspended)/i.test(String(stage||""));}
@@ -134,7 +134,7 @@ async function run(dataDir=DATA,nowDate=new Date()){
   target:"At least one goal after the 5-minute effective decision lag until confirmed regular-time full-time",
   started_at:new Date(startedAt).toISOString(),updated_at:nowDate.toISOString(),
   lag_minutes:LAG,observation_minute_range:[MINUTE_FROM,MINUTE_TO],
-  sample_policy:"One latest eligible snapshot per five-minute window from 65' to 75', captured after activation. No historical backfill. Goals observed at or crossing the lag boundary and non-regular-time/abandoned matches are excluded.",
+  sample_policy:"One latest eligible snapshot per five-minute window from 65' to 85', captured after activation. No historical backfill. Goals observed at or crossing the lag boundary and non-regular-time/abandoned matches are excluded.",
   feature_version:"late_ft_pressure_v2: 16 core live features plus score state, time bands, five-minute stat deltas, pressure acceleration and red-card balance; no future snapshots are used.",
   validation_policy:trained.validation_policy||{min_train_samples:500,min_validation_samples:300,min_train_matches:100,min_validation_matches:50,min_relative_log_loss_gain:0.01,min_relative_brier_gain:0.005,metrics_weighted_per_match:true},
   calibration_policy:{min_effective_match_weight:8,max_absolute_error:0.08,abstain_outside_reliable_bins:true},
