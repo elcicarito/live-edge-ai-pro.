@@ -32,8 +32,9 @@ function buildTopLedger(dataDir=DATA,nowDate=new Date()){
   if(!["MODEL_25","MODEL_FT"].includes(row.target)||row.status!=="OPEN"||row.modelStatus!=="SHADOW_VALIDATED"||!Number.isFinite(Number(row.modelProbability))||!Number.isFinite(Number(row.modelMinimumOdds))||Number(row.modelMinimumOdds)<=1||!Number.isFinite(Number(row.modelCalibrationError)))continue;
   const group=String(row.matchId)+"|"+row.target,prior=latest.get(group);if(!prior||stamp(row.createdAt)>stamp(prior.createdAt))latest.set(group,row);
  }
- const fresh=Number.isFinite(feedAt)&&now-feedAt<=8*60000&&Number.isFinite(ledgerAt)&&now-ledgerAt<=6*60000;
- if(fresh){
+ const feedFresh=Number.isFinite(feedAt)&&now-feedAt<=8*60000;
+ const fresh=feedFresh&&Number.isFinite(ledgerAt)&&now-ledgerAt<=6*60000;
+ if(feedFresh){
   const marketEntries=marketPredictions.buildMarketPredictions(feed,{corners:cornersModel,cards:cardsModel},entries,nowDate);
   for(const entry of marketEntries){entries.push(entry);byKey.set(entry.key,entry);}
  }
