@@ -155,8 +155,14 @@ def main():
     diagnostics = {}
     for league_key, league in LEAGUES.items():
         main_html = fetch(league["url"])
-        dates = discover_archive_dates(main_html, league["url"])
-        # Current page plus every daily archive link currently exposed by TipManager.
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+        month_url = league["url"].rstrip("/") + "/" + month
+        month_html = fetch(month_url)
+        dates = sorted(set(
+            discover_archive_dates(main_html, league["url"])
+            + discover_archive_dates(month_html, month_url)
+        ))
+        # Current feed plus every daily archive page linked from this month's archive.
         pages = [(None, league["url"])]
         pages += [(d, league["url"].rstrip("/") + "/" + d) for d in dates]
         league_count = 0
