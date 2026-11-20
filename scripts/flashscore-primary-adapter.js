@@ -60,7 +60,7 @@ async function buildRecentHistory(currentRecords) {
       if (!activeIds.has(id) || !Number.isFinite(time) || time < cutoff || time > Date.now() + 60000) continue;
       const stats = (Array.isArray(snapshot.stats) ? snapshot.stats : [])
         .filter(stat => !stat.period || String(stat.period).toLowerCase() === "match")
-        .filter(stat => /shots on target|shots off target|total shots|ball possession|corner kicks/i.test(String(stat.name || stat.label || "")))
+        .filter(stat => /shots on target|shots off target|total shots|ball possession|corner kicks|yellow cards?|^fouls$|red cards/i.test(String(stat.name || stat.label || "")))
         .map(stat => ({
           label: String(stat.label || stat.name || ""),
           home: stat.home_numeric ?? stat.home ?? null,
