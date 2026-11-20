@@ -1,6 +1,6 @@
 "use strict";
 const assert=require("node:assert/strict");
-const {labelLateFT,buildLateFTSamples}=require("./ai-edge-live-late-ft-trainer");
+const {labelLateFT,lateFTFeatureVector,buildLateFTSamples}=require("./ai-edge-live-late-ft-trainer");
 const base=require("./ai-edge-live-online-trainer");
 const outcome={source:"Flashscore",status:"CONFIRMED",status_confirmation:"confirmed_finished",final_status:"FINISHED",final_match:{status_text:"Finished"}};
 const stats=[
@@ -19,6 +19,25 @@ assert.equal(labelLateFT(sample,positiveRows,positiveTransitions,outcome),1,"goa
 const ambiguousRows=[row(70),sample,row(82,1),row(90,1)];
 const ambiguousTransitions=base.goalTransitions(ambiguousRows).transitions;
 assert.equal(labelLateFT(sample,ambiguousRows,ambiguousTransitions,outcome),null,"goal interval crossing the 5-minute lag boundary is excluded");
+const exactBoundaryRows=[row(75),row(80,1),row(90,1)];
+const exactBoundaryTransitions=base.goalTransitions(exactBoundaryRows).transitions;
+assert.equal(labelLateFT(exactBoundaryRows[0],exactBoundaryRows,exactBoundaryTransitions,outcome),null,"goal first observed exactly at the lag boundary is ambiguous and excluded");
+const trendRows=[65,70,75,80].map((minute)=>({
+ ...row(minute),
+ snapshot:{...row(minute).snapshot,stats:stats.map(item=>{
+  const value=item.label==="Shots on target"?minute-65+2:item.label==="Total shots"?minute-65+8:item.label==="Expected goals (xG)"?1+(minute-65)*0.05:item.home_numeric;
+  return {...item,home:value,home_numeric:value};
+ })}
+}));
+const ftVector=lateFTFeatureVector(trendRows[2],trendRows,2);
+assert.equal(ftVector.length,37,"late FT v2 adds 21 match-state and recent-pressure features to the 16 core features");
+assert.equal(ftVector[17],1,"draw state is represented explicitly");
+assert.equal(ftVector[24],1,"75-80 minute band is represented explicitly");
+assert.ok(Math.abs(ftVector[26]-(2/3))<1e-9,"five-minute shots-on-target growth is captured");
+const shortFit=base.fit([{match_id:"a",x:[0,1],y:0},{match_id:"b",x:[1,0],y:1}],[1,1]);
+assert.equal(shortFit.length,3,"shared trainer fit supports an isolated custom feature dimension");
+assert.throws(()=>base.fit([{match_id:"a",x:[0],y:0},{match_id:"b",x:[1,2],y:1}],[1,1]),/Inconsistent feature-vector dimensions/,"mixed feature dimensions are rejected");
+
 const extraTime={...outcome,final_match:{status_text:"Extra time"}};
 assert.equal(labelLateFT(sample,rows,[],extraTime),null,"extra-time matches are excluded from the regular-time target");
 const aet={...outcome,final_match:{status_text:"Finished",stage:"AET"}};
