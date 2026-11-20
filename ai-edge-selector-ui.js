@@ -315,9 +315,9 @@
       if(!Number.isFinite(rowAge)||rowAge<0||rowAge>8*60000)return;
       const p=Number(row.modelProbability),error=Number(row.modelCalibrationError),calibrationWeight=Number(row.modelCalibrationMatchesWeight),conservative=Number.isFinite(Number(row.conservativeProbability))?Number(row.conservativeProbability):Math.max(0.01,p-error);
       if(!Number.isFinite(p)||p<=0||p>=1||!Number.isFinite(error)||error>0.08||!Number.isFinite(calibrationWeight)||calibrationWeight<8||!Number.isFinite(Number(row.modelMinimumOdds))||Number(row.modelMinimumOdds)<=1)return;
-      const is25=row.target==="MODEL_25";
-      const market=is25?"GÓL V NASLEDUJÚCICH 25 MIN":"OVER "+((Number(m.home_score)||0)+(Number(m.away_score)||0)+0.5).toFixed(1);
-      const oddsKey=String(row.id||row.matchId+"|"+row.target)+"|"+(is25?"GOAL_25_MIN":market.replace(/\s+/g,"_"));
+      const is25=row.target==="MODEL_25",isMarket=!!row.marketType;
+      const market=isMarket?(row.marketLabel||row.target):is25?"GÓL V NASLEDUJÚCICH 25 MIN":"OVER "+((Number(m.home_score)||0)+(Number(m.away_score)||0)+0.5).toFixed(1);
+      const oddsKey=String(row.id||row.matchId+"|"+row.target)+"|"+(isMarket?row.target:is25?"GOAL_25_MIN":market.replace(/\s+/g,"_"));
       const entered=foundOdds.get(oddsKey)||"",enteredNum=Number(entered.replace(",",".")),ev=entered.trim()&&Number.isFinite(enteredNum)&&enteredNum>1?(enteredNum*conservative-1)*100:null;
       const min=Number(row.modelMinimumOdds);
       const groupId=String(row.matchId||"")+"|"+row.target;
@@ -333,7 +333,7 @@
       if(entry.status!=="OPEN"||(!["MODEL_25","MODEL_FT"].includes(entry.target)&&!isTopMarketTarget(entry.target)))continue;
       const current=live.get(String(entry.matchId||""));if(!current)continue;
       const score=String(entry.capturedScore||"0:0").split(":").map(Number);
-      const row={...entry,id:entry.predictionId,createdAt:entry.sourcePredictionAt,startMinute:entry.capturedMinute,startHome:score[0],startAway:score[1],modelCalibrationError:entry.calibrationError,modelCalibrationMatchesWeight:entry.calibrationMatchesWeight,modelMinimumOdds:entry.minimumOdds,modelProbability:entry.modelProbability,conservativeProbability:entry.conservativeProbability};
+      const row={...entry,id:entry.predictionId,createdAt:entry.capturedAt,startMinute:entry.capturedMinute,startHome:score[0],startAway:score[1],modelCalibrationError:entry.calibrationError,modelCalibrationMatchesWeight:entry.calibrationMatchesWeight,modelMinimumOdds:entry.minimumOdds,modelProbability:entry.modelProbability,conservativeProbability:entry.conservativeProbability};
       addCandidate(row,current);
     }
     // Nové kandidáty iba ak zápas + model ešte nie sú v TOP registri.
@@ -363,7 +363,7 @@
       const color=meets?"#39d98a":ev!==null&&ev>0?"#f4d27a":"#f08b8b";
       const horizon=item.row.marketType?item.row.marketLabel:item.target==="MODEL_25"?"AI EDGE 25 · GÓL V NASLEDUJÚCICH 25 MIN":"MODEL_FT · GÓL DO KONCA RIADNEHO ČASU";
       const fx=item.current.fx||{},statsQuality="ŠTATISTIKY "+(Number.isFinite(item.statsFreshness)?item.statsFreshness.toFixed(1)+" min":"—")+" · "+item.coreStats+"/10 ukazovateľov"+(item.activityReady?" · NOVÁ AKTIVITA Z MERANÍ":" · BEZ POROVNANIA MERANÍ");
-      const marketHint=item.target==="MODEL_25"?"Nie je to automaticky OVER do konca zápasu.":"Trh OVER podľa aktuálneho skóre.";
+      const marketHint=r.marketType==="CORNERS"?"Model predikuje konečný súčet rohov v riadnom čase.":r.marketType==="CARDS"?"Model predikuje konečný počet žltých kariet v riadnom čase.":item.target==="MODEL_25"?"Nie je to automaticky OVER do konca zápasu.":"Trh OVER podľa aktuálneho skóre.";
        const validationLabel="SHADOW VALIDATED · NIE GARANCIA";
        const calibrationLabel="KALIBRÁCIA "+(error*100).toFixed(1)+" % · VZORKA "+fmt(r.modelCalibrationMatchesWeight)+" zápasov";
        const activityLabel=item.activityReady?"POROVNANIE MERANÍ DOSTUPNÉ":"ČAKÁ NA ĎALŠIE MERANIE";
