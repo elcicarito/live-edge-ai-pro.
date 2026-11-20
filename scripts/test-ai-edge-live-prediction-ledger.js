@@ -51,7 +51,7 @@ assert(model25,"validated 25-minute shadow model creates a prediction");
 const lateFtModel={
  source:"Flashscore",mode:"FORWARD_ONLY_LIVE_TRAINING_LATE_FT",updated_at:new Date(now).toISOString(),
  validation_policy:{min_train_matches:100,min_validation_matches:50,min_relative_log_loss_gain:0.01,min_relative_brier_gain:0.005},
- model:{status:"SHADOW_VALIDATED",counts:{train:600,validation:350,train_matches:120,validation_matches:60},metrics:{relative_log_loss_gain:0.02,relative_brier_gain:0.015,calibration:{bins:[{range:"50-60",matches_weight:12,absolute_error:0.02}]}},weights:Array(17).fill(0)}
+ model:{status:"SHADOW_VALIDATED",counts:{train:600,validation:350,train_matches:120,validation_matches:60},metrics:{relative_log_loss_gain:0.02,relative_brier_gain:0.015,calibration:{bins:[{range:"50-60",matches_weight:12,absolute_error:0.02}]}},weights:Array(38).fill(0)}
 };
 const ftRows=[];
 addPredictions(ftRows,{...feed,records:[{collected_at:new Date(now).toISOString(),match:{...match,live_minute:75}}]},now,null,lateFtModel);
