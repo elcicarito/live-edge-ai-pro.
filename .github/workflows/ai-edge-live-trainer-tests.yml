@@ -16,6 +16,10 @@ on:
       - "scripts/ai-edge-live-prediction-ledger.js"
       - "ai-edge-selector-ui.js"
       - "scripts/test-ai-edge-live-prediction-ledger.js"
+      - "scripts/ai-edge-market-top-predictions.js"
+      - "scripts/test-ai-edge-market-top-predictions.js"
+      - "scripts/ai-edge-top-opportunity-ledger.js"
+      - "scripts/flashscore-primary-adapter.js"
       - ".github/workflows/ai-edge-live-trainer-tests.yml"
   pull_request:
     paths:
@@ -25,6 +29,10 @@ on:
       - "scripts/test-ai-edge-live-corners-under-trainer.js"
       - "scripts/ai-edge-live-late-ft-trainer.js"
       - "scripts/test-ai-edge-live-late-ft-trainer.js"
+      - "scripts/ai-edge-market-top-predictions.js"
+      - "scripts/test-ai-edge-market-top-predictions.js"
+      - "scripts/ai-edge-top-opportunity-ledger.js"
+      - "scripts/flashscore-primary-adapter.js"
       - ".github/workflows/ai-edge-live-trainer-tests.yml"
 
 permissions:
@@ -53,6 +61,8 @@ jobs:
           node scripts/test-ai-edge-live-late-ft-trainer.js
           node scripts/test-ai-edge-live-prediction-ledger.js
           node scripts/test-ai-edge-top-opportunity-ledger.js
+          node scripts/test-ai-edge-market-top-predictions.js
+          node --check scripts/ai-edge-market-top-predictions.js
           node --check scripts/ai-edge-top-opportunity-ledger.js
           node --check scripts/ai-edge-live-corners-under-trainer.js
           node --check ai-edge-selector-ui.js
