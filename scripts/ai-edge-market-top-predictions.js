@@ -90,6 +90,8 @@ function buildMarketPredictions(feed,models,entries=[],nowDate=new Date()){
    const model=line.marketType==="CORNERS"?models?.corners:models?.cards;
    const expectedMode=line.marketType==="CORNERS"?"FORWARD_ONLY_LIVE_CORNERS_UNDER_SHADOW":"FORWARD_ONLY_LIVE_CARDS_SHADOW";
    if(model?.mode!==expectedMode)continue;
+   const modelAt=stamp(model.updated_at);
+   if(!Number.isFinite(modelAt)||modelAt>now||now-modelAt>10*60000)continue;
    const item=model.models?.[line.modelKey];
    const featureCount=line.marketType==="CORNERS"?17:16;
    if(!modelIsValidated(model,item,featureCount))continue;
