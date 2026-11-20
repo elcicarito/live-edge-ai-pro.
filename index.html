@@ -2042,6 +2042,7 @@ input,select,textarea{border-color:#344b65!important;background:#0d1928!importan
   <button id="football-tab" class="sport-tab active" type="button"><span>⚽</span><b>FUTBAL</b><small>HLAVNÝ MODUL</small></button>
   <button id="basketball-tab" class="sport-tab" type="button"><span>🏀</span><b>BASKETBAL</b><small>LIVE ANALYTICS</small></button>
   <button id="hockey-tab" class="sport-tab" type="button"><span>🏒</span><b>HOKEJ</b><small>LIVE ANALYTICS</small></button>
+  <button id="esoccer-tab" class="sport-tab" type="button"><span>🎮</span><b>eSOCCER FC27</b><small>VALHALLA · VALKYRIE</small></button>
 </div>
 
 <div id="football-view">
@@ -2333,10 +2334,56 @@ OBNOVIŤ SKENER
   <div class="hockey-footnote"><b>O DÁTACH</b><p>Samostatný hokejový zber ESPN a Flashscore. Výsledky a štatistiky sa zobrazujú podľa dostupnosti zdrojov. Hokejové modely budú trénované a vyhodnocované nezávisle od futbalu a basketbalu.</p></div>
 </div>
 
+
+<div id="esoccer-view" style="display:none">
+  <section class="es-hero">
+    <div class="es-eyebrow">LIVE EDGE · E-SOCCER FC27 INTELLIGENCE</div>
+    <h2>eSOCCER <em>FC27 LAB</em></h2>
+    <p>Samostatná analytická vetva pre Valhalla Cup a Valkyrie Cup. Hráčske profily, priemery strelených a inkasovaných gólov, výsledkový archív a orientačný odhad skóre.</p>
+    <div class="es-metrics">
+      <div class="es-metric"><b id="esoccer-match-count">—</b><span>ARCHÍV ZÁPASOV</span></div>
+      <div class="es-metric"><b id="esoccer-player-count">—</b><span>HRÁČI</span></div>
+      <div class="es-metric"><b id="esoccer-competition-count">—</b><span>SÚŤAŽE</span></div>
+    </div>
+  </section>
+  <p id="esoccer-status" class="es-note">Pripájam samostatný eSoccer archív…</p>
+  <section class="es-panel">
+    <h3>🎮 FILTER SÚŤAŽE A ARCHÍVU</h3>
+    <div class="es-controls">
+      <select id="esoccer-league" aria-label="Vyber súťaž">
+        <option value="all">Valhalla Cup + Valkyrie Cup</option>
+        <option value="valhalla">Valhalla Cup</option>
+        <option value="valkyrie">Valkyrie Cup</option>
+      </select>
+      <input id="esoccer-search" type="search" placeholder="Hráč alebo klub…" aria-label="Hľadať hráča alebo klub">
+    </div>
+  </section>
+  <section class="es-panel">
+    <h3>🧠 HRÁČSKE ŠTATISTIKY</h3>
+    <p class="es-note">GF/Z = priemer strelených gólov na zápas · GA/Z = priemer inkasovaných gólov. Poradie podľa počtu odohraných zápasov.</p>
+    <div id="esoccer-player-table"><p class="es-note">Čakám na prvé importované výsledky…</p></div>
+  </section>
+  <section class="es-panel">
+    <h3>🎯 ODHAD ĎALŠIEHO VZÁJOMNÉHO ZÁPASU</h3>
+    <p class="es-note">Výber dvojice hráčov. Výpočet kombinuje priemer gólov hráča s priemerom inkasovaných gólov súpera a mierne zohľadňuje posledných päť výsledkov.</p>
+    <div class="es-controls">
+      <select id="esoccer-player-a" aria-label="Prvý hráč"><option value="">Vyber hráča</option></select>
+      <select id="esoccer-player-b" aria-label="Druhý hráč"><option value="">Vyber hráča</option></select>
+    </div>
+    <button id="esoccer-predict-btn" type="button" style="margin-top:9px">VYPOČÍTAŤ ODHAD SKÓRE</button>
+    <div id="esoccer-prediction"><p class="es-note">Odhad sa zobrazí po výbere dvoch hráčov.</p></div>
+  </section>
+  <section class="es-panel">
+    <h3>▤ HISTORICKÉ VÝSLEDKY</h3>
+    <div id="esoccer-match-list"><p class="es-note">Archív sa načíta po prvom úspešnom zbere.</p></div>
+  </section>
+  <p class="es-note">Dátový zdroj TipManager obnovuje výsledky približne každých päť minút. Táto stránka nie je live scoreboard; zobrazuje zaznamenané výsledky a orientačné štatistické odhady. Dáta eSoccer sa nemiešajú s Flashscore futbalom.</p>
+</div>
+
 <script>
 (() => {
-  const views = { football: document.getElementById("football-view"), basketball: document.getElementById("basketball-view"), hockey: document.getElementById("hockey-view") };
-  const tabs = { football: document.getElementById("football-tab"), basketball: document.getElementById("basketball-tab"), hockey: document.getElementById("hockey-tab") };
+  const views = { football: document.getElementById("football-view"), basketball: document.getElementById("basketball-view"), hockey: document.getElementById("hockey-view"), esoccer: document.getElementById("esoccer-view") };
+  const tabs = { football: document.getElementById("football-tab"), basketball: document.getElementById("basketball-tab"), hockey: document.getElementById("hockey-tab"), esoccer: document.getElementById("esoccer-tab") };
   function selectSport(sport) {
     for (const key of Object.keys(views)) {
       views[key].style.display = key === sport ? "block" : "none";
@@ -2354,6 +2401,7 @@ OBNOVIŤ SKENER
 <script src="./corners-under-dashboard.js?v=1"></script>
 <script src="./yellow-cards-under-dashboard.js?v=1"></script>
 <script src="./football-model-performance-center.js?v=6"></script>
+<script src="./esoccer-fc27.js?v=1"></script>
 
 </body>
 </html>
