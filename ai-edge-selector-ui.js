@@ -283,6 +283,7 @@
     const panel=$("ai-edge-top-opportunities");if(!panel)return;
     const title="<div style='font-size:13px;font-weight:900;letter-spacing:.6px;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div>";
     const note="";
+    const emptyFilterBar="<div aria-label='Filtrovanie TOP príležitostí' style='display:flex;gap:7px;overflow-x:auto;padding:5px 2px 10px;margin:5px 0 3px;scrollbar-width:thin;-webkit-overflow-scrolling:touch'>"+[["ALL","VŠETKY","#d7e9f8"],["EDGE25","EDGE 25","#38bdf8"],["FT","FT","#a78bfa"],["CORNERS","ROHY","#34d399"],["CARDS","KARTY","#fbbf24"]].map(([key,label,color])=>"<button type='button' data-top-filter='"+key+"' aria-pressed='"+(activeTopFilter===key)+"' style='flex:0 0 auto;min-height:37px;padding:7px 11px;border-radius:10px;border:1px solid "+color+"66;background:"+color+"18;color:"+color+";font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap'>"+label+"</button>").join("")+"</div>";
     const renderMarketLines=(model,items,policy,group)=>items.map(([key,label])=>{
       const item=model?.models?.[key]||{},c=item.counts||{},s=item.status;
       const state=s==="SHADOW_VALIDATED"?"VALIDOVANÝ":s==="NOT_VALIDATED"?"NEPREŠIEL":"ZBIERA VZORKY";
@@ -296,7 +297,7 @@
       "</div><div style='font-size:9px;color:#829bb2;margin-top:7px'>Flashscore · 5-minútové oneskorenie · rohy 55′–75′ · karty 55′–80′. Každá hranica sa validuje samostatne. Nevalidované hranice nevytvárajú TOP tip.</div></details>";
     const liveAt=Date.parse(data.collected_at||""),ledgerAt=Date.parse(ledger?.updated_at||"");
     if(!ledger||!Number.isFinite(liveAt)||Date.now()-liveAt>8*60000||!Number.isFinite(ledgerAt)||Date.now()-ledgerAt>6*60000){
-      panel.innerHTML=title+note+marketReadiness+"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#f4d28d;font-size:11px'>Výber je pozastavený: čakám na čerstvé LIVE dáta a aktuálnu predikčnú históriu.</div>";return;
+      panel.innerHTML=title+note+marketReadiness+emptyFilterBar+"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#f4d28d;font-size:11px'>Výber je pozastavený: čakám na čerstvé LIVE dáta a aktuálnu predikčnú históriu. Po obnovení dát sa zobrazia počty a filtrované príležitosti.</div>";applyTopFilter();return;
     }
     const live=new Map(usable.filter(x=>x.fx.ready).map(x=>[String(x.record.match?.id),x]));
     const latest=new Map();
