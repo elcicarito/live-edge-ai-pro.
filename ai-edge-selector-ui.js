@@ -296,15 +296,15 @@
       renderTopOpportunities(...args);
     },18500);
   }
-  function renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger,ftOnly=false){
+  function renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger,ftOnly=false,force=false){
     const panel=$("ai-edge-top-opportunities");if(!panel)return;
-    if(topPanelIsBusy()){
+    if(!force&&topPanelIsBusy()){
       pendingTopPanelRender=[data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger,ftOnly];
       scheduleTopPanelFlush();
       return;
     }
     pendingTopPanelRender=null;
-    const title="<div style='font-size:13px;font-weight:900;letter-spacing:.6px;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div>";
+    const title="<div style='display:flex;align-items:center;justify-content:space-between;gap:10px'><div style='font-size:13px;font-weight:900;letter-spacing:.6px;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><button type='button' data-top-refresh style='flex:0 0 auto;border:1px solid rgba(56,189,248,.55);border-radius:9px;padding:8px 11px;background:rgba(56,189,248,.13);color:#8bdcff;font-size:10px;font-weight:900;letter-spacing:.35px;cursor:pointer'>↻ AKTUALIZOVAŤ TOP</button></div>";
     const note="";
     const emptyFilterBar="<div style='font-size:9px;font-weight:900;letter-spacing:.8px;color:#9fb4ca;margin:9px 0 5px'>RÝCHLE PREPNUTIE MODULU</div><div aria-label='Filtrovanie TOP príležitostí' style='display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;margin:0 0 8px;scrollbar-width:thin;-webkit-overflow-scrolling:touch'>"+[["ALL","VŠETKY","#e5edf7"],["EDGE25","EDGE 25","#38bdf8"],["FT","FT","#a78bfa"],["CORNERS","ROHY","#34d399"],["CARDS","KARTY","#fbbf24"]].map(([key,label,color])=>"<button type='button' data-top-filter='"+key+"' aria-pressed='"+(activeTopFilter===key)+"' style='flex:0 0 auto;min-height:42px;padding:8px 14px;border-radius:11px;border:1.5px solid "+color+";background:"+color+"20;color:"+color+";font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap;box-shadow:0 2px 10px "+color+"18'>"+label+"</button>").join("")+"</div>";
     const renderMarketLines=(model,items,policy,group)=>items.map(([key,label])=>{
@@ -449,7 +449,7 @@
     applyTopFilter();
   }
 
-  function render(data,ledger,model,lateFtModel,cornersModel,cardsModel,topLedger,ftOnly=false){
+  function render(data,ledger,model,lateFtModel,cornersModel,cardsModel,topLedger,ftOnly=false,updateTop=true){
     const records=(data.records||[]).filter(r=>r.match?.source==="Flashscore"&&r.match.status==="live");
     const history=data.recent_history||[];
     const usable=records.map(r=>({record:r,fx:features(r.match,history,r.collected_at||data.collected_at)}));
@@ -457,7 +457,7 @@
     const fresh=usable.filter(x=>x.fx.ready).length;
     renderPredictionLedger(ledger);
     renderModelStatus(model,lateFtModel);
-    renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger,ftOnly);
+    if(updateTop)renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger,ftOnly,true);
     $("ai-edge-metrics").innerHTML=[
       ["<b>"+fmt(records.length)+"</b>","LIVE zápasy"],
       ["<b>"+fmt(withStats)+"</b>","So štatistikami"],
@@ -492,6 +492,7 @@
     $("ai-edge-audit-status").textContent="LIVE analytika · trvalá história · bez kurzov";
   }
   let refreshInFlight=false;
+  let topRefreshRequested=false;
   let activeRefreshCycle=0;
   let lastNonEmptyTopHtml=null;
   let lastNonEmptyTopCycle=0;
@@ -499,8 +500,8 @@
     let timer;
     return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(label+" · timeout "+Math.round(ms/1000)+" s")),ms);})]).finally(()=>clearTimeout(timer));
   }
-  async function refresh(){
-    if(refreshInFlight)return;
+  async function refresh(updateTop=false){
+    if(refreshInFlight){if(updateTop)topRefreshRequested=true;return;}
     refreshInFlight=true;
     activeRefreshCycle++;
     lastNonEmptyTopHtml=null;
@@ -509,7 +510,7 @@
       let feed;
       try{feed=await load();}catch(error){
         const state=$("ai-edge-state");if(state){state.className="ai-edge-state bad";state.textContent="LIVE DÁTA NEDOSTUPNÉ · "+(error?.message||"chyba LIVE feedu");}
-        const panel=$("ai-edge-top-opportunities");if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>LIVE feed sa nepodarilo načítať. Výber kandidátov je pozastavený, aby sa nezobrazovali neaktuálne údaje.</div>";
+        const panel=$("ai-edge-top-opportunities");if(updateTop&&panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>LIVE feed sa nepodarilo načítať. TOP zostáva bez zmeny; skús aktualizáciu neskôr.</div>";
         return;
       }
       if(feed.source!=="Flashscore"){
@@ -518,15 +519,15 @@
       }
 
       const panel=$("ai-edge-top-opportunities");
-      if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#c5d7e8;font-size:11px'>⚡ LIVE feed načítaný · overujem FT podklady (limit 7 s). Ak sa model alebo register neozve, TOP zobrazí dostupné dáta a nezostane visieť.</div>";
+      if(updateTop&&panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#c5d7e8;font-size:11px'>⚡ Aktualizujem TOP · overujem FT podklady (limit 7 s)…</div>";
 
       // Priorita prvého vykreslenia: iba nevyhodnotené FT príležitosti a ich nevyhnutné dáta.
       const [ledgerResult,lateFtResult,topLedgerResult]=await Promise.allSettled([settleWithin(loadLedger(),7000,"FT história"),settleWithin(loadLateFTModel(),7000,"FT model"),settleWithin(loadTopLedger(),7000,"TOP register")]);
       const ledger=ledgerResult.status==="fulfilled"?ledgerResult.value:null;
       const lateFtModel=lateFtResult.status==="fulfilled"?lateFtResult.value:null;
       const topLedger=topLedgerResult.status==="fulfilled"?topLedgerResult.value:null;
-      try{render(feed,ledger,null,lateFtModel,null,null,topLedger,true);}catch(error){
-        if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>FT sa nepodarilo zobraziť: "+esc(error?.message||"neznáma chyba")+".</div>";
+      try{render(feed,ledger,null,lateFtModel,null,null,topLedger,true,updateTop);}catch(error){
+        if(updateTop&&panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>FT sa nepodarilo zobraziť: "+esc(error?.message||"neznáma chyba")+".</div>";
       }
 
       // Až po zobrazení FT sa načítajú ostatné modely a doplnkové štatistiky.
@@ -534,8 +535,8 @@
       const model=modelResult.status==="fulfilled"?modelResult.value:null;
       const cornersModel=cornersResult.status==="fulfilled"?cornersResult.value:null;
       const cardsModel=cardsResult.status==="fulfilled"?cardsResult.value:null;
-      try{render(feed,ledger,model,lateFtModel,cornersModel,cardsModel,topLedger,false);}catch(error){
-        if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>Doplnenie modulov sa nepodarilo: "+esc(error?.message||"neznáma chyba")+".</div>";
+      try{render(feed,ledger,model,lateFtModel,cornersModel,cardsModel,topLedger,false,updateTop);}catch(error){
+        if(updateTop&&panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>Doplnenie modulov sa nepodarilo: "+esc(error?.message||"neznáma chyba")+".</div>";
       }
       if(simulationResult.status==="fulfilled")runStrategySimulation(simulationResult.value);
       else {const out=$("ai-edge-strategy-results");if(out)out.textContent="Simulátor je momentálne nedostupný: "+(simulationResult.reason?.message||"chyba načítania")+". LIVE výber kandidátov funguje nezávisle.";}
@@ -546,7 +547,10 @@
       if(cornersResult.status!=="fulfilled")warnings.push("model rohov: "+(cornersResult.reason?.message||"nedostupný"));
       if(cardsResult.status!=="fulfilled")warnings.push("model kariet: "+(cardsResult.reason?.message||"nedostupný"));
       if(warnings.length){const meta=$("ai-edge-updated");if(meta)meta.textContent+=" · "+warnings.join(" · ");}
-    }finally{refreshInFlight=false;}
+    }finally{
+      refreshInFlight=false;
+      if(topRefreshRequested){topRefreshRequested=false;refresh(true);}
+    }
   }
   document.addEventListener("DOMContentLoaded",()=>{
     const topPanel=$("ai-edge-top-opportunities");
@@ -557,6 +561,14 @@
     };
     document.addEventListener("click",event=>{
       markTopInteraction(event);
+      const refreshButton=event.target.closest("[data-top-refresh]");
+      if(refreshButton){
+        if(refreshInFlight){topRefreshRequested=true;refreshButton.textContent="ČAKÁM…";return;}
+        refreshButton.disabled=true;
+        refreshButton.textContent="AKTUALIZUJEM…";
+        refresh(true);
+        return;
+      }
       const filter=event.target.closest("[data-top-filter]");
       if(!filter)return;
       activeTopFilter=filter.dataset.topFilter||"ALL";
@@ -578,5 +590,5 @@
         scheduleTopPanelFlush();
       }
     },true);
-    document.addEventListener("input",event=>{const input=event.target.closest("[data-ai-edge-odds]");if(!input)return;const key=input.dataset.aiEdgeOdds;foundOdds.set(key,input.value);try{localStorage.setItem(ODDS_STORAGE_KEY,JSON.stringify(Object.fromEntries(foundOdds)));}catch{}const wrap=input.closest(".ai-edge-odds-check"),result=wrap?.querySelector(".ai-edge-odds-result");if(!result)return;const value=Number(input.value.replace(',','.')),minimum=Number(input.dataset.minOdds),conservative=Number(input.dataset.conservativeProbability),ev=input.value.trim()&&Number.isFinite(value)&&value>1&&Number.isFinite(conservative)?(value*conservative-1)*100:null,evOutput=wrap.querySelector("[data-ev-output]");if(evOutput){evOutput.textContent=ev===null?"Odhadované EV pri zadanom kurze: —":"Odhadované EV pri zadanom kurze: "+(ev>=0?"+":"")+ev.toFixed(1)+" % na vklad";evOutput.style.color=ev!==null&&value+1e-9>=minimum?"#39d98a":ev!==null&&ev>0?"#f4d27a":"#f08b8b";}if(!input.value.trim()){result.className="ai-edge-odds-result neutral";result.textContent="ČAKÁ NA TVOJ KURZ";}else if(!Number.isFinite(value)||value<=1){result.className="ai-edge-odds-result neutral";result.textContent="NEPLATNÝ KURZ";}else if(!Number.isFinite(minimum)||minimum<=1){result.className="ai-edge-odds-result neutral";result.textContent="MINIMÁLNY KURZ NIE JE DOSTUPNÝ";}else if(value+1e-9>=minimum){result.className="ai-edge-odds-result good";result.textContent="KURZ DOSAHUJE MINIMUM · EV+ ODHAD";}else if(ev!==null&&ev>0){result.className="ai-edge-odds-result neutral";result.textContent="EV KLADNÉ, ALE POD BEZPEČNÝM MINIMOM";}else{result.className="ai-edge-odds-result bad";result.textContent="KURZ POD MINIMOM · EV NIE JE KLADNÉ";}});$("ai-edge-sim-run")?.addEventListener("click",async()=>{try{runStrategySimulation(await loadStrategy());}catch(e){const out=$("ai-edge-strategy-results");if(out)out.textContent=e.message;}});refresh();window.setInterval(refresh,60000);});
+    document.addEventListener("input",event=>{const input=event.target.closest("[data-ai-edge-odds]");if(!input)return;const key=input.dataset.aiEdgeOdds;foundOdds.set(key,input.value);try{localStorage.setItem(ODDS_STORAGE_KEY,JSON.stringify(Object.fromEntries(foundOdds)));}catch{}const wrap=input.closest(".ai-edge-odds-check"),result=wrap?.querySelector(".ai-edge-odds-result");if(!result)return;const value=Number(input.value.replace(',','.')),minimum=Number(input.dataset.minOdds),conservative=Number(input.dataset.conservativeProbability),ev=input.value.trim()&&Number.isFinite(value)&&value>1&&Number.isFinite(conservative)?(value*conservative-1)*100:null,evOutput=wrap.querySelector("[data-ev-output]");if(evOutput){evOutput.textContent=ev===null?"Odhadované EV pri zadanom kurze: —":"Odhadované EV pri zadanom kurze: "+(ev>=0?"+":"")+ev.toFixed(1)+" % na vklad";evOutput.style.color=ev!==null&&value+1e-9>=minimum?"#39d98a":ev!==null&&ev>0?"#f4d27a":"#f08b8b";}if(!input.value.trim()){result.className="ai-edge-odds-result neutral";result.textContent="ČAKÁ NA TVOJ KURZ";}else if(!Number.isFinite(value)||value<=1){result.className="ai-edge-odds-result neutral";result.textContent="NEPLATNÝ KURZ";}else if(!Number.isFinite(minimum)||minimum<=1){result.className="ai-edge-odds-result neutral";result.textContent="MINIMÁLNY KURZ NIE JE DOSTUPNÝ";}else if(value+1e-9>=minimum){result.className="ai-edge-odds-result good";result.textContent="KURZ DOSAHUJE MINIMUM · EV+ ODHAD";}else if(ev!==null&&ev>0){result.className="ai-edge-odds-result neutral";result.textContent="EV KLADNÉ, ALE POD BEZPEČNÝM MINIMOM";}else{result.className="ai-edge-odds-result bad";result.textContent="KURZ POD MINIMOM · EV NIE JE KLADNÉ";}});$("ai-edge-sim-run")?.addEventListener("click",async()=>{try{runStrategySimulation(await loadStrategy());}catch(e){const out=$("ai-edge-strategy-results");if(out)out.textContent=e.message;}});refresh(true);window.setInterval(()=>refresh(false),60000);});
 })();
