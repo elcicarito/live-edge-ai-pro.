@@ -279,8 +279,31 @@
     panel.querySelectorAll("[data-top-module]").forEach(card=>{card.style.display=activeTopFilter==="ALL"||card.dataset.topModule===activeTopFilter?"":"none";});
     panel.querySelectorAll("[data-top-filter]").forEach(button=>{const active=button.dataset.topFilter===activeTopFilter;button.setAttribute("aria-pressed",String(active));button.style.opacity=active?"1":".66";button.style.transform=active?"translateY(-1px)":"";button.style.boxShadow=active?"0 0 0 2px rgba(226,240,255,.16)":"none";});
   }
+  let topPanelLastInteractionAt=0;
+  let pendingTopPanelRender=null;
+  let topPanelFlushTimer=null;
+  function topPanelIsBusy(){
+    const panel=$("ai-edge-top-opportunities");
+    return !!panel && (Date.now()-topPanelLastInteractionAt<18000 || panel.contains(document.activeElement) || !!panel.querySelector("details[open]"));
+  }
+  function scheduleTopPanelFlush(){
+    if(topPanelFlushTimer)clearTimeout(topPanelFlushTimer);
+    topPanelFlushTimer=setTimeout(()=>{
+      topPanelFlushTimer=null;
+      if(!pendingTopPanelRender || topPanelIsBusy())return;
+      const args=pendingTopPanelRender;
+      pendingTopPanelRender=null;
+      renderTopOpportunities(...args);
+    },18500);
+  }
   function renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger){
     const panel=$("ai-edge-top-opportunities");if(!panel)return;
+    if(topPanelIsBusy()){
+      pendingTopPanelRender=[data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger];
+      scheduleTopPanelFlush();
+      return;
+    }
+    pendingTopPanelRender=null;
     const title="<div style='font-size:13px;font-weight:900;letter-spacing:.6px;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div>";
     const note="";
     const emptyFilterBar="<div style='font-size:9px;font-weight:900;letter-spacing:.8px;color:#9fb4ca;margin:9px 0 5px'>RÝCHLE PREPNUTIE MODULU</div><div aria-label='Filtrovanie TOP príležitostí' style='display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;margin:0 0 8px;scrollbar-width:thin;-webkit-overflow-scrolling:touch'>"+[["ALL","VŠETKY","#e5edf7"],["EDGE25","EDGE 25","#38bdf8"],["FT","FT","#a78bfa"],["CORNERS","ROHY","#34d399"],["CARDS","KARTY","#fbbf24"]].map(([key,label,color])=>"<button type='button' data-top-filter='"+key+"' aria-pressed='"+(activeTopFilter===key)+"' style='flex:0 0 auto;min-height:42px;padding:8px 14px;border-radius:11px;border:1.5px solid "+color+";background:"+color+"20;color:"+color+";font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap;box-shadow:0 2px 10px "+color+"18'>"+label+"</button>").join("")+"</div>";
@@ -499,5 +522,35 @@
       if(warnings.length){const meta=$("ai-edge-updated");if(meta)meta.textContent+=" · "+warnings.join(" · ");}
     }finally{refreshInFlight=false;}
   }
-  document.addEventListener("DOMContentLoaded",()=>{document.addEventListener("click",event=>{const filter=event.target.closest("[data-top-filter]");if(!filter)return;activeTopFilter=filter.dataset.topFilter||"ALL";applyTopFilter();});document.addEventListener("input",event=>{const input=event.target.closest("[data-ai-edge-odds]");if(!input)return;const key=input.dataset.aiEdgeOdds;foundOdds.set(key,input.value);try{localStorage.setItem(ODDS_STORAGE_KEY,JSON.stringify(Object.fromEntries(foundOdds)));}catch{}const wrap=input.closest(".ai-edge-odds-check"),result=wrap?.querySelector(".ai-edge-odds-result");if(!result)return;const value=Number(input.value.replace(',','.')),minimum=Number(input.dataset.minOdds),conservative=Number(input.dataset.conservativeProbability),ev=input.value.trim()&&Number.isFinite(value)&&value>1&&Number.isFinite(conservative)?(value*conservative-1)*100:null,evOutput=wrap.querySelector("[data-ev-output]");if(evOutput){evOutput.textContent=ev===null?"Odhadované EV pri zadanom kurze: —":"Odhadované EV pri zadanom kurze: "+(ev>=0?"+":"")+ev.toFixed(1)+" % na vklad";evOutput.style.color=ev!==null&&value+1e-9>=minimum?"#39d98a":ev!==null&&ev>0?"#f4d27a":"#f08b8b";}if(!input.value.trim()){result.className="ai-edge-odds-result neutral";result.textContent="ČAKÁ NA TVOJ KURZ";}else if(!Number.isFinite(value)||value<=1){result.className="ai-edge-odds-result neutral";result.textContent="NEPLATNÝ KURZ";}else if(!Number.isFinite(minimum)||minimum<=1){result.className="ai-edge-odds-result neutral";result.textContent="MINIMÁLNY KURZ NIE JE DOSTUPNÝ";}else if(value+1e-9>=minimum){result.className="ai-edge-odds-result good";result.textContent="KURZ DOSAHUJE MINIMUM · EV+ ODHAD";}else if(ev!==null&&ev>0){result.className="ai-edge-odds-result neutral";result.textContent="EV KLADNÉ, ALE POD BEZPEČNÝM MINIMOM";}else{result.className="ai-edge-odds-result bad";result.textContent="KURZ POD MINIMOM · EV NIE JE KLADNÉ";}});$("ai-edge-sim-run")?.addEventListener("click",async()=>{try{runStrategySimulation(await loadStrategy());}catch(e){const out=$("ai-edge-strategy-results");if(out)out.textContent=e.message;}});refresh();window.setInterval(refresh,60000);});
+  document.addEventListener("DOMContentLoaded",()=>{
+    const topPanel=$("ai-edge-top-opportunities");
+    const markTopInteraction=event=>{
+      if(!topPanel || !event.target?.closest || !event.target.closest("#ai-edge-top-opportunities"))return;
+      topPanelLastInteractionAt=Date.now();
+      if(pendingTopPanelRender)scheduleTopPanelFlush();
+    };
+    document.addEventListener("click",event=>{
+      markTopInteraction(event);
+      const filter=event.target.closest("[data-top-filter]");
+      if(!filter)return;
+      activeTopFilter=filter.dataset.topFilter||"ALL";
+      applyTopFilter();
+    },true);
+    document.addEventListener("touchstart",markTopInteraction,{capture:true,passive:true});
+    document.addEventListener("touchmove",markTopInteraction,{capture:true,passive:true});
+    document.addEventListener("wheel",markTopInteraction,{capture:true,passive:true});
+    document.addEventListener("focusin",markTopInteraction,true);
+    document.addEventListener("focusout",event=>{
+      if(event.target?.closest?.("#ai-edge-top-opportunities") && pendingTopPanelRender){
+        topPanelLastInteractionAt=Date.now();
+        scheduleTopPanelFlush();
+      }
+    },true);
+    document.addEventListener("toggle",event=>{
+      if(event.target?.closest?.("#ai-edge-top-opportunities") && !event.target.open && pendingTopPanelRender){
+        topPanelLastInteractionAt=0;
+        scheduleTopPanelFlush();
+      }
+    },true);
+    document.addEventListener("input",event=>{const input=event.target.closest("[data-ai-edge-odds]");if(!input)return;const key=input.dataset.aiEdgeOdds;foundOdds.set(key,input.value);try{localStorage.setItem(ODDS_STORAGE_KEY,JSON.stringify(Object.fromEntries(foundOdds)));}catch{}const wrap=input.closest(".ai-edge-odds-check"),result=wrap?.querySelector(".ai-edge-odds-result");if(!result)return;const value=Number(input.value.replace(',','.')),minimum=Number(input.dataset.minOdds),conservative=Number(input.dataset.conservativeProbability),ev=input.value.trim()&&Number.isFinite(value)&&value>1&&Number.isFinite(conservative)?(value*conservative-1)*100:null,evOutput=wrap.querySelector("[data-ev-output]");if(evOutput){evOutput.textContent=ev===null?"Odhadované EV pri zadanom kurze: —":"Odhadované EV pri zadanom kurze: "+(ev>=0?"+":"")+ev.toFixed(1)+" % na vklad";evOutput.style.color=ev!==null&&value+1e-9>=minimum?"#39d98a":ev!==null&&ev>0?"#f4d27a":"#f08b8b";}if(!input.value.trim()){result.className="ai-edge-odds-result neutral";result.textContent="ČAKÁ NA TVOJ KURZ";}else if(!Number.isFinite(value)||value<=1){result.className="ai-edge-odds-result neutral";result.textContent="NEPLATNÝ KURZ";}else if(!Number.isFinite(minimum)||minimum<=1){result.className="ai-edge-odds-result neutral";result.textContent="MINIMÁLNY KURZ NIE JE DOSTUPNÝ";}else if(value+1e-9>=minimum){result.className="ai-edge-odds-result good";result.textContent="KURZ DOSAHUJE MINIMUM · EV+ ODHAD";}else if(ev!==null&&ev>0){result.className="ai-edge-odds-result neutral";result.textContent="EV KLADNÉ, ALE POD BEZPEČNÝM MINIMOM";}else{result.className="ai-edge-odds-result bad";result.textContent="KURZ POD MINIMOM · EV NIE JE KLADNÉ";}});$("ai-edge-sim-run")?.addEventListener("click",async()=>{try{runStrategySimulation(await loadStrategy());}catch(e){const out=$("ai-edge-strategy-results");if(out)out.textContent=e.message;}});refresh();window.setInterval(refresh,60000);});
 })();
