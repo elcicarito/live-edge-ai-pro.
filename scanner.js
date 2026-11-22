@@ -120,6 +120,7 @@
   let scanning = false;
   let backgroundHydrationStarted = false;
   let backgroundHydrationReady = false;
+  let backgroundHydrationRefreshPending = false;
   let backgroundHydrationData = null;
   let signalHistory = [];
   let pageLastSuccessAt = null;
@@ -6465,6 +6466,7 @@
           };
           backgroundHydrationReady = true;
           if (!scanning) scan();
+          else backgroundHydrationRefreshPending = true;
         }).catch(error => console.warn("Doplnkové dáta sa nepodarilo načítať:", error));
       }
 
@@ -6732,6 +6734,10 @@
 
     } finally {
       scanning = false;
+      if (backgroundHydrationRefreshPending) {
+        backgroundHydrationRefreshPending = false;
+        scan();
+      }
     }
   }
 
