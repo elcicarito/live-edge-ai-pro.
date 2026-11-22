@@ -65,4 +65,15 @@ const finalCardsTeamMismatch = cards.buildSamples(
 );
 assert.equal(finalCardsTeamMismatch.excluded.invalid_card_sequence, 1,
   "matching total with mismatched team counts must be rejected");
+
+const currentDeltaRow = row("delta", 65, 2, 1);
+const stalePreviousRow = row("delta", 50, 1, 1);
+const staleFeatures = cards.featureVector(currentDeltaRow, stalePreviousRow);
+assert.equal(staleFeatures[12], 0, "card delta must be zero when the previous snapshot is older than 12 minutes");
+assert.equal(staleFeatures[13], 0, "foul delta must be zero when the previous snapshot is older than 12 minutes");
+assert.equal(staleFeatures[14], 0, "shot delta must be zero when the previous snapshot is older than 12 minutes");
+const recentPreviousRow = row("delta", 60, 1, 1);
+const recentFeatures = cards.featureVector(currentDeltaRow, recentPreviousRow);
+assert.ok(recentFeatures[12] > 0, "recent snapshot deltas remain available inside the 12-minute window");
+
 process.stdout.write("AI EDGE live cards shadow trainer tests passed.\n");
