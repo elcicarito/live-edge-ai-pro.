@@ -1346,6 +1346,9 @@
   }
 
   if (flashscoreArchiveDateEl) flashscoreArchiveDateEl.value = localDateKey();
+  if (flashscoreArchiveStatusEl) {
+    flashscoreArchiveStatusEl.textContent = "Archív sa načíta až po stlačení tlačidla NAČÍTAŤ ZÁZNAMY. Veľký historický súbor sa pri štarte aplikácie nesťahuje.";
+  }
   if (flashscoreArchiveLoadEl) flashscoreArchiveLoadEl.addEventListener("click", loadFlashscoreArchive);
   if (flashscoreArchiveDateEl) flashscoreArchiveDateEl.addEventListener("change", loadFlashscoreArchive);
   if (flashscoreArchiveSearchEl) flashscoreArchiveSearchEl.addEventListener("input", renderFlashscoreArchive);
@@ -1353,7 +1356,7 @@
     flashscoreArchiveFilter = button.dataset.flashscoreFilter || "all";
     renderFlashscoreArchive();
   }));
-  loadFlashscoreArchive();
+  // Historical timeline is loaded only when the user requests the archive.
 
 
   let lastRenderedSignalArchive = null;
