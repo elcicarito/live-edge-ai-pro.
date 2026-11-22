@@ -2022,6 +2022,18 @@ input,select,textarea{border-color:#344b65!important;background:#0d1928!importan
  #football-view .football-hero-feature-grid small{font-size:7px}
 }
 
+
+/* Moduly mimo TOP príležitostí sú predvolene zbalené. */
+.module-disclosure{margin:9px 0!important;padding:0!important;overflow:hidden}
+.module-disclosure>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:48px;padding:13px 14px;cursor:pointer;list-style:none;color:#e5effa;font-size:12px;font-weight:900;letter-spacing:.25px}
+.module-disclosure>summary::-webkit-details-marker{display:none}
+.module-disclosure>summary:after{content:'＋';margin-left:auto;color:#7dd3fc;font-size:16px}
+.module-disclosure[open]>summary:after{content:'−'}
+.module-disclosure>summary small{display:block;margin-left:auto;color:#8fa6bf;font-size:9px;font-weight:600;letter-spacing:0;text-align:right}
+.module-disclosure[open]>section{margin:0!important}
+#football-overview-details .dashboard-grid{padding:0 12px;margin:0 0 8px!important}
+#football-overview-details #dashboard-updated{padding:0 12px 10px!important}
+#ai-edge-top-simulation{margin:9px 0!important}
 </style>
 </head>
 
@@ -2074,6 +2086,7 @@ input,select,textarea{border-color:#344b65!important;background:#0d1928!importan
   <a href="#flashscore-match-archive-card">🗂 Archív</a>
 </nav>
 
+<details class="card module-disclosure" id="football-overview-details"><summary>📊 ZÁKLADNÝ LIVE PREHĽAD <small>Počty zápasov, signálov a stav dát</small></summary>
 <div class="dashboard-grid football-overview-grid" aria-label="Futbalový LIVE prehľad">
   <div class="metric football-overview-live"><div class="metric-value" id="dashboard-live-count">—</div><div class="metric-label">LIVE zápasy</div></div>
   <div class="metric football-overview-signals"><div class="metric-value" id="dashboard-signal-count">—</div><div class="metric-label">Potvrdené signály</div></div>
@@ -2081,14 +2094,18 @@ input,select,textarea{border-color:#344b65!important;background:#0d1928!importan
   <div class="metric football-overview-status metric-status"><div class="metric-value" id="dashboard-data-status">ČAKÁM</div><div class="metric-label">Stav dát</div></div>
 </div>
 <p id="dashboard-updated">Posledná aktualizácia: čakám na prvý zber</p>
+</details>
 <details id="ai-edge-top-simulation" class="card ai-edge-top-simulation-card" aria-live="polite" aria-label="Simulácia AI EDGE pri individuálnom minimálnom kurze"><summary class="ai-edge-top-simulation-heading"><span>AI EDGE · SIMULÁCIA MINIMÁLNYCH KURZOV</span><small>1 jednotka / zápas</small></summary><div class="ai-edge-top-simulation-content"><div id="ai-edge-top-simulation-summary" class="ai-edge-top-simulation-summary"><span>Načítavam vyhodnotené predikcie…</span></div><p class="ai-edge-top-simulation-note">Samostatné výsledky AI EDGE 25 a GÓL DO KONCA ZÁPASU. Hypotetická simulácia podľa minimálneho kurzu modelu, nie potvrdený reálny zisk.</p></div></details>
 <div id="live-data-health" aria-live="polite"><span>Kontrola aktualizácie sa pripravuje…</span></div>
 
-<section id="ai-edge-top-opportunities" aria-live="polite" aria-label="Najlepšie LIVE príležitosti podľa validovaného modelu" style="padding:13px 14px;margin:10px 0;border:1px solid #31566c;border-left:3px solid #38bdf8;border-radius:13px;background:linear-gradient(135deg,#14263a 0%,#101b2a 100%);"><div style="font-size:12px;font-weight:900;color:#d7f2ff">🎯 TOP LIVE PRÍLEŽITOSTI</div><div style="font-size:10px;color:#8fa6bf;margin-top:5px">Načítavam validované modelové kandidáty…</div></section>\n\n<section id="live-pressure-overview" aria-live="polite" aria-label="Doplnková analýza tlaku v LIVE zápasoch">
+<section id="ai-edge-top-opportunities" aria-live="polite" aria-label="Najlepšie LIVE príležitosti podľa validovaného modelu" style="padding:13px 14px;margin:10px 0;border:1px solid #31566c;border-left:3px solid #38bdf8;border-radius:13px;background:linear-gradient(135deg,#14263a 0%,#101b2a 100%);"><div style="font-size:12px;font-weight:900;color:#d7f2ff">🎯 TOP LIVE PRÍLEŽITOSTI</div><div style="font-size:10px;color:#8fa6bf;margin-top:5px">Načítavam validované modelové kandidáty…</div></section>\n\n<details class="card module-disclosure" id="live-pressure-details"><summary>🔥 LIVE TLAK <small>Otvoriť prehľad zápasov s najvyššou aktivitou</small></summary>
+<section id="live-pressure-overview" aria-live="polite" aria-label="Doplnková analýza tlaku v LIVE zápasoch">
   <div style="font-size:12px;font-weight:900;color:#c8e7ff">🔥 TOP LIVE TLAK</div>
   <div style="font-size:10px;color:#8fa6bf;margin-top:5px">Čakám na aktuálne štatistiky zápasov…</div>
 </section>
+</details>
 
+<details class="card module-disclosure" id="corners-under-details"><summary>🚩 ROHY UNDER LAB <small>Samostatná analytika rohov</small></summary>
 <section id="corners-under-lab" class="corners-lab" aria-live="polite" aria-label="AI rohy UNDER shadow prehľad">
   <div class="corners-lab-head">
     <div><div class="corners-lab-eyebrow">FLASHScore DATA · TOTAL MATCH CORNERS</div><h3 class="corners-lab-title">🚩 ROHY UNDER LAB</h3></div>
@@ -2098,8 +2115,10 @@ input,select,textarea{border-color:#344b65!important;background:#0d1928!importan
   <div id="corners-under-overview" class="corners-lab-grid"><div class="corners-line-card">Načítavam tréningové dáta…</div></div>
   <div id="corners-under-meta" class="corners-lab-foot">Čakám na prvý report modelu.</div>
 </section>
+</details>
 
 
+<details class="card module-disclosure" id="yellow-cards-under-details"><summary>🟨 ŽLTÉ KARTY LAB <small>Samostatná analytika kariet</small></summary>
 <section id="yellow-cards-under-lab" class="cards-lab" aria-live="polite" aria-label="AI žlté karty OVER UNDER shadow prehľad">
   <div class="cards-lab-head">
     <div><div class="cards-lab-eyebrow">FLASHSCORE DATA · TOTAL MATCH YELLOW CARDS</div><h3 class="cards-lab-title">🟨 ŽLTÉ KARTY OVER / UNDER LAB</h3></div>
@@ -2109,8 +2128,10 @@ input,select,textarea{border-color:#344b65!important;background:#0d1928!importan
   <div id="yellow-cards-under-overview" class="cards-lab-grid"><div class="cards-line-card">Načítavam tréningové dáta…</div></div>
   <div id="yellow-cards-under-meta" class="cards-lab-foot">Čakám na prvý report modelu.</div>
 </section>
+</details>
 
 
+<details class="card module-disclosure" id="ai-edge-prediction-details"><summary>🧠 LIVE PREDIKČNÝ PREHĽAD <small>Otvoriť validované predikcie a stav modelu</small></summary>
 <section id="ai-edge-selector-panel" class="card ai-edge-card" aria-live="polite">
   <div class="ai-edge-head">
     <div><div class="ai-edge-kicker">LIVE INTELLIGENCE · FLASHSCORE</div><h3>🎯 AI EDGE SELECTOR</h3>
@@ -2170,9 +2191,11 @@ input,select,textarea{border-color:#344b65!important;background:#0d1928!importan
   <p id="ai-edge-warning" class="ai-edge-warning">Index tlaku je experimentálny signál z dostupných štatistík, nie overená pravdepodobnosť gólu. Model sa nesmie zamieňať s potvrdenou úspešnosťou.</p>
   <div class="ai-edge-footer"><span id="ai-edge-updated">Čakám na LIVE feed…</span><span id="ai-edge-audit-status">Režim: LIVE predikcie</span></div>
 </section>
+</details>
 
 <div id="signal" hidden></div>
 
+<details class="card module-disclosure" id="all-live-matches-details"><summary>⚽ VŠETKY LIVE ZÁPASY <small>Otvoriť kompletný zoznam a filtre</small></summary>
 <div class="live-filter-bar" role="group" aria-label="Filtrovanie LIVE zápasov">
   <button type="button" class="live-filter-btn" data-live-filter="confirmed" aria-pressed="false">⚡ Signály</button>
   <button type="button" class="live-filter-btn" data-live-filter="pressure" aria-pressed="false">⚠ Tlak</button>
@@ -2181,6 +2204,7 @@ input,select,textarea{border-color:#344b65!important;background:#0d1928!importan
 <div class="card">
   <p id="matches">Načítavam LIVE zápasy...</p>
 </div>
+</details>
 
 <details class="card engine-details">
   <summary>
