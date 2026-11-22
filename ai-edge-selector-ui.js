@@ -299,7 +299,7 @@
   function renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger,ftOnly=false){
     const panel=$("ai-edge-top-opportunities");if(!panel)return;
     if(topPanelIsBusy()){
-      pendingTopPanelRender=[data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger];
+      pendingTopPanelRender=[data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger,ftOnly];
       scheduleTopPanelFlush();
       return;
     }
@@ -434,7 +434,18 @@
     const diagnostics="<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:6px;margin:8px 0 10px'>"+
       [["LIVE ZÁPASY",liveCount],["ČERSTVÉ ŠTATISTIKY",readyCount],["ČAKÁ NA MERANIA",waitingCount],["OTVORENÉ TOP TIPY",openCount]].map(([label,value])=>"<div style='padding:8px;border:1px solid rgba(137,165,194,.17);border-radius:9px;background:rgba(9,19,31,.45)'><div style='font-size:16px;font-weight:900;color:#e8f1fa;font-variant-numeric:tabular-nums'>"+fmt(value)+"</div><div style='font-size:9px;color:#8fa6bc;letter-spacing:.5px;margin-top:3px'>"+label+"</div></div>").join("")+
       "</div><div style='font-size:10px;color:#829bb2;line-height:1.45;margin-bottom:8px'>Čerstvé štatistiky = zápas prešiel aktuálnym filtrom použiteľnosti dát. Čakanie na merania nie je zamietnutie predikcie; model sa zobrazí až po splnení všetkých vlastných podmienok.</div>";
-    panel.innerHTML=title+note+filterBar+marketReadiness+diagnostics+noCandidate+(topLedger?topStats:"<div style='margin-top:12px;padding:9px;color:#f4d28d;font-size:11px'>Samostatný TOP register sa ešte pripravuje; štatistika sa zobrazí po prvom úspešnom behu kolektora.</div>");
+    const nextHtml=title+note+filterBar+marketReadiness+diagnostics+noCandidate+(topLedger?topStats:"<div style='margin-top:12px;padding:9px;color:#f4d28d;font-size:11px'>Samostatný TOP register sa ešte pripravuje; štatistika sa zobrazí po prvom úspešnom behu kolektora.</div>");
+    // Druhá fáza dopĺňa modely. Ak jej výpočet v tom istom obnovení vráti prázdny zoznam,
+    // nesmie zmazať FT karty, ktoré už prvá fáza úspešne vykreslila.
+    if(cards){
+      lastNonEmptyTopHtml=nextHtml;
+      lastNonEmptyTopCycle=activeRefreshCycle;
+    }else if(lastNonEmptyTopHtml&&lastNonEmptyTopCycle===activeRefreshCycle){
+      panel.innerHTML=lastNonEmptyTopHtml;
+      applyTopFilter();
+      return;
+    }
+    panel.innerHTML=nextHtml;
     applyTopFilter();
   }
 
@@ -481,6 +492,9 @@
     $("ai-edge-audit-status").textContent="LIVE analytika · trvalá história · bez kurzov";
   }
   let refreshInFlight=false;
+  let activeRefreshCycle=0;
+  let lastNonEmptyTopHtml=null;
+  let lastNonEmptyTopCycle=0;
   function settleWithin(promise,ms,label){
     let timer;
     return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(label+" · timeout "+Math.round(ms/1000)+" s")),ms);})]).finally(()=>clearTimeout(timer));
@@ -488,6 +502,9 @@
   async function refresh(){
     if(refreshInFlight)return;
     refreshInFlight=true;
+    activeRefreshCycle++;
+    lastNonEmptyTopHtml=null;
+    lastNonEmptyTopCycle=activeRefreshCycle;
     try{
       let feed;
       try{feed=await load();}catch(error){
