@@ -6470,9 +6470,9 @@
         }).catch(error => console.warn("Doplnkové dáta sa nepodarilo načítať:", error));
       }
 
-      const historyData = backgroundHydrationReady
-        ? (backgroundHydrationData?.history || [])
-        : (Array.isArray(current.recent_history) ? current.recent_history : []);
+      const historyData = Array.isArray(current.recent_history)
+        ? current.recent_history
+        : backgroundHydrationReady ? (backgroundHydrationData?.history || []) : [];
       if (backgroundHydrationReady && Array.isArray(historyData)) {
         flashscoreRecentHistoryStatus = { state: "READY", count: historyData.length, error: "" };
         flashscoreRecentHistoryCache = { loadedAt: Date.now(), rows: historyData };
