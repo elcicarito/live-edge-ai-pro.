@@ -488,7 +488,7 @@
     }).join(""):'<p>Momentálne nie sú vo feede aktívne Flashscore zápasy.</p>';
     $("ai-edge-data-meta").innerHTML='<div><span>Zdroj</span><b>Flashscore LIVE · '+esc(data.data_status||"—")+'</b></div><div><span>História v LIVE feede</span><b>'+fmt(data.recent_history_count||history.length)+' snímok</b></div><div><span>Čerstvé štatistiky</span><b>'+fresh+' / '+records.length+'</b></div>';
     $("ai-edge-warning").textContent="Index tlaku je iba opis aktivity, nie pravdepodobnosť. AI EDGE SHADOW je experimentálna tieňová predikcia; každý horizont sa zobrazuje iba vtedy, keď prejde vlastnou validáciou a kalibračným filtrom. Zelené označenie znamená iba to, že ručne zadaný kurz dosahuje vypočítaný minimálny limit — nie potvrdenú stávkovú výhodu ani pokyn na podanie. Časové okno vychádza z päťminútového predpokladu oneskorenia.";
-    $("ai-edge-updated").textContent="Feed: "+date(data.collected_at)+" · automatická obnova každých 60 s";
+    $("ai-edge-updated").textContent="Feed: "+date(data.collected_at)+" · LIVE feed automaticky 60 s · TOP obnovíš tlačidlom";
     $("ai-edge-audit-status").textContent="LIVE analytika · trvalá história · bez kurzov";
   }
   let refreshInFlight=false;
