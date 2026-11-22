@@ -296,7 +296,7 @@
       renderTopOpportunities(...args);
     },18500);
   }
-  function renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger){
+  function renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger,ftOnly=false){
     const panel=$("ai-edge-top-opportunities");if(!panel)return;
     if(topPanelIsBusy()){
       pendingTopPanelRender=[data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger];
@@ -373,6 +373,8 @@
       if(alreadyCaptured.has(groupId))continue;
       addCandidate(row,current);
     }
+    // Prvé zobrazenie po načítaní feedu obsahuje iba FT; ostatné trhy sa doplnia následne.
+    if(ftOnly){for(let i=candidates.length-1;i>=0;i--)if(candidates[i].target!=="MODEL_FT")candidates.splice(i,1);}
     // Optional manually entered odds must not distort model ranking.
     // Rank by conservative probability, calibration quality, then current Flashscore data quality.
     candidates.sort((a,b)=>
@@ -436,7 +438,7 @@
     applyTopFilter();
   }
 
-  function render(data,ledger,model,lateFtModel,cornersModel,cardsModel,topLedger){
+  function render(data,ledger,model,lateFtModel,cornersModel,cardsModel,topLedger,ftOnly=false){
     const records=(data.records||[]).filter(r=>r.match?.source==="Flashscore"&&r.match.status==="live");
     const history=data.recent_history||[];
     const usable=records.map(r=>({record:r,fx:features(r.match,history,r.collected_at||data.collected_at)}));
@@ -444,7 +446,7 @@
     const fresh=usable.filter(x=>x.fx.ready).length;
     renderPredictionLedger(ledger);
     renderModelStatus(model,lateFtModel);
-    renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger);
+    renderTopOpportunities(data,ledger,model,lateFtModel,cornersModel,cardsModel,usable,topLedger,ftOnly);
     $("ai-edge-metrics").innerHTML=[
       ["<b>"+fmt(records.length)+"</b>","LIVE zápasy"],
       ["<b>"+fmt(withStats)+"</b>","So štatistikami"],
@@ -494,31 +496,34 @@
         return;
       }
 
-      // Zobraz TOP výber hneď po načítaní primárneho LIVE feedu.
-      // História, kalibrácie a simulácie sa doplnia asynchrónne a neblokujú prvé vykreslenie.
-      try{render(feed,null,null,null,null,null,null);}catch(error){
-        const panel=$("ai-edge-top-opportunities");if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>Prvé vykreslenie sa nepodarilo: "+esc(error?.message||"neznáma chyba")+".</div>";
+      const panel=$("ai-edge-top-opportunities");
+      if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#c5d7e8;font-size:11px'>⚡ Načítavam najskôr FT · ostatné moduly prídu následne.</div>";
+
+      // Priorita prvého vykreslenia: iba nevyhodnotené FT príležitosti a ich nevyhnutné dáta.
+      const [ledgerResult,lateFtResult,topLedgerResult]=await Promise.allSettled([loadLedger(),loadLateFTModel(),loadTopLedger()]);
+      const ledger=ledgerResult.status==="fulfilled"?ledgerResult.value:null;
+      const lateFtModel=lateFtResult.status==="fulfilled"?lateFtResult.value:null;
+      const topLedger=topLedgerResult.status==="fulfilled"?topLedgerResult.value:null;
+      try{render(feed,ledger,null,lateFtModel,null,null,topLedger,true);}catch(error){
+        if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>FT sa nepodarilo zobraziť: "+esc(error?.message||"neznáma chyba")+".</div>";
       }
 
-      const [ledgerResult,modelResult,lateFtResult,cornersResult,cardsResult,simulationResult,topLedgerResult]=await Promise.allSettled([loadLedger(),loadModel(),loadLateFTModel(),loadMarketModel(CORNERS_MODEL,"FORWARD_ONLY_LIVE_CORNERS_UNDER_SHADOW"),loadMarketModel(CARDS_MODEL,"FORWARD_ONLY_LIVE_CARDS_SHADOW"),loadStrategy(),loadTopLedger()]);
-      const ledger=ledgerResult.status==="fulfilled"?ledgerResult.value:null;
+      // Až po zobrazení FT sa načítajú ostatné modely a doplnkové štatistiky.
+      const [modelResult,cornersResult,cardsResult,simulationResult]=await Promise.allSettled([loadModel(),loadMarketModel(CORNERS_MODEL,"FORWARD_ONLY_LIVE_CORNERS_UNDER_SHADOW"),loadMarketModel(CARDS_MODEL,"FORWARD_ONLY_LIVE_CARDS_SHADOW"),loadStrategy()]);
       const model=modelResult.status==="fulfilled"?modelResult.value:null;
-      const lateFtModel=lateFtResult.status==="fulfilled"?lateFtResult.value:null;
       const cornersModel=cornersResult.status==="fulfilled"?cornersResult.value:null;
       const cardsModel=cardsResult.status==="fulfilled"?cardsResult.value:null;
-      const topLedger=topLedgerResult.status==="fulfilled"?topLedgerResult.value:null;
-      try{render(feed,ledger,model,lateFtModel,cornersModel,cardsModel,topLedger);}catch(error){
-        const panel=$("ai-edge-top-opportunities");if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>Výber kandidátov sa nepodarilo spracovať: "+esc(error?.message||"neznáma chyba")+". Ostatné LIVE údaje zostávajú oddelené.</div>";
+      try{render(feed,ledger,model,lateFtModel,cornersModel,cardsModel,topLedger,false);}catch(error){
+        if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>Doplnenie modulov sa nepodarilo: "+esc(error?.message||"neznáma chyba")+".</div>";
       }
       if(simulationResult.status==="fulfilled")runStrategySimulation(simulationResult.value);
       else {const out=$("ai-edge-strategy-results");if(out)out.textContent="Simulátor je momentálne nedostupný: "+(simulationResult.reason?.message||"chyba načítania")+". LIVE výber kandidátov funguje nezávisle.";}
       const warnings=[];
       if(ledgerResult.status!=="fulfilled")warnings.push("história predikcií: "+(ledgerResult.reason?.message||"nedostupná"));
-      if(modelResult.status!=="fulfilled")warnings.push("model: "+(modelResult.reason?.message||"nedostupný"));
       if(lateFtResult.status!=="fulfilled")warnings.push("model gól do FT: "+(lateFtResult.reason?.message||"nedostupný"));
+      if(modelResult.status!=="fulfilled")warnings.push("model: "+(modelResult.reason?.message||"nedostupný"));
       if(cornersResult.status!=="fulfilled")warnings.push("model rohov: "+(cornersResult.reason?.message||"nedostupný"));
       if(cardsResult.status!=="fulfilled")warnings.push("model kariet: "+(cardsResult.reason?.message||"nedostupný"));
-      if(topLedgerResult.status!=="fulfilled")warnings.push("TOP register: "+(topLedgerResult.reason?.message||"nedostupný"));
       if(warnings.length){const meta=$("ai-edge-updated");if(meta)meta.textContent+=" · "+warnings.join(" · ");}
     }finally{refreshInFlight=false;}
   }
