@@ -118,6 +118,9 @@
     "margin-top:15px;padding:14px;background:#172438;color:white;border-radius:12px;";
 
   let scanning = false;
+  let backgroundHydrationStarted = false;
+  let backgroundHydrationReady = false;
+  let backgroundHydrationData = null;
   let signalHistory = [];
   let pageLastSuccessAt = null;
   let pageLastAttemptAt = null;
@@ -6438,32 +6441,43 @@
 
     try {
       const current = await getJSON(CURRENT_URL);
-      const historyData = Array.isArray(current.recent_history)
-        ? current.recent_history
-        : await loadFlashscoreRecentHistory().catch(error => {
-            flashscoreRecentHistoryStatus = { state: "ERROR", count: 0, error: String(error?.message || error) };
-            console.warn("Flashscore timeline história nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
-            return [];
-          });
-      if (Array.isArray(current.recent_history)) {
-        flashscoreRecentHistoryStatus = {
-          state: "READY",
-          count: historyData.length,
-          error: ""
-        };
+
+      // LIVE sa vykreslí bez čakania na veľké archívy a historické časové osi.
+      // Doplnkové dáta sa načítajú raz na pozadí a následne sa prehľad doplní.
+      if (!backgroundHydrationStarted) {
+        backgroundHydrationStarted = true;
+        const historyTask = Array.isArray(current.recent_history)
+          ? Promise.resolve(current.recent_history)
+          : loadFlashscoreRecentHistory().catch(error => {
+              flashscoreRecentHistoryStatus = { state: "ERROR", count: 0, error: String(error?.message || error) };
+              console.warn("Flashscore timeline história nie je dostupná – LIVE zobrazenie pokračuje bez historických metrík:", error);
+              return [];
+            });
+        Promise.allSettled([
+          historyTask,
+          getCachedJSON(BTTS_ARCHIVE_URL, 60 * 1000),
+          getCachedJSON(OUTCOMES_URL, 10 * 60 * 1000)
+        ]).then(results => {
+          backgroundHydrationData = {
+            history: results[0].status === "fulfilled" ? results[0].value : [],
+            btts: results[1].status === "fulfilled" ? results[1].value : null,
+            matches: results[2].status === "fulfilled" ? results[2].value : null
+          };
+          backgroundHydrationReady = true;
+          if (!scanning) scan();
+        }).catch(error => console.warn("Doplnkové dáta sa nepodarilo načítať:", error));
+      }
+
+      const historyData = backgroundHydrationReady
+        ? (backgroundHydrationData?.history || [])
+        : (Array.isArray(current.recent_history) ? current.recent_history : []);
+      if (backgroundHydrationReady && Array.isArray(historyData)) {
+        flashscoreRecentHistoryStatus = { state: "READY", count: historyData.length, error: "" };
         flashscoreRecentHistoryCache = { loadedAt: Date.now(), rows: historyData };
       }
-      const [signalArchive, bttsArchive, matchArchive] = await Promise.all([
-        Promise.resolve(null),
-        getCachedJSON(BTTS_ARCHIVE_URL, 60 * 1000).catch(error => {
-          console.warn("Nový Flashscore BTTS archív zatiaľ nie je dostupný:", error);
-          return null;
-        }),
-        getCachedJSON(OUTCOMES_URL, 10 * 60 * 1000).catch(error => {
-          console.warn("Flashscore výsledkový archív nie je dostupný:", error);
-          return null;
-        }),
-      ]);
+      const signalArchive = null;
+      const bttsArchive = backgroundHydrationReady ? backgroundHydrationData?.btts || null : null;
+      const matchArchive = backgroundHydrationReady ? backgroundHydrationData?.matches || null : null;
 
 
       pageLastSuccessAt = Date.now();
