@@ -57,7 +57,14 @@ function stageEligible(stage) {
 }
 function featureVector(row, previous) {
   const stats = row?.snapshot?.stats || [];
-  const oldStats = previous?.snapshot?.stats || [];
+  const currentTime = Date.parse(row?.snapshot?.collected_at || "");
+  const previousTime = Date.parse(previous?.snapshot?.collected_at || "");
+  const comparisonMinutes = currentTime - previousTime;
+  // Only use a prior snapshot as a live delta when it is genuinely recent.
+  // Older archive rows must not masquerade as recent card/foul/shot activity.
+  const comparisonReady = Number.isFinite(comparisonMinutes) &&
+    comparisonMinutes > 0 && comparisonMinutes <= 12 * 60000;
+  const oldStats = comparisonReady ? (previous?.snapshot?.stats || []) : [];
   const cards = base.statValue(stats, PATTERNS.cards);
   const fouls = base.statValue(stats, PATTERNS.fouls);
   const shots = base.statValue(stats, PATTERNS.shots);
