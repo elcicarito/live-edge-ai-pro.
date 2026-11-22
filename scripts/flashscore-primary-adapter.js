@@ -147,7 +147,8 @@ function adaptFlashscoreCurrent(input, options = {}) {
 
 async function main() {
   const input = JSON.parse(fs.readFileSync(INPUT, "utf8"));
-  const recentHistory = await buildRecentHistory(input.records.map(record => record?.match ? { match: record.match } : null).filter(Boolean));
+  const fastFeed = process.env.LIVE_EDGE_FAST_FEED === "1";
+  const recentHistory = fastFeed ? [] : await buildRecentHistory(input.records.map(record => record?.match ? { match: record.match } : null).filter(Boolean));
   const output = adaptFlashscoreCurrent(input, { recentHistory });
   fs.writeFileSync(OUTPUT, JSON.stringify(output, null, 2) + "\n");
   console.log(JSON.stringify({
