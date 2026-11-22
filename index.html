@@ -2355,19 +2355,41 @@ OBNOVIŤ SKENER
 (() => {
   const views = { football: document.getElementById("football-view"), basketball: document.getElementById("basketball-view"), hockey: document.getElementById("hockey-view") };
   const tabs = { football: document.getElementById("football-tab"), basketball: document.getElementById("basketball-tab"), hockey: document.getElementById("hockey-tab") };
+  const sportModules = {
+    basketball: "./basketball.js?v=13",
+    hockey: "./hockey.js?v=4"
+  };
+  const sportModuleLoads = new Map();
+  function loadSportModule(sport) {
+    const src = sportModules[sport];
+    if (!src) return Promise.resolve();
+    if (sportModuleLoads.has(sport)) return sportModuleLoads.get(sport);
+    const promise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = () => {
+        sportModuleLoads.delete(sport);
+        reject(new Error("Nepodarilo sa načítať modul: " + sport));
+      };
+      document.head.appendChild(script);
+    });
+    sportModuleLoads.set(sport, promise);
+    return promise;
+  }
   function selectSport(sport) {
     for (const key of Object.keys(views)) {
       views[key].style.display = key === sport ? "block" : "none";
       tabs[key].classList.toggle("active", key === sport);
     }
+    if (sport !== "football") loadSportModule(sport).catch(error => console.error(error));
   }
   for (const key of Object.keys(tabs)) tabs[key].addEventListener("click", () => selectSport(key));
 })();
 </script>
 <script defer src="./momentum-engine.js?v=5"></script>
 <script defer src="./scanner.js?v=199"></script>
-<script defer src="./basketball.js?v=12"></script>
-<script defer src="./hockey.js?v=3"></script>
 <script defer src="./ai-edge-selector-ui.js?v=40"></script>
 <script defer src="./corners-under-dashboard.js?v=1"></script>
 <script defer src="./yellow-cards-under-dashboard.js?v=1"></script>
