@@ -30,6 +30,28 @@ function matchRows(id, positive, timeOffset = 0) {
 }
 const tiny = matchRows("flashscore:tiny", true);
 assert.ok(featureVector(tiny[1], tiny[0]), "live stats produce a feature vector");
+
+const staleCurrent = {
+  match_id: "flashscore:delta-check",
+  snapshot: { collected_at: "2026-11-22T12:30:00.000Z", live_minute: 30, stage: "2nd Half", home_score: 0, away_score: 0, stats: stats(30, false) }
+};
+const stalePrevious = {
+  match_id: "flashscore:delta-check",
+  snapshot: { collected_at: "2026-11-22T12:15:00.000Z", live_minute: 15, stage: "1st Half", home_score: 0, away_score: 0, stats: stats(15, false) }
+};
+const staleDeltaVector = featureVector(staleCurrent, stalePrevious);
+assert.equal(staleDeltaVector[13], 0, "stale prior SOT snapshot cannot create recent activity");
+assert.equal(staleDeltaVector[14], 0, "stale prior shots snapshot cannot create recent activity");
+assert.equal(staleDeltaVector[15], 0, "stale prior corners snapshot cannot create recent activity");
+const recentPrevious = {
+  match_id: "flashscore:delta-check",
+  snapshot: { ...stalePrevious.snapshot, collected_at: "2026-11-22T12:25:00.000Z" }
+};
+const recentDeltaVector = featureVector(staleCurrent, recentPrevious);
+assert.ok(recentDeltaVector[13] > 0, "recent prior SOT snapshot preserves valid activity delta");
+assert.ok(recentDeltaVector[14] > 0, "recent prior shots snapshot preserves valid activity delta");
+assert.ok(recentDeltaVector[15] > 0, "recent prior corners snapshot preserves valid activity delta");
+
 const transitions = goalTransitions(tiny);
 assert.equal(transitions.invalid, false);
 assert.equal(transitions.transitions.length, 1);
