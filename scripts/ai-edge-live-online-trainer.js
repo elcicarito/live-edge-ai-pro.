@@ -113,7 +113,14 @@ function featureVector(row, previous) {
   const score = scoreOf(row);
   const minute = minuteOf(row);
   if (!score || minute === null || !sot || !shots) return null;
-  const oldStats = previous?.snapshot?.stats || [];
+  const currentTime = Date.parse(snapshot.collected_at || "");
+  const previousTime = Date.parse(previous?.snapshot?.collected_at || "");
+  const comparisonMinutes = currentTime - previousTime;
+  // Recent deltas are valid only when the previous snapshot is 1-12 minutes older.
+  // A stale archive row must never be interpreted as current match activity.
+  const comparisonReady = Number.isFinite(comparisonMinutes) &&
+    comparisonMinutes > 0 && comparisonMinutes <= 12 * 60000;
+  const oldStats = comparisonReady ? (previous?.snapshot?.stats || []) : [];
   const oldSot = statValue(oldStats, STAT_PATTERNS.sot);
   const oldShots = statValue(oldStats, STAT_PATTERNS.shots);
   const oldCorners = statValue(oldStats, STAT_PATTERNS.corners);
