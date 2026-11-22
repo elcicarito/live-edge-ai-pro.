@@ -481,6 +481,10 @@
     $("ai-edge-audit-status").textContent="LIVE analytika · trvalá história · bez kurzov";
   }
   let refreshInFlight=false;
+  function settleWithin(promise,ms,label){
+    let timer;
+    return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(label+" · timeout "+Math.round(ms/1000)+" s")),ms);})]).finally(()=>clearTimeout(timer));
+  }
   async function refresh(){
     if(refreshInFlight)return;
     refreshInFlight=true;
@@ -497,10 +501,10 @@
       }
 
       const panel=$("ai-edge-top-opportunities");
-      if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#c5d7e8;font-size:11px'>⚡ Načítavam najskôr FT · ostatné moduly prídu následne.</div>";
+      if(panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#c5d7e8;font-size:11px'>⚡ LIVE feed načítaný · overujem FT podklady (limit 7 s). Ak sa model alebo register neozve, TOP zobrazí dostupné dáta a nezostane visieť.</div>";
 
       // Priorita prvého vykreslenia: iba nevyhodnotené FT príležitosti a ich nevyhnutné dáta.
-      const [ledgerResult,lateFtResult,topLedgerResult]=await Promise.allSettled([loadLedger(),loadLateFTModel(),loadTopLedger()]);
+      const [ledgerResult,lateFtResult,topLedgerResult]=await Promise.allSettled([settleWithin(loadLedger(),7000,"FT história"),settleWithin(loadLateFTModel(),7000,"FT model"),settleWithin(loadTopLedger(),7000,"TOP register")]);
       const ledger=ledgerResult.status==="fulfilled"?ledgerResult.value:null;
       const lateFtModel=lateFtResult.status==="fulfilled"?lateFtResult.value:null;
       const topLedger=topLedgerResult.status==="fulfilled"?topLedgerResult.value:null;
@@ -509,7 +513,7 @@
       }
 
       // Až po zobrazení FT sa načítajú ostatné modely a doplnkové štatistiky.
-      const [modelResult,cornersResult,cardsResult,simulationResult]=await Promise.allSettled([loadModel(),loadMarketModel(CORNERS_MODEL,"FORWARD_ONLY_LIVE_CORNERS_UNDER_SHADOW"),loadMarketModel(CARDS_MODEL,"FORWARD_ONLY_LIVE_CARDS_SHADOW"),loadStrategy()]);
+      const [modelResult,cornersResult,cardsResult,simulationResult]=await Promise.allSettled([settleWithin(loadModel(),7000,"EDGE model"),settleWithin(loadMarketModel(CORNERS_MODEL,"FORWARD_ONLY_LIVE_CORNERS_UNDER_SHADOW"),7000,"model rohov"),settleWithin(loadMarketModel(CARDS_MODEL,"FORWARD_ONLY_LIVE_CARDS_SHADOW"),7000,"model kariet"),settleWithin(loadStrategy(),7000,"simulátor")]);
       const model=modelResult.status==="fulfilled"?modelResult.value:null;
       const cornersModel=cornersResult.status==="fulfilled"?cornersResult.value:null;
       const cardsModel=cardsResult.status==="fulfilled"?cardsResult.value:null;
