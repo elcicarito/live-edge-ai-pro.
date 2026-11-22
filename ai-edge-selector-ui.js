@@ -510,7 +510,7 @@
       let feed;
       try{feed=await load();}catch(error){
         const state=$("ai-edge-state");if(state){state.className="ai-edge-state bad";state.textContent="LIVE DÁTA NEDOSTUPNÉ · "+(error?.message||"chyba LIVE feedu");}
-        const panel=$("ai-edge-top-opportunities");if(updateTop&&panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>LIVE feed sa nepodarilo načítať. TOP zostáva bez zmeny; skús aktualizáciu neskôr.</div>";
+        const panel=$("ai-edge-top-opportunities");if(updateTop&&panel)panel.innerHTML="<div style='display:flex;align-items:center;justify-content:space-between;gap:10px'><div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><button type='button' data-top-refresh style='flex:0 0 auto;border:1px solid rgba(56,189,248,.55);border-radius:9px;padding:8px 11px;background:rgba(56,189,248,.13);color:#8bdcff;font-size:10px;font-weight:900;cursor:pointer'>↻ AKTUALIZOVAŤ TOP</button></div><div style='padding:10px;color:#f4d28d;font-size:11px'>LIVE feed sa nepodarilo načítať. TOP zostáva bez zmeny; skús aktualizáciu neskôr.</div>";
         return;
       }
       if(feed.source!=="Flashscore"){
@@ -519,7 +519,7 @@
       }
 
       const panel=$("ai-edge-top-opportunities");
-      if(updateTop&&panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#c5d7e8;font-size:11px'>⚡ Aktualizujem TOP · overujem FT podklady (limit 7 s)…</div>";
+      if(updateTop&&panel)panel.innerHTML="<div style='display:flex;align-items:center;justify-content:space-between;gap:10px'><div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><button type='button' data-top-refresh style='flex:0 0 auto;border:1px solid rgba(56,189,248,.55);border-radius:9px;padding:8px 11px;background:rgba(56,189,248,.13);color:#8bdcff;font-size:10px;font-weight:900;cursor:pointer'>↻ AKTUALIZOVAŤ TOP</button></div><div style='padding:10px;color:#c5d7e8;font-size:11px'>⚡ Aktualizujem TOP · overujem FT podklady (limit 7 s)…</div>";
 
       // Priorita prvého vykreslenia: iba nevyhodnotené FT príležitosti a ich nevyhnutné dáta.
       const [ledgerResult,lateFtResult,topLedgerResult]=await Promise.allSettled([settleWithin(loadLedger(),7000,"FT história"),settleWithin(loadLateFTModel(),7000,"FT model"),settleWithin(loadTopLedger(),7000,"TOP register")]);
@@ -527,7 +527,7 @@
       const lateFtModel=lateFtResult.status==="fulfilled"?lateFtResult.value:null;
       const topLedger=topLedgerResult.status==="fulfilled"?topLedgerResult.value:null;
       try{render(feed,ledger,null,lateFtModel,null,null,topLedger,true,updateTop);}catch(error){
-        if(updateTop&&panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>FT sa nepodarilo zobraziť: "+esc(error?.message||"neznáma chyba")+".</div>";
+        if(updateTop&&panel)panel.innerHTML="<div style='display:flex;align-items:center;justify-content:space-between;gap:10px'><div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><button type='button' data-top-refresh style='flex:0 0 auto;border:1px solid rgba(56,189,248,.55);border-radius:9px;padding:8px 11px;background:rgba(56,189,248,.13);color:#8bdcff;font-size:10px;font-weight:900;cursor:pointer'>↻ AKTUALIZOVAŤ TOP</button></div><div style='padding:10px;color:#f4d28d;font-size:11px'>FT sa nepodarilo zobraziť: "+esc(error?.message||"neznáma chyba")+".</div>";
       }
 
       // Až po zobrazení FT sa načítajú ostatné modely a doplnkové štatistiky.
@@ -536,7 +536,7 @@
       const cornersModel=cornersResult.status==="fulfilled"?cornersResult.value:null;
       const cardsModel=cardsResult.status==="fulfilled"?cardsResult.value:null;
       try{render(feed,ledger,model,lateFtModel,cornersModel,cardsModel,topLedger,false,updateTop);}catch(error){
-        if(updateTop&&panel)panel.innerHTML="<div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><div style='padding:10px;color:#f4d28d;font-size:11px'>Doplnenie modulov sa nepodarilo: "+esc(error?.message||"neznáma chyba")+".</div>";
+        if(updateTop&&panel)panel.innerHTML="<div style='display:flex;align-items:center;justify-content:space-between;gap:10px'><div style='font-size:13px;font-weight:900;color:#d7f2ff'>🎯 TOP LIVE PRÍLEŽITOSTI</div><button type='button' data-top-refresh style='flex:0 0 auto;border:1px solid rgba(56,189,248,.55);border-radius:9px;padding:8px 11px;background:rgba(56,189,248,.13);color:#8bdcff;font-size:10px;font-weight:900;cursor:pointer'>↻ AKTUALIZOVAŤ TOP</button></div><div style='padding:10px;color:#f4d28d;font-size:11px'>Doplnenie modulov sa nepodarilo: "+esc(error?.message||"neznáma chyba")+".</div>";
       }
       if(simulationResult.status==="fulfilled")runStrategySimulation(simulationResult.value);
       else {const out=$("ai-edge-strategy-results");if(out)out.textContent="Simulátor je momentálne nedostupný: "+(simulationResult.reason?.message||"chyba načítania")+". LIVE výber kandidátov funguje nezávisle.";}
