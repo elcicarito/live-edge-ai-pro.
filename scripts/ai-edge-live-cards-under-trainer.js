@@ -194,17 +194,7 @@ function buildSamples(rows, outcomes, startedAt) {
   return { byLine, excluded };
 }
 function trainLine(samples) {
-  const trained = base.trainHorizon(samples);
-  if (trained.status !== "SHADOW_VALIDATED" || !trained.metrics?.calibration) return trained;
-  const bins = trained.metrics.calibration.bins || [];
-  const reliableBins = bins.filter(bin => Number(bin.matches_weight || 0) >= 8);
-  const maxReliableError = reliableBins.length
-    ? Math.max(...reliableBins.map(bin => Number(bin.absolute_error || 0))) : Infinity;
-  if (!reliableBins.length || maxReliableError > 0.08) {
-    return { ...trained, status: "NOT_VALIDATED", weights: null,
-      validation_note: "Calibration gate failed: at least one reliable bin needs effective match weight >=8 and all reliable bins must stay within 8% absolute error. Weak bins remain abstention-only." };
-  }
-  return trained;
+  return base.trainCalibratedHorizon(samples);
 }
 async function run(dataDir = DATA, nowDate = new Date()) {
   const modelPath = path.join(dataDir, MODEL_FILE);
@@ -234,7 +224,7 @@ async function run(dataDir = DATA, nowDate = new Date()) {
     training_policy: "Only snapshots captured at or after activation are eligible. One latest observation per five-minute decision window. Matches without confirmed full-time yellow-card totals, incomplete timelines, decreasing card sequences or a card event inside the five-minute effective lag are excluded. No historical backfill.",
     validation_policy: {
       min_train_samples: 500, min_validation_samples: 300,
-      min_train_matches: 100, min_validation_matches: 50,
+      min_train_matches: 100, min_validation_matches: 50, min_calibration_matches: 30,
       min_relative_log_loss_gain: 0.01, min_relative_brier_gain: 0.005,
       min_effective_match_weight_per_calibration_bin: 8,
       max_absolute_calibration_error: 0.08,
