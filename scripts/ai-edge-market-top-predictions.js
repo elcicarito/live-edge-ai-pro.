@@ -169,8 +169,8 @@ function settleMarketEntries(entries,outcomes,nowDate=new Date()){
   entry.status=won?"HIT":"MISS";entry.settledAt=outcome.confirmed_at||now;
  }
 }
-function summarizeMarketGroup(entries,group){
- const list=entries.filter(x=>x.marketGroup===group),counts={HIT:0,MISS:0,OPEN:0,UNRESOLVED:0};
+function summarizeMarketGroup(entries,group,target=null){
+ const list=entries.filter(x=>x.marketGroup===group&&(!target||x.target===target)),counts={HIT:0,MISS:0,OPEN:0,UNRESOLVED:0};
  for(const row of list)if(counts[row.status]!==undefined)counts[row.status]++;
  let net=0,staked=0,peak=0,balance=0,maxDrawdown=0;
  for(const row of list.filter(x=>x.status==="HIT"||x.status==="MISS").sort((a,b)=>stamp(a.capturedAt)-stamp(b.capturedAt))){
