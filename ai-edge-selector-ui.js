@@ -323,6 +323,8 @@
       panel.innerHTML=title+note+emptyFilterBar+marketReadiness+"<div style='padding:10px;border:1px solid #40536a;border-radius:9px;color:#f4d28d;font-size:11px'>Výber je pozastavený: čakám na čerstvé LIVE dáta a aktuálnu predikčnú históriu. Po obnovení dát sa zobrazia počty a filtrované príležitosti.</div>";applyTopFilter();return;
     }
     const live=new Map(usable.filter(x=>x.fx.ready).map(x=>[String(x.record.match?.id),x]));
+    // Captured open market tips remain visible without fresh stats; new candidates still require fx.ready.
+    const liveAny=new Map(usable.map(x=>[String(x.record.match?.id),x]));
     const latest=new Map();
     for(const row of ledger.predictions||[]){
       if(!["MODEL_25","MODEL_FT"].includes(row.target)||row.status!=="OPEN"||row.modelStatus!=="SHADOW_VALIDATED"||!Number.isFinite(Number(row.modelProbability))||Number(row.modelProbability)<=0||Number(row.modelProbability)>=1||!Number.isFinite(Number(row.modelMinimumOdds))||Number(row.modelMinimumOdds)<=1||!Number.isFinite(Number(row.modelCalibrationError))||Number(row.modelCalibrationError)>0.08||!Number.isFinite(Number(row.modelCalibrationMatchesWeight))||Number(row.modelCalibrationMatchesWeight)<8)continue;
@@ -363,7 +365,7 @@
     // Zobraziť už zachytené otvorené TOP tipy; register nesmie skryť aktívnu príležitosť.
     for(const entry of topLedger?.entries||[]){
       if(entry.status!=="OPEN"||(!["MODEL_25","MODEL_FT"].includes(entry.target)&&!isTopMarketTarget(entry.target)))continue;
-      const current=live.get(String(entry.matchId||""));if(!current)continue;
+      const current=(isTopMarketTarget(entry.target)?liveAny:live).get(String(entry.matchId||""));if(!current)continue;
       const score=String(entry.capturedScore||"0:0").split(":").map(Number);
       const row={...entry,fromTopLedger:true,id:entry.predictionId,createdAt:entry.capturedAt,startMinute:entry.capturedMinute,startHome:score[0],startAway:score[1],modelCalibrationError:entry.calibrationError,modelCalibrationMatchesWeight:entry.calibrationMatchesWeight,modelMinimumOdds:entry.minimumOdds,modelProbability:entry.modelProbability,conservativeProbability:entry.conservativeProbability};
       addCandidate(row,current);
@@ -400,7 +402,7 @@
       const marketHint=r.marketType==="CORNERS"?"Model predikuje konečný súčet rohov v riadnom čase.":r.marketType==="CARDS"?"Model predikuje konečný počet žltých kariet v riadnom čase.":item.target==="MODEL_25"?"Nie je to automaticky OVER do konca zápasu.":"Trh OVER podľa aktuálneho skóre.";
        const validationLabel="SHADOW VALIDATED · NIE GARANCIA";
        const calibrationLabel="KALIBRÁCIA "+(error*100).toFixed(1)+" % · VZORKA "+fmt(r.modelCalibrationMatchesWeight)+" zápasov";
-       const activityLabel=item.activityReady?"POROVNANIE MERANÍ DOSTUPNÉ":"ČAKÁ NA ĎALŠIE MERANIE";
+       const activityLabel=item.activityReady?"POROVNANIE MERANÍ DOSTUPNÉ":item.row.fromTopLedger&&r.marketType?"SLEDOVANÝ OTVORENÝ TIP · BEZ ČERSTVÝCH MERANÍ":"ČAKÁ NA ĎALŠIE MERANIE";
       const moduleKey=item.target==="MODEL_25"?"EDGE25":item.target==="MODEL_FT"?"FT":r.marketType==="CORNERS"?"CORNERS":"CARDS";
       const moduleClass=item.target==="MODEL_25"?"module-edge25":item.target==="MODEL_FT"?"module-ft":r.marketType==="CORNERS"?"module-corners":"module-cards";
       const moduleColor=item.target==="MODEL_25"?"#38bdf8":item.target==="MODEL_FT"?"#a78bfa":r.marketType==="CORNERS"?"#34d399":"#fbbf24";
