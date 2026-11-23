@@ -194,12 +194,7 @@ function summarizeSamples(samples) {
   };
 }
 function trainLine(samples) {
-  const trained = base.trainHorizon(samples);
-  if (trained.status !== "SHADOW_VALIDATED" || !trained.metrics?.calibration) return trained;
-  const gate = base.calibrationGate(trained.metrics.calibration, 8, 0.08);
-  if (!gate.passed) return { ...trained, status: "NOT_VALIDATED", weights: null, calibration_gate: gate,
-    validation_note: "Calibration gate failed: every reliable bin needs effective match weight >=8 and absolute error <=8%." };
-  return { ...trained, calibration_gate: gate };
+  return base.trainCalibratedHorizon(samples);
 }
 async function run(dataDir = DATA, nowDate = new Date()) {
   const modelPath = path.join(dataDir, MODEL_FILE);
@@ -225,7 +220,7 @@ async function run(dataDir = DATA, nowDate = new Date()) {
     lines: LINES.map(({ key, line }) => ({ key, side: "UNDER", line })),
     training_policy: "Only snapshots captured at or after activation. One latest sample per five-minute decision window. Requires confirmed final Flashscore corners, a complete regular-time timeline, monotonic corner totals and full five-minute lag coverage. No historical backfill.",
     feature_policy: "Recent activity deltas are calculated only from the same match's previous snapshot when its timestamp is 1-12 minutes older; otherwise deltas are zero and the final feature marks comparison unavailable. This prevents stale snapshots from masquerading as current pace.",
-    validation_policy: { min_train_samples: 500, min_validation_samples: 300, min_train_matches: 100, min_validation_matches: 50,
+    validation_policy: { min_train_samples: 500, min_validation_samples: 300, min_train_matches: 100, min_validation_matches: 50, min_calibration_matches: 30,
       min_relative_log_loss_gain: 0.01, min_relative_brier_gain: 0.005,
       min_effective_match_weight_per_calibration_bin: 8, max_absolute_calibration_error: 0.08, metrics_weighted_per_match: true },
     prediction_policy: "Shadow evaluation only. No TOP opportunities or betting recommendations are emitted.",
