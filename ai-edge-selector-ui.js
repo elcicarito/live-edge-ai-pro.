@@ -376,7 +376,7 @@
       if(entry.status!=="OPEN"||!topModuleForRecord(entry))continue;
       const current=(isTopMarketTarget(entry)?liveAny:live).get(String(entry.matchId||""));if(!current)continue;
       const score=String(entry.capturedScore||"0:0").split(":").map(Number);
-      const row={...entry,fromTopLedger:true,id:entry.predictionId,createdAt:entry.capturedAt,startMinute:entry.capturedMinute,startHome:score[0],startAway:score[1],modelCalibrationError:entry.calibrationError,modelCalibrationMatchesWeight:entry.calibrationMatchesWeight,modelMinimumOdds:entry.minimumOdds,modelProbability:entry.modelProbability,conservativeProbability:entry.conservativeProbability};
+      const row={...entry,fromTopLedger:true,id:entry.predictionId,createdAt:entry.capturedAt,startMinute:entry.capturedMinute,startHome:score[0],startAway:score[1],modelCalibrationError:entry.modelCalibrationError??entry.calibrationError,modelCalibrationMatchesWeight:entry.modelCalibrationMatchesWeight??entry.calibrationMatchesWeight,modelMinimumOdds:entry.modelMinimumOdds??entry.minimumOdds,modelProbability:entry.modelProbability,conservativeProbability:entry.conservativeProbability};
       addCandidate(row,current);
     }
     // Nové kandidáty iba ak zápas + model ešte nie sú v TOP registri.
