@@ -57,5 +57,30 @@ assert.equal(summarizeMarketGroup(entries,"CARDS_OU").HIT,1);
 assert.equal(summarizeMarketGroup(entries,"CARDS_OU","CARDS_OVER_2_5").HIT,1);
 assert.equal(summarizeMarketGroup(entries,"CARDS_OU","CARDS_UNDER_3_5").total,0,"line-level summary must exclude other card thresholds");
 assert.equal(summarizeMarketGroup(entries,"CORNERS_UNDER").MISS,1);
+
+// Unvalidated corner U8.5/U9.5 are visible only as explicitly experimental observations.
+const experimentalLines={};
+for(const key of ["UNDER_8_5","UNDER_9_5","UNDER_10_5","UNDER_11_5"]){
+ experimentalLines[key]={
+  status:"NOT_VALIDATED",
+  experimental_weights:Array(18).fill(0),
+  experimental_probability_calibration:{method:"platt_train_match_holdout",intercept:0,slope:1,matches:50,samples:300},
+  counts:{train:1962,validation:644,train_matches:770,validation_matches:246},
+  metrics:{relative_log_loss_gain:.20,relative_brier_gain:.25,calibration:{bins:[{range:"50-60",matches_weight:12,absolute_error:.20}]}}
+ };
+}
+const experimentalCorners={...validatedModel("FORWARD_ONLY_LIVE_CORNERS_UNDER_SHADOW","UNDER_8_5",17),models:experimentalLines};
+for(const item of Object.values(experimentalCorners.models))item.status="NOT_VALIDATED";
+const experimentalPredictions=buildMarketPredictions(feed,{corners:experimentalCorners,cards:null},[],now);
+assert.deepEqual(experimentalPredictions.map(x=>x.target).sort(),["CORNERS_UNDER_8_5","CORNERS_UNDER_9_5"]);
+for(const p of experimentalPredictions){
+ assert.equal(p.modelStatus,"EXPERIMENTAL");
+ assert.equal(p.experimentalModel,true);
+ assert.equal(p.modelProbability,.5);
+ assert.equal(p.modelCalibrationError,.20);
+ assert.equal(p.modelFairOdds,2);
+ assert.equal(p.modelMinimumOdds,3.51);
+}
+
 assert.equal(MARKET_LINES.length,10);
 console.log("AI Edge validated corners/cards TOP prediction tests passed.");

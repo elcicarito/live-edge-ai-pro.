@@ -474,7 +474,10 @@ function trainCalibratedHorizon(samples) {
         : null,
     validation_policy: { min_train_matches: MIN_TRAIN_MATCHES, min_validation_matches: MIN_VALIDATION_MATCHES, min_relative_log_loss_gain: MIN_RELATIVE_LOG_LOSS_GAIN, min_relative_brier_gain: MIN_RELATIVE_BRIER_GAIN, min_effective_match_weight_per_calibration_bin: 8, min_well_calibrated_bins: 2, max_absolute_calibration_error: 0.08, metrics_weighted_per_match: true, probability_calibration: "Platt scaling fit on separate training-match holdout" },
     weights: validated ? weights : null,
-    probability_calibration: validated ? probabilityCalibration : null
+    probability_calibration: validated ? probabilityCalibration : null,
+    // Experimental inference is retained separately; it never changes validation status.
+    experimental_weights: weights,
+    experimental_probability_calibration: probabilityCalibration
   };
 }
 async function run(dataDir = DATA, nowDate = new Date()) {

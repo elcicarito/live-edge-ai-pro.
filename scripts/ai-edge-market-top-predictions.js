@@ -32,12 +32,26 @@ function modelIsValidated(model,item,featureCount){
   Number(metrics.relative_log_loss_gain)>=Number(policy.min_relative_log_loss_gain||0.01)&&
   Number(metrics.relative_brier_gain)>=Number(policy.min_relative_brier_gain||0.005);
 }
-function calibrationGate(item,probability,model){
+function modelIsExperimentallyUsable(model,item,featureCount){
+ const policy=model?.validation_policy||{},counts=item?.counts||{},metrics=item?.metrics||{};
+ return model?.source==="Flashscore"&&item?.status==="NOT_VALIDATED"&&
+  Array.isArray(item.experimental_weights)&&item.experimental_weights.length===featureCount+1&&
+  item.experimental_probability_calibration?.method==="platt_train_match_holdout"&&
+  Number.isFinite(Number(item.experimental_probability_calibration.intercept))&&
+  Number.isFinite(Number(item.experimental_probability_calibration.slope))&&Number(item.experimental_probability_calibration.slope)>0&&
+  Number(counts.train)>=Number(policy.min_train_samples||500)&&
+  Number(counts.validation)>=Number(policy.min_validation_samples||300)&&
+  Number(counts.train_matches)>=Number(policy.min_train_matches||100)&&
+  Number(counts.validation_matches)>=Number(policy.min_validation_matches||50)&&
+  Number(metrics.relative_log_loss_gain)>=Number(policy.min_relative_log_loss_gain||0.01)&&
+  Number(metrics.relative_brier_gain)>=Number(policy.min_relative_brier_gain||0.005);
+}
+function calibrationGate(item,probability,model,experimental=false){
  const bins=item?.metrics?.calibration?.bins;
  if(!Number.isFinite(probability)||probability<0||probability>1||!Array.isArray(bins))return {allowed:false,reason:"CALIBRATION_MISSING"};
  const policy=model?.validation_policy||{};
  const minWeight=Number(policy.min_effective_match_weight_per_calibration_bin||8);
- const maxError=Number(policy.max_absolute_calibration_error||0.08);
+ const maxError=experimental?0.5:Number(policy.max_absolute_calibration_error||0.08);
  const bin=bins.find(b=>{
   const [lo,hi]=String(b.range||"").split("-").map(Number);
   return Number.isFinite(lo)&&Number.isFinite(hi)&&probability>=lo/100&&(probability<hi/100||(hi===100&&probability<=1));
@@ -46,7 +60,7 @@ function calibrationGate(item,probability,model){
  const weight=Number(bin.matches_weight||0),error=Number(bin.absolute_error);
  if(weight<minWeight)return {allowed:false,reason:"BIN_SUPPORT_LOW",bin:bin.range,weight,error};
  if(!Number.isFinite(error)||error>maxError)return {allowed:false,reason:"BIN_CALIBRATION_FAILED",bin:bin.range,weight,error};
- return {allowed:true,bin:bin.range,weight,error};
+ return {allowed:true,bin:bin.range,weight,error,experimental};
 }
 function marketRows(feed,record){
  const match=record?.match||{},id=String(match.id||"");
@@ -102,7 +116,9 @@ function buildMarketPredictions(feed,models,entries=[],nowDate=new Date()){
    if(!Number.isFinite(modelAt)||modelAt>now||now-modelAt>10*60000)continue;
    const item=model.models?.[line.modelKey];
    const featureCount=line.marketType==="CORNERS"?17:16;
-   if(!modelIsValidated(model,item,featureCount))continue;
+   const validated=modelIsValidated(model,item,featureCount);
+   const experimental=line.marketType==="CORNERS"&&["UNDER_8_5","UNDER_9_5"].includes(line.modelKey)&&!validated&&modelIsExperimentallyUsable(model,item,featureCount);
+   if(!validated&&!experimental)continue;
    const trainer=line.marketType==="CORNERS"?cornersTrainer:cardsTrainer;
    const chosen=new Map();
    for(let i=0;i<rows.length;i++){
@@ -121,8 +137,8 @@ function buildMarketPredictions(feed,models,entries=[],nowDate=new Date()){
     if(!lagCovered||minute<sampleMinute+LAG_MINUTES)continue;
     const x=trainer.featureVector(row,rows[index-1]);
     if(!x)continue;
-    const p=sigmoid(item.weights,x,item.probability_calibration);
-    const calibration=calibrationGate(item,p,model);
+    const p=validated?sigmoid(item.weights,x,item.probability_calibration):sigmoid(item.experimental_weights,x,item.experimental_probability_calibration);
+    const calibration=calibrationGate(item,p,model,experimental);
     if(!calibration.allowed)continue;
     selected=row;vector=x;gate=calibration;probability=p;break;
    }
@@ -142,7 +158,8 @@ function buildMarketPredictions(feed,models,entries=[],nowDate=new Date()){
     modelProbability:Number(probability.toFixed(6)),conservativeProbability:Number(conservative.toFixed(6)),
     modelFairOdds:Number((1/probability).toFixed(2)),modelCalibrationError:gate.error,
     modelCalibrationMatchesWeight:gate.weight,modelCalibrationBin:gate.bin,
-    modelMinimumOdds:minOdds,minimumOdds:minOdds,stake:1,modelStatus:"SHADOW_VALIDATED",
+    modelMinimumOdds:minOdds,minimumOdds:minOdds,stake:1,modelStatus:experimental?"EXPERIMENTAL":"SHADOW_VALIDATED",
+    experimentalModel:experimental,
     modelUpdatedAt:model.updated_at,modelOddsSafetyMargin:0.05,
     status:"OPEN",resultScore:null,resultTotal:null,settledAt:null,
     statsLagMinutes:LAG_MINUTES,observationMinuteRange:model.observation_minute_range
@@ -180,4 +197,4 @@ function summarizeMarketGroup(entries,group,target=null){
  const decided=counts.HIT+counts.MISS;
  return {target:target||group,total:list.length,...counts,decided,accuracy:decided?counts.HIT/decided:null,stakePerPick:1,totalStaked:staked,netProfit:staked?Number(net.toFixed(4)):null,roi:staked?Number((net/staked*100).toFixed(2)):null,maxDrawdown:staked?Number(maxDrawdown.toFixed(4)):null,oddsBasis:"locked_individual_minimum_hypothetical_not_actual_bookmaker_odds"};
 }
-module.exports={MARKET_LINES,marketRows,stageEligible,sigmoid,modelIsValidated,calibrationGate,minimumOdds,buildMarketPredictions,settleMarketEntries,summarizeMarketGroup};
+module.exports={MARKET_LINES,marketRows,stageEligible,sigmoid,modelIsValidated,modelIsExperimentallyUsable,calibrationGate,minimumOdds,buildMarketPredictions,settleMarketEntries,summarizeMarketGroup};
