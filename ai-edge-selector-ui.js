@@ -406,12 +406,12 @@
       const comparison=!entered.trim()?"<span class='ai-edge-odds-result neutral'>ČAKÁ NA TVOJ KURZ</span>":!Number.isFinite(v)||v<=1?"<span class='ai-edge-odds-result neutral'>NEPLATNÝ KURZ</span>":meets?"<span class='ai-edge-odds-result good'>KURZ DOSAHUJE MINIMUM · EV+ ODHAD</span>":ev>0?"<span class='ai-edge-odds-result neutral'>EV KLADNÉ, ALE KURZ POD BEZPEČNÝM MINIMOM</span>":"<span class='ai-edge-odds-result bad'>KURZ POD MINIMOM · EV NIE JE KLADNÉ</span>";
       const timing=item.minute<item.after?"ČAKÁ NA OKNO od "+item.after+"′":"OKNO AKTÍVNE";
       const color=meets?"#39d98a":ev!==null&&ev>0?"#f4d27a":"#f08b8b";
+      const recordModule=topModuleForRecord(r);
       const horizon=(recordModule==="CORNERS"||recordModule==="CARDS")?(r.marketLabel||r.target):item.target==="MODEL_25"?"AI EDGE 25 · GÓL V NASLEDUJÚCICH 25 MIN":"MODEL_FT · GÓL DO KONCA RIADNEHO ČASU";
       const fx=item.current.fx||{},statsQuality="ŠTATISTIKY "+(Number.isFinite(item.statsFreshness)?item.statsFreshness.toFixed(1)+" min":"—")+" · "+item.coreStats+"/10 ukazovateľov"+(item.activityReady?" · NOVÁ AKTIVITA Z MERANÍ":" · BEZ POROVNANIA MERANÍ");
       const marketHint=recordModule==="CORNERS"?"Model predikuje konečný súčet rohov v riadnom čase.":recordModule==="CARDS"?"Model predikuje konečný počet žltých kariet v riadnom čase.":item.target==="MODEL_25"?"Nie je to automaticky OVER do konca zápasu.":"Trh OVER podľa aktuálneho skóre.";
        const validationLabel="SHADOW VALIDATED · NIE GARANCIA";
        const calibrationLabel="KALIBRÁCIA "+(error*100).toFixed(1)+" % · VZORKA "+fmt(r.modelCalibrationMatchesWeight)+" zápasov";
-       const recordModule=topModuleForRecord(r);
       const activityLabel=item.activityReady?"POROVNANIE MERANÍ DOSTUPNÉ":item.row.fromTopLedger&&(recordModule==="CORNERS"||recordModule==="CARDS")?"SLEDOVANÝ OTVORENÝ TIP · BEZ ČERSTVÝCH MERANÍ":"ČAKÁ NA ĎALŠIE MERANIE";
       const moduleKey=recordModule||"CARDS";
       const moduleClass=recordModule==="EDGE25"?"module-edge25":recordModule==="FT"?"module-ft":recordModule==="CORNERS"?"module-corners":"module-cards";
