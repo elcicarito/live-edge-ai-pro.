@@ -178,6 +178,6 @@ function summarizeMarketGroup(entries,group,target=null){
   const change=row.status==="HIT"?odds-1:-1;balance+=change;net+=change;staked++;peak=Math.max(peak,balance);maxDrawdown=Math.max(maxDrawdown,peak-balance);
  }
  const decided=counts.HIT+counts.MISS;
- return {target:group,total:list.length,...counts,decided,accuracy:decided?counts.HIT/decided:null,stakePerPick:1,totalStaked:staked,netProfit:staked?Number(net.toFixed(4)):null,roi:staked?Number((net/staked*100).toFixed(2)):null,maxDrawdown:staked?Number(maxDrawdown.toFixed(4)):null,oddsBasis:"locked_individual_minimum_hypothetical_not_actual_bookmaker_odds"};
+ return {target:target||group,total:list.length,...counts,decided,accuracy:decided?counts.HIT/decided:null,stakePerPick:1,totalStaked:staked,netProfit:staked?Number(net.toFixed(4)):null,roi:staked?Number((net/staked*100).toFixed(2)):null,maxDrawdown:staked?Number(maxDrawdown.toFixed(4)):null,oddsBasis:"locked_individual_minimum_hypothetical_not_actual_bookmaker_odds"};
 }
 module.exports={MARKET_LINES,marketRows,stageEligible,sigmoid,modelIsValidated,calibrationGate,minimumOdds,buildMarketPredictions,settleMarketEntries,summarizeMarketGroup};
