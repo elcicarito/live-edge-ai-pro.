@@ -25,6 +25,8 @@ on:
     paths:
       - "scripts/ai-edge-live-online-trainer.js"
       - "scripts/test-ai-edge-live-online-trainer.js"
+      - "scripts/ai-edge-live-cards-under-trainer.js"
+      - "scripts/test-ai-edge-live-cards-under-trainer.js"
       - "scripts/ai-edge-live-corners-under-trainer.js"
       - "scripts/test-ai-edge-live-corners-under-trainer.js"
       - "scripts/ai-edge-live-late-ft-trainer.js"
@@ -62,7 +64,9 @@ jobs:
           node scripts/test-ai-edge-live-prediction-ledger.js
           node scripts/test-ai-edge-top-opportunity-ledger.js
           node scripts/test-ai-edge-market-top-predictions.js
+          node --check scripts/ai-edge-live-online-trainer.js
           node --check scripts/ai-edge-market-top-predictions.js
+          node --check scripts/ai-edge-live-cards-under-trainer.js
           node --check scripts/ai-edge-top-opportunity-ledger.js
           node --check scripts/ai-edge-live-corners-under-trainer.js
           node --check ai-edge-selector-ui.js

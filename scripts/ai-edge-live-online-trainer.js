@@ -181,16 +181,48 @@ function rowWeights(rows) {
   for (const row of rows) counts.set(row.match_id, (counts.get(row.match_id) || 0) + 1);
   return rows.map(row => 1 / (counts.get(row.match_id) || 1));
 }
-function logLoss(rows, weights, sampleWeights = rowWeights(rows)) {
+function rawLogit(weights, x) {
+  return weights[0] + x.reduce((sum, value, index) => sum + value * weights[index + 1], 0);
+}
+function predictProbability(weights, x, calibration = null) {
+  const raw = rawLogit(weights, x);
+  const z = calibration && Number.isFinite(Number(calibration.intercept)) && Number.isFinite(Number(calibration.slope))
+    ? Number(calibration.intercept) + Number(calibration.slope) * raw : raw;
+  return sigmoid(z);
+}
+function logLoss(rows, weights, sampleWeights = rowWeights(rows), probabilityCalibration = null) {
   if (!rows.length) return null;
   let total = 0, weightTotal = 0;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i], weight = sampleWeights[i];
-    const p = Math.max(1e-8, Math.min(1 - 1e-8, sigmoid(weights[0] + row.x.reduce((s, v, j) => s + v * weights[j + 1], 0))));
+    const p = Math.max(1e-8, Math.min(1 - 1e-8, predictProbability(weights, row.x, probabilityCalibration)));
     total -= weight * (row.y * Math.log(p) + (1 - row.y) * Math.log(1 - p));
     weightTotal += weight;
   }
   return weightTotal ? total / weightTotal : null;
+}
+function fitPlattCalibration(rows, weights) {
+  if (!Array.isArray(rows) || rows.length < 100) return null;
+  const sampleWeights = rowWeights(rows);
+  const logits = rows.map(row => rawLogit(weights, row.x));
+  const totalWeight = sampleWeights.reduce((sum, value) => sum + value, 0);
+  if (!totalWeight || new Set(rows.map(row => row.match_id)).size < 30 ||
+      !rows.some(row => row.y === 1) || !rows.some(row => row.y === 0)) return null;
+  let intercept = 0, slope = 1;
+  const learningRate = 0.025, epochs = 1600, slopePenalty = 0.01;
+  for (let epoch = 0; epoch < epochs; epoch++) {
+    let gradIntercept = 0, gradSlope = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const p = sigmoid(intercept + slope * logits[i]);
+      const error = (p - rows[i].y) * sampleWeights[i];
+      gradIntercept += error;
+      gradSlope += error * logits[i];
+    }
+    intercept -= learningRate * (gradIntercept / totalWeight + 0.001 * intercept);
+    slope -= learningRate * (gradSlope / totalWeight + slopePenalty * (slope - 1));
+    slope = Math.max(0.05, Math.min(5, slope));
+  }
+  return { method: "platt_train_match_holdout", intercept: Number(intercept.toFixed(8)), slope: Number(slope.toFixed(8)), matches: new Set(rows.map(row => row.match_id)).size, samples: rows.length };
 }
 
 function fit(rows, sampleWeights = rowWeights(rows)) {
@@ -221,7 +253,7 @@ function fit(rows, sampleWeights = rowWeights(rows)) {
   return weights.map(value => Number(value.toFixed(8)));
 }
 
-function calibration(rows, weights, binCount = 10) {
+function calibration(rows, weights, binCount = 10, probabilityCalibration = null) {
   if (!rows.length) return null;
   const sampleWeights = rowWeights(rows);
   const bins = Array.from({ length: binCount }, (_, index) => ({
@@ -231,7 +263,7 @@ function calibration(rows, weights, binCount = 10) {
   let totalWeight = 0;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const p = sigmoid(weights[0] + row.x.reduce((sum, value, j) => sum + value * weights[j + 1], 0));
+    const p = predictProbability(weights, row.x, probabilityCalibration);
     const weight = sampleWeights[i];
     const bin = bins[Math.min(binCount - 1, Math.floor(p * binCount))];
     bin.count++;
@@ -265,13 +297,13 @@ function calibration(rows, weights, binCount = 10) {
     bins: populated
   };
 }
-function metrics(rows, weights) {
+function metrics(rows, weights, probabilityCalibration = null) {
   if (!rows.length) return null;
   const sampleWeights = rowWeights(rows);
   let correct = 0, brier = 0, weightTotal = 0, positiveWeight = 0;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i], weight = sampleWeights[i];
-    const p = sigmoid(weights[0] + row.x.reduce((sum, v, j) => sum + v * weights[j + 1], 0));
+    const p = predictProbability(weights, row.x, probabilityCalibration);
     if ((p >= 0.5 ? 1 : 0) === row.y) correct += weight;
     brier += weight * (p - row.y) ** 2;
     weightTotal += weight;
@@ -281,7 +313,7 @@ function metrics(rows, weights) {
   const baseline = Math.max(1e-8, Math.min(1 - 1e-8, prevalence));
   const baselineLogLoss = -(prevalence * Math.log(baseline) + (1 - prevalence) * Math.log(1 - baseline));
   const baselineBrier = prevalence * (1 - prevalence);
-  const modelLoss = logLoss(rows, weights, sampleWeights);
+  const modelLoss = logLoss(rows, weights, sampleWeights, probabilityCalibration);
   const modelBrier = brier / weightTotal;
   return {
     count: rows.length,
@@ -291,7 +323,7 @@ function metrics(rows, weights) {
     baseline_brier: Number(baselineBrier.toFixed(4)),
     log_loss: Number(modelLoss.toFixed(4)),
     baseline_log_loss: Number(baselineLogLoss.toFixed(4)),
-    calibration: calibration(rows, weights)
+    calibration: calibration(rows, weights, 10, probabilityCalibration)
   };
 }
 
@@ -390,6 +422,56 @@ function trainHorizon(samples) {
     weights: validated ? weights : null
   };
 }
+function isCalibrationHoldout(matchId) {
+  let hash = 2166136261;
+  for (const character of String(matchId || "")) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+  return (hash >>> 0) % 5 === 0;
+}
+function trainCalibratedHorizon(samples) {
+  const train = samples.filter(row => row.split === "train");
+  const validation = samples.filter(row => row.split === "validation");
+  const calibrationRows = train.filter(row => isCalibrationHoldout(row.match_id));
+  const fitRows = train.filter(row => !isCalibrationHoldout(row.match_id));
+  const countMatches = rows => new Set(rows.map(row => row.match_id)).size;
+  const counts = {
+    train: fitRows.length, validation: validation.length,
+    train_matches: countMatches(fitRows), validation_matches: countMatches(validation),
+    train_positive: fitRows.filter(row => row.y === 1).length,
+    train_negative: fitRows.filter(row => row.y === 0).length,
+    validation_positive: validation.filter(row => row.y === 1).length,
+    validation_negative: validation.filter(row => row.y === 0).length
+  };
+  const calibrationCounts = { samples: calibrationRows.length, matches: countMatches(calibrationRows) };
+  if (fitRows.length < MIN_TRAIN || validation.length < MIN_VALIDATION ||
+      counts.train_matches < MIN_TRAIN_MATCHES || counts.validation_matches < MIN_VALIDATION_MATCHES ||
+      calibrationCounts.samples < 100 || calibrationCounts.matches < 30 ||
+      !fitRows.some(row => row.y === 1) || !fitRows.some(row => row.y === 0)) {
+    return { status: "WARMUP", counts, calibration_counts: calibrationCounts, metrics: null, weights: null, probability_calibration: null };
+  }
+  const weights = fit(fitRows);
+  const probabilityCalibration = fitPlattCalibration(calibrationRows, weights);
+  if (!probabilityCalibration) return { status: "WARMUP", counts, calibration_counts: calibrationCounts, metrics: null, weights: null, probability_calibration: null };
+  const validationMetrics = metrics(validation, weights, probabilityCalibration);
+  const lossGain = 1 - validationMetrics.log_loss / validationMetrics.baseline_log_loss;
+  const brierGain = 1 - validationMetrics.brier / validationMetrics.baseline_brier;
+  const calibrationResult = calibrationGate(validationMetrics.calibration, 8, 0.08, 2);
+  const performancePassed = lossGain >= MIN_RELATIVE_LOG_LOSS_GAIN && brierGain >= MIN_RELATIVE_BRIER_GAIN;
+  const validated = performancePassed && calibrationResult.passed;
+  return {
+    status: validated ? "SHADOW_VALIDATED" : "NOT_VALIDATED",
+    counts, calibration_counts: calibrationCounts,
+    metrics: { ...validationMetrics, relative_log_loss_gain: Number(lossGain.toFixed(4)), relative_brier_gain: Number(brierGain.toFixed(4)) },
+    calibration_gate: calibrationResult,
+    validation_note: !performancePassed
+      ? "Performance gate failed after independent Platt calibration: both relative Log Loss and Brier improvements are required."
+      : !calibrationResult.passed
+        ? "Calibration gate failed after independent Platt calibration: at least two reliable validation bins must have absolute error <=8%; unreliable bins remain blocked."
+        : null,
+    validation_policy: { min_train_matches: MIN_TRAIN_MATCHES, min_validation_matches: MIN_VALIDATION_MATCHES, min_relative_log_loss_gain: MIN_RELATIVE_LOG_LOSS_GAIN, min_relative_brier_gain: MIN_RELATIVE_BRIER_GAIN, min_effective_match_weight_per_calibration_bin: 8, min_well_calibrated_bins: 2, max_absolute_calibration_error: 0.08, metrics_weighted_per_match: true, probability_calibration: "Platt scaling fit on separate training-match holdout" },
+    weights: validated ? weights : null,
+    probability_calibration: validated ? probabilityCalibration : null
+  };
+}
 async function run(dataDir = DATA, nowDate = new Date()) {
   const modelPath = path.join(dataDir, MODEL_FILE);
   const existing = readJson(modelPath, null);
@@ -437,4 +519,4 @@ if (require.main === module) {
   run().then(result => console.log("AI EDGE FORWARD-ONLY LIVE TRAINER", JSON.stringify(result)))
     .catch(error => { console.error("AI EDGE LIVE TRAINER FAILED:", error.message); process.exit(1); });
 }
-module.exports = { finite, isoWeekKey, readTimeline, statValue, featureVector, goalTransitions, labelFor, stableValidationMatch, buildSamples, fit, calibration, calibrationGate, metrics, trainHorizon, run };
+module.exports = { finite, isoWeekKey, readTimeline, statValue, featureVector, goalTransitions, labelFor, stableValidationMatch, buildSamples, fit, calibration, calibrationGate, metrics, trainHorizon, trainCalibratedHorizon, fitPlattCalibration, predictProbability, isCalibrationHoldout, run };

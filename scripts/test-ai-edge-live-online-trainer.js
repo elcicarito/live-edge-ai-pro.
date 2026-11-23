@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const zlib = require("node:zlib");
-const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, calibration, calibrationGate, metrics, fit, run, readTimeline } = require("./ai-edge-live-online-trainer");
+const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, calibration, calibrationGate, metrics, fit, fitPlattCalibration, predictProbability, run, readTimeline } = require("./ai-edge-live-online-trainer");
 
 const started = Date.parse("2026-11-12T21:00:00.000Z");
 const stats = (minute, goal) => [
@@ -125,6 +125,24 @@ assert.equal(selectiveCalibration.passing_bins, 2);
 assert.equal(selectiveCalibration.failed_bins, 1);
 assert.equal(calibrationGate({ bins: [{ matches_weight: 7.9, absolute_error: 0.01 }] }).passed, false,
   "no sufficiently weighted calibration bin means no validation");
+
+// Independent Platt calibration must correct systematic overconfidence without using validation rows.
+const calibrationRows = [];
+for (let i = 0; i < 400; i++) {
+  const x = [-2, -1, 1, 2][i % 4];
+  const target = 1 / (1 + Math.exp(-(-0.15 + 0.45 * x)));
+  const fraction = (Math.imul(i + 1, 2654435761) >>> 0) / 4294967296;
+  calibrationRows.push({ match_id: "calibration-match-" + i, x: [x], y: fraction < target ? 1 : 0 });
+}
+const platt = fitPlattCalibration(calibrationRows, [0, 1]);
+assert.ok(platt && platt.method === "platt_train_match_holdout");
+assert.ok(platt.slope > 0.1 && platt.slope < 1.2, "Platt slope should reduce overconfident raw logits");
+const rawProbability = 1 / (1 + Math.exp(-2));
+const calibratedProbability = predictProbability([0, 1], [2], platt);
+assert.ok(calibratedProbability < rawProbability, "calibrated probability should be less extreme for an overconfident model");
+assert.ok(calibratedProbability > 0 && calibratedProbability < 1);
+const calibratedMetrics = metrics(calibrationRows, [0, 1], platt);
+assert.ok(calibratedMetrics.calibration && calibratedMetrics.calibration.bin_count === 10);
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "ai-edge-live-trainer-"));
 async function main() {

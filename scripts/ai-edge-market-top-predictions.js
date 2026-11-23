@@ -8,15 +8,23 @@ const MARKET_LINES=[
 ];
 function stamp(value){const n=Number(value);if(Number.isFinite(n))return n;const p=Date.parse(value||"");return Number.isFinite(p)?p:NaN;}
 function finite(value){if(value===null||value===undefined||String(value).trim()==="")return null;const n=Number(String(value).replace(",","."));return Number.isFinite(n)?n:null;}
-function sigmoid(weights,x){
+function sigmoid(weights,x,probabilityCalibration=null){
  if(!Array.isArray(weights)||!Array.isArray(x)||weights.length!==x.length+1)return null;
  let z=weights[0];for(let i=0;i<x.length;i++)z+=x[i]*weights[i+1];
+ if(probabilityCalibration?.method==="platt_train_match_holdout"){
+  const intercept=Number(probabilityCalibration.intercept),slope=Number(probabilityCalibration.slope);
+  if(!Number.isFinite(intercept)||!Number.isFinite(slope)||slope<=0)return null;
+  z=intercept+slope*z;
+ }
  return 1/(1+Math.exp(-Math.max(-20,Math.min(20,z))));
 }
 function modelIsValidated(model,item,featureCount){
  const policy=model?.validation_policy||{},counts=item?.counts||{},metrics=item?.metrics||{};
  return model?.source==="Flashscore"&&item?.status==="SHADOW_VALIDATED"&&
   Array.isArray(item.weights)&&item.weights.length===featureCount+1&&
+  item.probability_calibration?.method==="platt_train_match_holdout"&&
+  Number.isFinite(Number(item.probability_calibration.intercept))&&
+  Number.isFinite(Number(item.probability_calibration.slope))&&Number(item.probability_calibration.slope)>0&&
   Number(counts.train)>=Number(policy.min_train_samples||500)&&
   Number(counts.validation)>=Number(policy.min_validation_samples||300)&&
   Number(counts.train_matches)>=Number(policy.min_train_matches||100)&&
@@ -113,7 +121,7 @@ function buildMarketPredictions(feed,models,entries=[],nowDate=new Date()){
     if(!lagCovered||minute<sampleMinute+LAG_MINUTES)continue;
     const x=trainer.featureVector(row,rows[index-1]);
     if(!x)continue;
-    const p=sigmoid(item.weights,x);
+    const p=sigmoid(item.weights,x,item.probability_calibration);
     const calibration=calibrationGate(item,p,model);
     if(!calibration.allowed)continue;
     selected=row;vector=x;gate=calibration;probability=p;break;
