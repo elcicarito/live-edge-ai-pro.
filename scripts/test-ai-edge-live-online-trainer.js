@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const zlib = require("node:zlib");
-const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, calibration, calibrationGate, metrics, fit, fitPlattCalibration, predictProbability, run, readTimeline } = require("./ai-edge-live-online-trainer");
+const { featureVector, goalTransitions, labelFor, buildSamples, trainHorizon, calibration, calibrationGate, metrics, fit, fitPlattCalibration, predictProbability, isCalibrationHoldout, stableValidationMatch, run, readTimeline } = require("./ai-edge-live-online-trainer");
 
 const started = Date.parse("2026-11-12T21:00:00.000Z");
 const stats = (minute, goal) => [
@@ -68,6 +68,13 @@ for (let i = 0; i < 100; i++) {
 }
 const samples = buildSamples(allRows, { matches }, started);
 assert.ok(samples[15].length > 0 && samples[25].length > 0, "both horizons build from post-start live captures");
+const trainMatchIds = [...new Set(samples[15].filter(row => row.split === "train").map(row => row.match_id))];
+const validationMatchIds = [...new Set(samples[15].filter(row => row.split === "validation").map(row => row.match_id))];
+const calibrationMatchIds = trainMatchIds.filter(isCalibrationHoldout);
+assert.ok(calibrationMatchIds.length > 0, "independent calibration holdout must contain training matches");
+assert.ok(calibrationMatchIds.length < trainMatchIds.length, "calibration holdout must leave matches for model fitting");
+assert.ok(validationMatchIds.every(id => !calibrationMatchIds.includes(id)), "calibration holdout must remain disjoint from validation matches");
+assert.ok(trainMatchIds.every(id => stableValidationMatch(id) === false), "training matches remain outside the validation split");
 assert.ok(samples[15].every(row => row.match_id.startsWith("flashscore:")));
 const earlyValidation = trainHorizon(samples[15]);
 assert.equal(earlyValidation.status, "WARMUP", "a small validation set must never be promoted");

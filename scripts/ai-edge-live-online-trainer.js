@@ -423,9 +423,14 @@ function trainHorizon(samples) {
   };
 }
 function isCalibrationHoldout(matchId) {
+  // Use a distinct deterministic hash namespace from stableValidationMatch.
+  // The calibration holdout is selected only from rows already assigned to train,
+  // but reusing the validation hash would select exactly zero rows.
   let hash = 2166136261;
-  for (const character of String(matchId || "")) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
-  return (hash >>> 0) % 5 === 0;
+  for (const character of "calibration:" + String(matchId || "")) {
+    hash = Math.imul(hash ^ character.charCodeAt(0), 16777619) >>> 0;
+  }
+  return hash % 5 === 0;
 }
 function trainCalibratedHorizon(samples) {
   const train = samples.filter(row => row.split === "train");
