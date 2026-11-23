@@ -54,6 +54,8 @@ const cornerEntry=entries.find(x=>x.target==="CORNERS_UNDER_8_5");
 assert.equal(cardEntry.status,"HIT");
 assert.equal(cornerEntry.status,"MISS");
 assert.equal(summarizeMarketGroup(entries,"CARDS_OU").HIT,1);
+assert.equal(summarizeMarketGroup(entries,"CARDS_OU","CARDS_OVER_2_5").HIT,1);
+assert.equal(summarizeMarketGroup(entries,"CARDS_OU","CARDS_UNDER_3_5").total,0,"line-level summary must exclude other card thresholds");
 assert.equal(summarizeMarketGroup(entries,"CORNERS_UNDER").MISS,1);
 assert.equal(MARKET_LINES.length,10);
 console.log("AI Edge validated corners/cards TOP prediction tests passed.");
