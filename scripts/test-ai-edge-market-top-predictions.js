@@ -19,7 +19,7 @@ const record={collected_at:"2026-11-20T19:55:00.000Z",match:{id:"match-1",source
 function validatedModel(mode,key,featureCount){
  return {source:"Flashscore",mode,updated_at:now.toISOString(),observation_minute_range:mode.includes("CORNERS")?[55,75]:[55,80],
  validation_policy:{min_train_samples:500,min_validation_samples:300,min_train_matches:100,min_validation_matches:50,min_relative_log_loss_gain:.01,min_relative_brier_gain:.005,min_effective_match_weight_per_calibration_bin:8,max_absolute_calibration_error:.08},
- models:{[key]:{status:"SHADOW_VALIDATED",counts:{train:500,validation:300,train_matches:100,validation_matches:50},metrics:{relative_log_loss_gain:.02,relative_brier_gain:.01,calibration:{bins:[{range:"50-60",matches_weight:9,absolute_error:.03}]}},weights:Array(featureCount+1).fill(0)}}};
+ models:{[key]:{status:"SHADOW_VALIDATED",probability_calibration:{method:"platt_train_match_holdout",intercept:0,slope:1,matches:50,samples:300},counts:{train:500,validation:300,train_matches:100,validation_matches:50},metrics:{relative_log_loss_gain:.02,relative_brier_gain:.01,calibration:{bins:[{range:"50-60",matches_weight:9,absolute_error:.03}]}},weights:Array(featureCount+1).fill(0)}}};
 }
 const cards=validatedModel("FORWARD_ONLY_LIVE_CARDS_SHADOW","OVER_2_5",16);
 const corners=validatedModel("FORWARD_ONLY_LIVE_CORNERS_UNDER_SHADOW","UNDER_8_5",17);
