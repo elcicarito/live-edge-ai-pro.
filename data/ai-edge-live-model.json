@@ -3,7 +3,7 @@
   "source": "Flashscore",
   "mode": "FORWARD_ONLY_LIVE_TRAINING",
   "started_at": "2026-11-12T21:44:46.455Z",
-  "updated_at": "2026-11-24T10:28:20.604Z",
+  "updated_at": "2026-11-24T10:31:42.866Z",
   "lag_minutes": 5,
   "horizons_minutes": [
     15,
@@ -26,26 +26,26 @@
     "max_absolute_error": 0.08,
     "abstain_outside_reliable_bins": true
   },
-  "total_labeled_samples": 100592,
+  "total_labeled_samples": 100676,
   "validated_horizons": 1,
   "status": "SHADOW_VALIDATION_AVAILABLE",
   "models": {
     "15": {
       "status": "NOT_VALIDATED",
       "counts": {
-        "train": 41284,
+        "train": 41328,
         "validation": 10810,
-        "train_matches": 1751,
+        "train_matches": 1753,
         "validation_matches": 462,
-        "train_positive": 15267,
-        "train_negative": 26017,
+        "train_positive": 15279,
+        "train_negative": 26049,
         "validation_positive": 3951,
         "validation_negative": 6859
       },
       "metrics": {
         "count": 10810,
         "matches": 462,
-        "accuracy": 0.6088,
+        "accuracy": 0.6087,
         "brier": 0.2367,
         "baseline_brier": 0.2394,
         "log_loss": 0.6663,
@@ -54,32 +54,32 @@
           "method": "equal_width_probability_bins_match_weighted",
           "bin_count": 10,
           "populated_bins": 3,
-          "expected_calibration_error": 0.0091,
-          "maximum_calibration_error": 0.152,
+          "expected_calibration_error": 0.0088,
+          "maximum_calibration_error": 0.1484,
           "bins": [
             {
               "range": "30-40",
-              "count": 5905,
-              "matches_weight": 247.5941,
+              "count": 5914,
+              "matches_weight": 248.0307,
               "mean_predicted": 0.369,
-              "observed_rate": 0.3658,
+              "observed_rate": 0.3657,
               "absolute_error": 0.0033
             },
             {
               "range": "40-50",
-              "count": 4737,
-              "matches_weight": 206.3752,
+              "count": 4729,
+              "matches_weight": 206.0219,
               "mean_predicted": 0.4345,
-              "observed_rate": 0.424,
-              "absolute_error": 0.0105
+              "observed_rate": 0.4245,
+              "absolute_error": 0.01
             },
             {
               "range": "50-60",
-              "count": 168,
-              "matches_weight": 8.0307,
-              "mean_predicted": 0.5178,
-              "observed_rate": 0.6698,
-              "absolute_error": 0.152
+              "count": 167,
+              "matches_weight": 7.9474,
+              "mean_predicted": 0.5179,
+              "observed_rate": 0.6663,
+              "absolute_error": 0.1484
             }
           ]
         },
@@ -88,12 +88,12 @@
       },
       "calibration_gate": {
         "passed": true,
-        "reliable_bins": 3,
+        "reliable_bins": 2,
         "passing_bins": 2,
-        "failed_bins": 1,
+        "failed_bins": 0,
         "min_passing_bins": 2,
-        "max_reliable_error": 0.152,
-        "max_passing_error": 0.0105,
+        "max_reliable_error": 0.01,
+        "max_passing_error": 0.01,
         "reason": null
       },
       "validation_note": "Performance gate failed: both relative Log Loss and Brier improvements are required.",
@@ -112,12 +112,12 @@
     "25": {
       "status": "SHADOW_VALIDATED",
       "counts": {
-        "train": 38411,
+        "train": 38451,
         "validation": 10087,
-        "train_matches": 1748,
+        "train_matches": 1750,
         "validation_matches": 460,
-        "train_positive": 21972,
-        "train_negative": 16439,
+        "train_positive": 21989,
+        "train_negative": 16462,
         "validation_positive": 5695,
         "validation_negative": 4392
       },
@@ -133,24 +133,24 @@
           "method": "equal_width_probability_bins_match_weighted",
           "bin_count": 10,
           "populated_bins": 3,
-          "expected_calibration_error": 0.0198,
+          "expected_calibration_error": 0.0197,
           "maximum_calibration_error": 0.1547,
           "bins": [
             {
               "range": "50-60",
-              "count": 5481,
-              "matches_weight": 246.6036,
-              "mean_predicted": 0.5554,
-              "observed_rate": 0.5492,
-              "absolute_error": 0.0062
+              "count": 5485,
+              "matches_weight": 246.8177,
+              "mean_predicted": 0.5553,
+              "observed_rate": 0.5494,
+              "absolute_error": 0.0059
             },
             {
               "range": "60-70",
-              "count": 4149,
-              "matches_weight": 190.5855,
+              "count": 4145,
+              "matches_weight": 190.3714,
               "mean_predicted": 0.6404,
-              "observed_rate": 0.6192,
-              "absolute_error": 0.0212
+              "observed_rate": 0.619,
+              "absolute_error": 0.0215
             },
             {
               "range": "70-80",
@@ -172,7 +172,7 @@
         "failed_bins": 1,
         "min_passing_bins": 2,
         "max_reliable_error": 0.1547,
-        "max_passing_error": 0.0212,
+        "max_passing_error": 0.0215,
         "reason": null
       },
       "validation_note": null,
@@ -187,23 +187,23 @@
         "metrics_weighted_per_match": true
       },
       "weights": [
-        0.06343594,
-        0.24554232,
-        0.20231116,
-        0.06987033,
-        0.0204219,
-        0.23530366,
-        0.05471644,
-        0.25978629,
-        0.02941489,
-        0.19275061,
-        0.07286597,
-        0.03765374,
-        0.03268465,
-        -0.03330486,
-        -0.00024136,
-        -0.00072407,
-        0.0003496
+        0.06265326,
+        0.24631836,
+        0.20251242,
+        0.06996695,
+        0.02048514,
+        0.23535272,
+        0.05379054,
+        0.26031516,
+        0.0292411,
+        0.19264365,
+        0.07290833,
+        0.03775129,
+        0.03269669,
+        -0.03363695,
+        -0.00071625,
+        -0.00081617,
+        0.00014594
       ]
     }
   }
