@@ -151,9 +151,11 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),"ai-edge-ledger-test-"));
 try{
  fs.writeFileSync(path.join(temp,"flashscore-primary-current.json"),JSON.stringify(feed));
  fs.writeFileSync(path.join(temp,"flashscore-confirmed-outcomes.json"),JSON.stringify({matches:{}}));
- const result=buildLedger(temp,new Date(now));
  const historyPath=path.join(temp,"ai-edge-prediction-history.json");
  const compressedPath=historyPath+".gz";
+ const settledFixture={id:"settled-fixture",matchId:"old-fixture",target:15,createdAt:now-60000,status:"HIT",snapshots:[{time:now-60000,minute:40,home_score:0,away_score:0,status:"live",status_text:"1st Half",stage:"1st Half"}]};
+ fs.writeFileSync(compressedPath,zlib.gzipSync(Buffer.from(JSON.stringify({source:"Flashscore",predictions:[settledFixture]}))));
+ const result=buildLedger(temp,new Date(now));
  assert.equal(fs.existsSync(historyPath),false,"uncompressed permanent history is removed after compression");
  assert.equal(fs.existsSync(compressedPath),true,"permanent history is stored as gzip");
  const saved=JSON.parse(zlib.gunzipSync(fs.readFileSync(compressedPath)).toString("utf8"));
@@ -161,7 +163,9 @@ try{
  assert.equal(saved.mode,"LIVE_PREDICTION_LEDGER");
  assert(saved.by_target["15"],"per-target summary saved");
  assert.equal(result.total,saved.total_predictions);
- assert(saved.predictions.every(p=>Array.isArray(p.snapshots)&&p.snapshots.length===1),"baseline match snapshots are persisted");
+ assert(saved.predictions.some(p=>p.id==="settled-fixture"&&!Object.prototype.hasOwnProperty.call(p,"snapshots")),"settled historical predictions retain their result but discard redundant timelines");
+ assert(saved.predictions.filter(p=>p.status==="OPEN").every(p=>Array.isArray(p.snapshots)&&p.snapshots.length===1),"open predictions retain their evaluation snapshots");
+ assert(saved.predictions.filter(p=>p.status!=="OPEN").every(p=>!Object.prototype.hasOwnProperty.call(p,"snapshots")),"settled predictions do not retain large evaluation timelines");
  assert.equal(view.mode,"LIVE_PREDICTION_LEDGER_VIEW");
  assert.equal(view.total_predictions,saved.total_predictions);
  assert(view.predictions.length>0,"compact live view includes recent predictions");
