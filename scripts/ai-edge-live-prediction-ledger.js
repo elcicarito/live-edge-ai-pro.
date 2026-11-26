@@ -165,7 +165,8 @@ function probabilityThresholdSummary(rows,target="MODEL_FT"){
   const cohort=selected.filter(row=>Number(row.modelProbability)>=threshold/100);
   const HIT=cohort.filter(row=>row.status==="HIT").length,MISS=cohort.filter(row=>row.status==="MISS").length;
   const decided=HIT+MISS,OPEN=cohort.filter(row=>row.status==="OPEN").length,UNRESOLVED=cohort.filter(row=>row.status==="UNRESOLVED").length;
-  const mean=cohort.length?cohort.reduce((sum,row)=>sum+Number(row.modelProbability),0)/cohort.length:null;
+  const settled=cohort.filter(row=>row.status==="HIT"||row.status==="MISS");
+  const mean=settled.length?settled.reduce((sum,row)=>sum+Number(row.modelProbability),0)/settled.length:null;
   const accuracy=decided?HIT/decided:null,calibrationError=accuracy!==null&&mean!==null?Math.abs(accuracy-mean):null;
   let net=0,staked=0;
   for(const row of cohort){if(row.status!=="HIT"&&row.status!=="MISS")continue;const odds=Number(row.simulationMinimumOdds??row.modelMinimumOdds);if(!Number.isFinite(odds)||odds<=1)continue;staked++;net+=row.status==="HIT"?odds-1:-1;}
