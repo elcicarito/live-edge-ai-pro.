@@ -14,7 +14,7 @@ const samples=trainer.buildSamples(snapshots,outcomes,Date.UTC(2025,0,1));
 assert.ok(samples.length>=2,"should produce at least two five-minute bucket samples");
 for(const row of samples){assert.equal(row.x.length,37,"FT EARLY vector must match late FT's 37 features");assert.equal(row.x[22],1,"early time band must be fixed to the first band");assert.deepEqual(row.x.slice(23,26),[0,0,0]);assert.equal(row.y,1,"goal after the five-minute lag must be positive");}
 
-const {addPredictions}=require("./ai-edge-live-prediction-ledger");
+const {addPredictions,minimumOddsSimulationSummary,buildStrategyDataset}=require("./ai-edge-live-prediction-ledger");
 const now=Date.parse("2026-11-26T18:00:00Z");
 const liveStats=[stat("Shots on target",5,2),stat("Total shots",12,7),stat("Corner kicks",4,2),stat("Ball possession",55,45)];
 const currentMatch={id:"fixture-early-live",source:"Flashscore",status:"live",home:"Home",away:"Away",competition:"Test league",live_minute:50,home_score:1,away_score:0,stats_collected_at:new Date(now).toISOString(),stats:liveStats};
@@ -30,4 +30,14 @@ assert.equal(early.deadlineMinute,120,"FT EARLY must remain open until regular-t
 assert.equal(early.modelStatus,"EXPERIMENTAL","unvalidated early model must be clearly marked experimental");
 assert.equal(early.separateTracking,true);
 
-console.log("FT EARLY 45-55 tests passed:",samples.length,"samples and live TOP candidate generation");
+const roiRows=[
+ {target:"FT_EARLY_45_55",matchId:"roi-hit",createdAt:"2026-11-25T18:00:00Z",status:"HIT",modelProbability:0.7,modelMinimumOdds:2.2,simulationMinimumOdds:2.2},
+ {target:"FT_EARLY_45_55",matchId:"roi-miss",createdAt:"2026-11-25T19:00:00Z",status:"MISS",modelProbability:0.65,modelMinimumOdds:1.9,simulationMinimumOdds:1.9}
+];
+const earlyRoi=minimumOddsSimulationSummary(roiRows,"FT_EARLY_45_55");
+assert.equal(earlyRoi.decided,2,"FT EARLY ROI must include settled predictions");
+assert.equal(earlyRoi.net_profit,0.2,"FT EARLY ROI must use each prediction's locked minimum odds");
+assert.equal(earlyRoi.roi,10,"FT EARLY ROI must be expressed against total 1-unit stakes");
+assert.equal(buildStrategyDataset(roiRows).length,2,"FT EARLY settled rows must enter strategy simulation dataset");
+
+console.log("FT EARLY 45-55 tests passed:",samples.length,"samples, live candidate generation and individual-minimum-odds ROI");
