@@ -340,7 +340,8 @@
       if(target.startsWith("CORNERS")||marketType.includes("CORNER")||label.includes("ROH"))return "CORNERS";
       if(target.startsWith("CARDS")||marketType.includes("CARD")||label.includes("KART"))return "CARDS";
       if(target==="MODEL_25")return "EDGE25";
-      if(target==="MODEL_FT")return "FT";\n      if(target==="FT_EARLY_45_55")return "FT_EARLY";\n      if(target==="FT_EARLY_45_55")return "FT_EARLY";
+      if(target==="MODEL_FT")return "FT";
+      if(target==="FT_EARLY_45_55")return "FT_EARLY";
       return "";
     };
     const isTopMarketTarget=row=>["CORNERS","CARDS"].includes(topModuleForRecord(row));
