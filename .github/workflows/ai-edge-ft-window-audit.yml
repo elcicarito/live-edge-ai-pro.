@@ -32,7 +32,7 @@ jobs:
           node-version: 22
       - name: Run historical FT window comparison
         working-directory: app
-        run: node scripts/ai-edge-ft-window-audit.js ../flashscore-data/data audit-output
+        run: |\n          node --check scripts/ai-edge-ft-window-audit.js\n          node scripts/ai-edge-ft-window-audit.js ../flashscore-data/data audit-output
       - name: Upload audit report
         uses: actions/upload-artifact@v4
         with:
