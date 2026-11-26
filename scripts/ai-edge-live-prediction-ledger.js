@@ -132,7 +132,7 @@ if(min>=1&&min<=90&&!/(half.?time|\bht\b|after extra time|penalt|abandoned|cance
  }
  if(min>=45&&min<=55&&earlyFtModel?.source==="Flashscore"&&earlyFtModel?.mode==="FORWARD_ONLY_LIVE_TRAINING_FT_EARLY_45_55"){
   const item=earlyFtModel.model||{},counts=item.counts||{},weights=item.weights;
-  const ready=Array.isArray(weights)&&weights.length===39&&Number(counts.train)>=500&&Number(counts.validation)>=300&&Number(counts.train_matches)>=100&&Number(counts.validation_matches)>=50;
+  const ready=Array.isArray(weights)&&weights.length===38&&Number(counts.train)>=500&&Number(counts.validation)>=300&&Number(counts.train_matches)>=100&&Number(counts.validation_matches)>=50;
   if(ready){
    const x=lateFTFeatureVectorForMatch(m,hist,r.collected_at||collected);
    if(x){x.fill(0,22,26);x[22]=1;}
