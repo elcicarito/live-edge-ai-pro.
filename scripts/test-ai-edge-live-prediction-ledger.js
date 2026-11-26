@@ -55,6 +55,22 @@ const lateFtModel={
 };
 const ftRows=[];
 addPredictions(ftRows,{...feed,records:[{collected_at:new Date(now).toISOString(),match:{...match,live_minute:75}}]},now,null,lateFtModel);
+const {probabilityThresholdSummary}=require("./ai-edge-live-prediction-ledger");
+const thresholdRows=[
+ {matchId:"a",target:"MODEL_FT",createdAt:1,modelProbability:.72,status:"HIT",modelMinimumOdds:1.7},
+ {matchId:"a",target:"MODEL_FT",createdAt:2,modelProbability:.81,status:"MISS",modelMinimumOdds:1.6},
+ {matchId:"b",target:"MODEL_FT",createdAt:3,modelProbability:.66,status:"MISS",modelMinimumOdds:1.9},
+ {matchId:"c",target:"MODEL_FT",createdAt:4,modelProbability:.84,status:"OPEN",modelMinimumOdds:1.6},
+ {matchId:"d",target:"MODEL_FT",createdAt:5,modelProbability:.58,status:"HIT",modelMinimumOdds:2.0}
+];
+const thresholdSummary=probabilityThresholdSummary(thresholdRows);
+assert.equal(thresholdSummary.find(x=>x.threshold===60).total,3,"60%+ uses one earliest prediction per match");
+assert.equal(thresholdSummary.find(x=>x.threshold===60).HIT,1);
+assert.equal(thresholdSummary.find(x=>x.threshold===60).MISS,1);
+assert.equal(thresholdSummary.find(x=>x.threshold===60).OPEN,1);
+assert.equal(thresholdSummary.find(x=>x.threshold===70).total,2);
+assert.equal(thresholdSummary.find(x=>x.threshold===80).total,1);
+assert.equal(thresholdSummary.find(x=>x.threshold===85).total,0);
 const modelFT=ftRows.find(p=>p.target==="MODEL_FT");
 assert(modelFT,"independently validated full-time model creates its own prediction");
 assert.equal(modelFT.modelProbability,0.5);
