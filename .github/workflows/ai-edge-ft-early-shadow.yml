@@ -1,0 +1,46 @@
+name: FT EARLY 45-55 shadow trainer
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/10 * * * *"
+permissions:
+  contents: write
+concurrency:
+  group: ft-early-45-55-shadow
+  cancel-in-progress: false
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout application code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: app
+      - name: Checkout permanent Flashscore archive and shadow model state
+        uses: actions/checkout@v4
+        with:
+          ref: live-data-v2
+          path: archive
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Train prospective FT EARLY shadow model
+        working-directory: app
+        run: |
+          node --check scripts/ai-edge-ft-early-shadow-trainer.js
+          node scripts/ai-edge-ft-early-shadow-trainer.js ../archive/data
+      - name: Persist shadow model state to archive branch
+        working-directory: archive
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ai-edge-ft-early-shadow-model.json
+          if git diff --cached --quiet; then
+            echo "No shadow-model state change."
+          else
+            git commit -m "Update FT EARLY 45-55 shadow model"
+            git push origin live-data-v2
+          fi
