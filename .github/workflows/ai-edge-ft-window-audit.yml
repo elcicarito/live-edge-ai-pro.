@@ -1,0 +1,39 @@
+name: AI Edge FT capture-window audit
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ai-edge-ft-window-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout application code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: app
+      - name: Checkout permanent Flashscore archive
+        uses: actions/checkout@v4
+        with:
+          ref: live-data-v2
+          path: flashscore-data
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run historical FT window comparison
+        working-directory: app
+        run: node scripts/ai-edge-ft-window-audit.js ../flashscore-data/data audit-output
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-edge-ft-window-audit
+          path: |
+            app/audit-output/ai-edge-ft-window-audit.json
+            app/audit-output/ai-edge-ft-window-audit.md
+          retention-days: 30
