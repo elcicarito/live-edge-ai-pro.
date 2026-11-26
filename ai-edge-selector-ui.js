@@ -153,7 +153,7 @@
     const groups=Object.entries(ledger.by_target||{});
     const accuracyPanel=$("ai-edge-accuracy-engine");
     if(accuracyPanel){
-      const tracked=groups.filter(([id])=>["MODEL_15","MODEL_25","MODEL_FT","BTTS","RESULT_1X2","NEXT_TEAM"].includes(id));
+      const tracked=groups.filter(([id])=>["MODEL_15","MODEL_25","MODEL_FT","FT_EARLY_45_55","BTTS","RESULT_1X2","NEXT_TEAM"].includes(id));
       const cards=tracked.map(([id,g])=>{
         const decided=Number(g.decided||0),accuracy=Number(g.accuracy);
         const enough=decided>=100,stable=decided>=300;
