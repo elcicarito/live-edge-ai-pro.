@@ -43,7 +43,7 @@ function buildTopLedger(dataDir=DATA,nowDate=new Date()){
   const m=rec.match,min=Number.parseInt(m.live_minute,10),after=Number(row.actionableAfterMinute),deadline=Number(row.deadlineMinute),created=stamp(row.createdAt);
   const probability=Number(row.modelProbability),calibrationError=Number(row.modelCalibrationError),calibrationWeight=Number(row.modelCalibrationMatchesWeight),minimumOdds=Number(row.modelMinimumOdds);
   if(!Number.isFinite(min)||min<1||min>110||!Number.isFinite(after)||!Number.isFinite(deadline)||deadline<=after||min>deadline||!Number.isFinite(created)||created>now||now-created>8*60000)continue;
-  if(!Number.isFinite(probability)||probability<=0||probability>=1||!Number.isFinite(calibrationError)||calibrationError>0.08||!Number.isFinite(calibrationWeight)||calibrationWeight<8||!Number.isFinite(minimumOdds)||minimumOdds<=1)continue;
+  if(!Number.isFinite(probability)||probability<=0||probability>=1||!Number.isFinite(calibrationError)||calibrationError>(row.modelStatus==="EXPERIMENTAL"?0.5:0.08)||!Number.isFinite(calibrationWeight)||calibrationWeight<8||!Number.isFinite(minimumOdds)||minimumOdds<=1)continue;
   const fx=features(m,feed.recent_history||[],rec.collected_at||feed.collected_at,now);if(!fx.ready)continue;
   const predictionId=String(row.id||row.matchId+"|"+row.target),key=topEntryKey(row.matchId,row.target)+"|"+predictionId;if(byKey.has(key)||hasCaptured(entries,row.matchId,row.target))continue;
   const conservative=Math.max(.01,Number(row.modelProbability)-Number(row.modelCalibrationError));
