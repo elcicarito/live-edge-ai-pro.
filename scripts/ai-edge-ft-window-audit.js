@@ -43,7 +43,7 @@ function makeSamples(rows,band){
    }
    if(label===null)continue;
    const x=late.lateFTFeatureVector(row,matchRows,i);
-   const bandOffset=x.length-16-6-4-5; // core + score-state + band one-hot + deltas
+   const core=base.featureVector(row,matchRows[i-1]||null);\n   const bandOffset=core?core.length+6:-1; // four one-hot time-window slots follow six score/time features
    if(bandOffset>=0&&bandOffset+3<x.length){
     x.fill(0,bandOffset,bandOffset+4);
     const slot=band.name==="45-55"?0:band.name==="55-65"?1:band.name==="65-75"?2:3;
