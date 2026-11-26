@@ -327,7 +327,7 @@
     const liveAny=new Map(usable.map(x=>[String(x.record.match?.id),x]));
     const latest=new Map();
     for(const row of ledger.predictions||[]){
-      if(!["MODEL_25","MODEL_FT","FT_EARLY_45_55"].includes(row.target)||row.status!=="OPEN"||row.modelStatus!=="SHADOW_VALIDATED"||!Number.isFinite(Number(row.modelProbability))||Number(row.modelProbability)<=0||Number(row.modelProbability)>=1||!Number.isFinite(Number(row.modelMinimumOdds))||Number(row.modelMinimumOdds)<=1||!Number.isFinite(Number(row.modelCalibrationError))||Number(row.modelCalibrationError)>0.08||!Number.isFinite(Number(row.modelCalibrationMatchesWeight))||Number(row.modelCalibrationMatchesWeight)<8)continue;
+      if(!["MODEL_25","MODEL_FT","FT_EARLY_45_55"].includes(row.target)||row.status!=="OPEN"||!["SHADOW_VALIDATED","EXPERIMENTAL"].includes(row.modelStatus)||!Number.isFinite(Number(row.modelProbability))||Number(row.modelProbability)<=0||Number(row.modelProbability)>=1||!Number.isFinite(Number(row.modelMinimumOdds))||Number(row.modelMinimumOdds)<=1||!Number.isFinite(Number(row.modelCalibrationError))||Number(row.modelCalibrationError)>(row.modelStatus==="EXPERIMENTAL"?0.5:0.08)||!Number.isFinite(Number(row.modelCalibrationMatchesWeight))||Number(row.modelCalibrationMatchesWeight)<8)continue;
       const id=String(row.matchId||"")+"|"+row.target,previous=latest.get(id);
       if(!previous||Number(row.createdAt)>Number(previous.createdAt))latest.set(id,row);
     }
