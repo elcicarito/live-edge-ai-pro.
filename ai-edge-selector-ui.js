@@ -393,6 +393,7 @@
     // Optional manually entered odds must not distort model ranking.
     // Rank by conservative probability, calibration quality, then current Flashscore data quality.
     candidates.sort((a,b)=>
+      Number(a.row.modelStatus==="EXPERIMENTAL")-Number(b.row.modelStatus==="EXPERIMENTAL")||
       b.conservative-a.conservative||
       Number(a.row.modelCalibrationError)-Number(b.row.modelCalibrationError)||
       Number(b.row.modelCalibrationMatchesWeight)-Number(a.row.modelCalibrationMatchesWeight)||
