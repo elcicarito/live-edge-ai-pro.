@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "source": "Flashscore",
+  "mode": "FORWARD_ONLY_LIVE_TRAINING_FT_EARLY_45_55",
+  "target": "At least one goal after a five-minute decision lag until confirmed regular-time full-time",
+  "started_at": "2026-11-27T10:37:03.782Z",
+  "updated_at": "2026-11-27T10:37:03.782Z",
+  "lag_minutes": 5,
+  "observation_minute_range": [
+    45,
+    55
+  ],
+  "sample_policy": "Prospective only; snapshots captured after activation; latest usable snapshot in each five-minute bucket; goals at or crossing the five-minute decision boundary and non-regular-time matches excluded.",
+  "feature_version": "late_ft_pressure_v2 with fixed 45-55 minute band; same 38-feature family as late FT.",
+  "validation_policy": {
+    "min_train_samples": 500,
+    "min_validation_samples": 300,
+    "min_train_matches": 100,
+    "min_validation_matches": 50,
+    "min_relative_log_loss_gain": 0.01,
+    "min_relative_brier_gain": 0.005
+  },
+  "calibration_policy": {
+    "min_effective_match_weight": 8,
+    "max_absolute_error": 0.08,
+    "experimental_max_absolute_error": 0.5
+  },
+  "total_labeled_samples": 0,
+  "total_labeled_matches": 0,
+  "model": {
+    "status": "WARMUP",
+    "counts": {
+      "train": 0,
+      "validation": 0,
+      "train_matches": 0,
+      "validation_matches": 0,
+      "train_positive": 0,
+      "train_negative": 0,
+      "validation_positive": 0,
+      "validation_negative": 0
+    },
+    "metrics": null,
+    "weights": null
+  },
+  "status": "COLLECTING",
+  "live_tips_enabled": false,
+  "production_model_modified": false
+}
