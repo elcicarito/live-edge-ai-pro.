@@ -3,7 +3,7 @@
   "source": "Flashscore",
   "mode": "FORWARD_ONLY_LIVE_CARDS_SHADOW",
   "started_at": "2026-11-17T19:03:30.493Z",
-  "updated_at": "2026-11-27T20:56:12.101Z",
+  "updated_at": "2026-11-27T20:59:45.672Z",
   "target": "Final total yellow cards in regular time (90 minutes plus stoppage time); extra time and penalty shootouts excluded.",
   "lag_minutes": 5,
   "observation_minute_range": [
@@ -56,13 +56,13 @@
     "metrics_weighted_per_match": true
   },
   "prediction_policy": "Shadow evaluation only. No TOP opportunities or betting recommendations are emitted by this trainer.",
-  "total_labeled_samples": 34320,
-  "total_labeled_matches": 1538,
+  "total_labeled_samples": 34470,
+  "total_labeled_matches": 1544,
   "excluded": {
-    "missing_final_cards": 1114,
-    "incomplete_timeline": 90,
+    "missing_final_cards": 1107,
+    "incomplete_timeline": 91,
     "invalid_card_sequence": 241,
-    "lag_ambiguous": 2166
+    "lag_ambiguous": 2173
   },
   "validated_lines": 5,
   "status": "SHADOW_VALIDATION_AVAILABLE",
@@ -70,301 +70,110 @@
     "UNDER_3_5": {
       "status": "SHADOW_VALIDATED",
       "counts": {
-        "train": 3642,
+        "train": 3664,
         "validation": 1135,
-        "train_matches": 980,
+        "train_matches": 985,
         "validation_matches": 304,
-        "train_positive": 1684,
-        "train_negative": 1958,
+        "train_positive": 1697,
+        "train_negative": 1967,
         "validation_positive": 539,
         "validation_negative": 596
       },
       "calibration_counts": {
-        "samples": 943,
-        "matches": 254
+        "samples": 946,
+        "matches": 255
       },
       "metrics": {
         "count": 1135,
         "matches": 304,
-        "accuracy": 0.7052,
-        "brier": 0.1909,
+        "accuracy": 0.7061,
+        "brier": 0.1912,
         "baseline_brier": 0.2465,
-        "log_loss": 0.5598,
+        "log_loss": 0.5605,
         "baseline_log_loss": 0.6861,
         "calibration": {
           "method": "equal_width_probability_bins_match_weighted",
           "bin_count": 10,
           "populated_bins": 9,
-          "expected_calibration_error": 0.0704,
-          "maximum_calibration_error": 0.186,
+          "expected_calibration_error": 0.077,
+          "maximum_calibration_error": 0.1768,
           "bins": [
             {
               "range": "0-10",
               "count": 46,
               "matches_weight": 14.7833,
-              "mean_predicted": 0.0635,
+              "mean_predicted": 0.0638,
               "observed_rate": 0,
-              "absolute_error": 0.0635
+              "absolute_error": 0.0638
             },
             {
               "range": "10-20",
               "count": 79,
               "matches_weight": 21.1167,
-              "mean_predicted": 0.1518,
+              "mean_predicted": 0.1519,
               "observed_rate": 0.0284,
-              "absolute_error": 0.1234
+              "absolute_error": 0.1235
             },
             {
               "range": "20-30",
-              "count": 133,
-              "matches_weight": 38.5167,
-              "mean_predicted": 0.2543,
-              "observed_rate": 0.1112,
-              "absolute_error": 0.1431
+              "count": 138,
+              "matches_weight": 39.7,
+              "mean_predicted": 0.2556,
+              "observed_rate": 0.1079,
+              "absolute_error": 0.1477
             },
             {
               "range": "30-40",
-              "count": 210,
-              "matches_weight": 51.55,
-              "mean_predicted": 0.3513,
-              "observed_rate": 0.4054,
-              "absolute_error": 0.0541
+              "count": 209,
+              "matches_weight": 51.2167,
+              "mean_predicted": 0.353,
+              "observed_rate": 0.4237,
+              "absolute_error": 0.0707
             },
             {
               "range": "40-50",
-              "count": 228,
-              "matches_weight": 61.6667,
-              "mean_predicted": 0.4513,
-              "observed_rate": 0.4516,
-              "absolute_error": 0.0004
+              "count": 227,
+              "matches_weight": 61.6,
+              "mean_predicted": 0.4517,
+              "observed_rate": 0.4432,
+              "absolute_error": 0.0085
             },
             {
               "range": "50-60",
-              "count": 216,
-              "matches_weight": 55.9833,
-              "mean_predicted": 0.5529,
-              "observed_rate": 0.6314,
-              "absolute_error": 0.0785
+              "count": 215,
+              "matches_weight": 55.65,
+              "mean_predicted": 0.5526,
+              "observed_rate": 0.6388,
+              "absolute_error": 0.0862
             },
             {
               "range": "60-70",
-              "count": 181,
-              "matches_weight": 49.55,
-              "mean_predicted": 0.6416,
-              "observed_rate": 0.705,
-              "absolute_error": 0.0634
+              "count": 182,
+              "matches_weight": 49.9333,
+              "mean_predicted": 0.6414,
+              "observed_rate": 0.7073,
+              "absolute_error": 0.0659
             },
             {
               "range": "70-80",
-              "count": 39,
-              "matches_weight": 9.5,
-              "mean_predicted": 0.735,
-              "observed_rate": 0.9211,
-              "absolute_error": 0.186
+              "count": 36,
+              "matches_weight": 8.6667,
+              "mean_predicted": 0.7366,
+              "observed_rate": 0.9135,
+              "absolute_error": 0.1768
             },
             {
               "range": "80-90",
               "count": 3,
               "matches_weight": 1.3333,
-              "mean_predicted": 0.8372,
+              "mean_predicted": 0.8382,
               "observed_rate": 1,
-              "absolute_error": 0.1628
+              "absolute_error": 0.1618
             }
           ]
         },
-        "relative_log_loss_gain": 0.1841,
-        "relative_brier_gain": 0.2256
-      },
-      "calibration_gate": {
-        "passed": true,
-        "reliable_bins": 8,
-        "passing_bins": 5,
-        "failed_bins": 3,
-        "min_passing_bins": 2,
-        "max_reliable_error": 0.186,
-        "max_passing_error": 0.0785,
-        "reason": null
-      },
-      "validation_note": null,
-      "validation_policy": {
-        "min_train_matches": 100,
-        "min_validation_matches": 50,
-        "min_relative_log_loss_gain": 0.01,
-        "min_relative_brier_gain": 0.005,
-        "min_effective_match_weight_per_calibration_bin": 8,
-        "min_well_calibrated_bins": 2,
-        "max_absolute_calibration_error": 0.08,
-        "metrics_weighted_per_match": true,
-        "probability_calibration": "Platt scaling fit on separate training-match holdout"
-      },
-      "weights": [
-        -0.16535726,
-        0.25389141,
-        -1.62352757,
-        0.05089298,
-        -0.03589057,
-        -0.1845573,
-        -0.00055901,
-        0.33304988,
-        0.08137992,
-        0.27075932,
-        -0.04855116,
-        0.10264828,
-        -0.26099609,
-        -0.5188876,
-        -0.00503581,
-        0.04393507,
-        -0.08345039
-      ],
-      "probability_calibration": {
-        "method": "platt_train_match_holdout",
-        "intercept": 0.5035497,
-        "slope": 2.5718938,
-        "matches": 254,
-        "samples": 943
-      },
-      "experimental_weights": [
-        -0.16535726,
-        0.25389141,
-        -1.62352757,
-        0.05089298,
-        -0.03589057,
-        -0.1845573,
-        -0.00055901,
-        0.33304988,
-        0.08137992,
-        0.27075932,
-        -0.04855116,
-        0.10264828,
-        -0.26099609,
-        -0.5188876,
-        -0.00503581,
-        0.04393507,
-        -0.08345039
-      ],
-      "experimental_probability_calibration": {
-        "method": "platt_train_match_holdout",
-        "intercept": 0.5035497,
-        "slope": 2.5718938,
-        "matches": 254,
-        "samples": 943
-      }
-    },
-    "UNDER_4_5": {
-      "status": "SHADOW_VALIDATED",
-      "counts": {
-        "train": 3642,
-        "validation": 1135,
-        "train_matches": 980,
-        "validation_matches": 304,
-        "train_positive": 2432,
-        "train_negative": 1210,
-        "validation_positive": 763,
-        "validation_negative": 372
-      },
-      "calibration_counts": {
-        "samples": 943,
-        "matches": 254
-      },
-      "metrics": {
-        "count": 1135,
-        "matches": 304,
-        "accuracy": 0.7545,
-        "brier": 0.1747,
-        "baseline_brier": 0.2327,
-        "log_loss": 0.5292,
-        "baseline_log_loss": 0.6581,
-        "calibration": {
-          "method": "equal_width_probability_bins_match_weighted",
-          "bin_count": 10,
-          "populated_bins": 10,
-          "expected_calibration_error": 0.0723,
-          "maximum_calibration_error": 0.1997,
-          "bins": [
-            {
-              "range": "0-10",
-              "count": 6,
-              "matches_weight": 2.25,
-              "mean_predicted": 0.0701,
-              "observed_rate": 0,
-              "absolute_error": 0.0701
-            },
-            {
-              "range": "10-20",
-              "count": 34,
-              "matches_weight": 10.1833,
-              "mean_predicted": 0.1635,
-              "observed_rate": 0,
-              "absolute_error": 0.1635
-            },
-            {
-              "range": "20-30",
-              "count": 49,
-              "matches_weight": 13.3667,
-              "mean_predicted": 0.2483,
-              "observed_rate": 0.0486,
-              "absolute_error": 0.1997
-            },
-            {
-              "range": "30-40",
-              "count": 63,
-              "matches_weight": 17.4167,
-              "mean_predicted": 0.3569,
-              "observed_rate": 0.2689,
-              "absolute_error": 0.088
-            },
-            {
-              "range": "40-50",
-              "count": 109,
-              "matches_weight": 30.2167,
-              "mean_predicted": 0.4553,
-              "observed_rate": 0.4203,
-              "absolute_error": 0.035
-            },
-            {
-              "range": "50-60",
-              "count": 209,
-              "matches_weight": 53.7167,
-              "mean_predicted": 0.5581,
-              "observed_rate": 0.5886,
-              "absolute_error": 0.0305
-            },
-            {
-              "range": "60-70",
-              "count": 230,
-              "matches_weight": 60.2333,
-              "mean_predicted": 0.656,
-              "observed_rate": 0.707,
-              "absolute_error": 0.051
-            },
-            {
-              "range": "70-80",
-              "count": 343,
-              "matches_weight": 90.1833,
-              "mean_predicted": 0.751,
-              "observed_rate": 0.8418,
-              "absolute_error": 0.0908
-            },
-            {
-              "range": "80-90",
-              "count": 90,
-              "matches_weight": 26.1,
-              "mean_predicted": 0.825,
-              "observed_rate": 0.901,
-              "absolute_error": 0.076
-            },
-            {
-              "range": "90-100",
-              "count": 2,
-              "matches_weight": 0.3333,
-              "mean_predicted": 0.9013,
-              "observed_rate": 1,
-              "absolute_error": 0.0987
-            }
-          ]
-        },
-        "relative_log_loss_gain": 0.1959,
-        "relative_brier_gain": 0.2492
+        "relative_log_loss_gain": 0.1831,
+        "relative_brier_gain": 0.2243
       },
       "calibration_gate": {
         "passed": true,
@@ -372,8 +181,8 @@
         "passing_bins": 4,
         "failed_bins": 4,
         "min_passing_bins": 2,
-        "max_reliable_error": 0.1997,
-        "max_passing_error": 0.076,
+        "max_reliable_error": 0.1768,
+        "max_passing_error": 0.0707,
         "reason": null
       },
       "validation_note": null,
@@ -389,73 +198,264 @@
         "probability_calibration": "Platt scaling fit on separate training-match holdout"
       },
       "weights": [
-        0.72625504,
-        0.27843743,
-        -1.613416,
-        0.22185851,
-        -0.02115284,
-        -0.18546445,
-        -0.01220808,
-        0.21785705,
-        -0.02578204,
-        0.19568309,
-        -0.11509283,
-        0.13836332,
-        -0.26435885,
-        -0.43330559,
-        -0.02122864,
-        0.03478361,
-        -0.03508274
+        -0.1616964,
+        0.25280415,
+        -1.62006549,
+        0.05089546,
+        -0.04667716,
+        -0.19202154,
+        -0.00022519,
+        0.33257866,
+        0.07947569,
+        0.27709058,
+        -0.05217355,
+        0.0957164,
+        -0.25256725,
+        -0.51447364,
+        -0.00728379,
+        0.04747777,
+        -0.08255351
       ],
       "probability_calibration": {
         "method": "platt_train_match_holdout",
-        "intercept": -0.75230924,
-        "slope": 2.47785173,
-        "matches": 254,
-        "samples": 943
+        "intercept": 0.49117887,
+        "slope": 2.56858594,
+        "matches": 255,
+        "samples": 946
       },
       "experimental_weights": [
-        0.72625504,
-        0.27843743,
-        -1.613416,
-        0.22185851,
-        -0.02115284,
-        -0.18546445,
-        -0.01220808,
-        0.21785705,
-        -0.02578204,
-        0.19568309,
-        -0.11509283,
-        0.13836332,
-        -0.26435885,
-        -0.43330559,
-        -0.02122864,
-        0.03478361,
-        -0.03508274
+        -0.1616964,
+        0.25280415,
+        -1.62006549,
+        0.05089546,
+        -0.04667716,
+        -0.19202154,
+        -0.00022519,
+        0.33257866,
+        0.07947569,
+        0.27709058,
+        -0.05217355,
+        0.0957164,
+        -0.25256725,
+        -0.51447364,
+        -0.00728379,
+        0.04747777,
+        -0.08255351
       ],
       "experimental_probability_calibration": {
         "method": "platt_train_match_holdout",
-        "intercept": -0.75230924,
-        "slope": 2.47785173,
-        "matches": 254,
-        "samples": 943
+        "intercept": 0.49117887,
+        "slope": 2.56858594,
+        "matches": 255,
+        "samples": 946
+      }
+    },
+    "UNDER_4_5": {
+      "status": "SHADOW_VALIDATED",
+      "counts": {
+        "train": 3664,
+        "validation": 1135,
+        "train_matches": 985,
+        "validation_matches": 304,
+        "train_positive": 2450,
+        "train_negative": 1214,
+        "validation_positive": 763,
+        "validation_negative": 372
+      },
+      "calibration_counts": {
+        "samples": 946,
+        "matches": 255
+      },
+      "metrics": {
+        "count": 1135,
+        "matches": 304,
+        "accuracy": 0.7539,
+        "brier": 0.175,
+        "baseline_brier": 0.2327,
+        "log_loss": 0.53,
+        "baseline_log_loss": 0.6581,
+        "calibration": {
+          "method": "equal_width_probability_bins_match_weighted",
+          "bin_count": 10,
+          "populated_bins": 10,
+          "expected_calibration_error": 0.0731,
+          "maximum_calibration_error": 0.2022,
+          "bins": [
+            {
+              "range": "0-10",
+              "count": 5,
+              "matches_weight": 2,
+              "mean_predicted": 0.0667,
+              "observed_rate": 0,
+              "absolute_error": 0.0667
+            },
+            {
+              "range": "10-20",
+              "count": 35,
+              "matches_weight": 10.4333,
+              "mean_predicted": 0.1628,
+              "observed_rate": 0,
+              "absolute_error": 0.1628
+            },
+            {
+              "range": "20-30",
+              "count": 50,
+              "matches_weight": 13.7,
+              "mean_predicted": 0.2496,
+              "observed_rate": 0.0474,
+              "absolute_error": 0.2022
+            },
+            {
+              "range": "30-40",
+              "count": 62,
+              "matches_weight": 17.0833,
+              "mean_predicted": 0.3567,
+              "observed_rate": 0.2859,
+              "absolute_error": 0.0708
+            },
+            {
+              "range": "40-50",
+              "count": 112,
+              "matches_weight": 31.05,
+              "mean_predicted": 0.4552,
+              "observed_rate": 0.4187,
+              "absolute_error": 0.0365
+            },
+            {
+              "range": "50-60",
+              "count": 209,
+              "matches_weight": 53.5333,
+              "mean_predicted": 0.5579,
+              "observed_rate": 0.5981,
+              "absolute_error": 0.0402
+            },
+            {
+              "range": "60-70",
+              "count": 232,
+              "matches_weight": 61.7,
+              "mean_predicted": 0.6559,
+              "observed_rate": 0.7018,
+              "absolute_error": 0.0459
+            },
+            {
+              "range": "70-80",
+              "count": 342,
+              "matches_weight": 89.6833,
+              "mean_predicted": 0.751,
+              "observed_rate": 0.8465,
+              "absolute_error": 0.0955
+            },
+            {
+              "range": "80-90",
+              "count": 87,
+              "matches_weight": 24.65,
+              "mean_predicted": 0.826,
+              "observed_rate": 0.8952,
+              "absolute_error": 0.0692
+            },
+            {
+              "range": "90-100",
+              "count": 1,
+              "matches_weight": 0.1667,
+              "mean_predicted": 0.9025,
+              "observed_rate": 1,
+              "absolute_error": 0.0975
+            }
+          ]
+        },
+        "relative_log_loss_gain": 0.1947,
+        "relative_brier_gain": 0.248
+      },
+      "calibration_gate": {
+        "passed": true,
+        "reliable_bins": 8,
+        "passing_bins": 5,
+        "failed_bins": 3,
+        "min_passing_bins": 2,
+        "max_reliable_error": 0.2022,
+        "max_passing_error": 0.0708,
+        "reason": null
+      },
+      "validation_note": null,
+      "validation_policy": {
+        "min_train_matches": 100,
+        "min_validation_matches": 50,
+        "min_relative_log_loss_gain": 0.01,
+        "min_relative_brier_gain": 0.005,
+        "min_effective_match_weight_per_calibration_bin": 8,
+        "min_well_calibrated_bins": 2,
+        "max_absolute_calibration_error": 0.08,
+        "metrics_weighted_per_match": true,
+        "probability_calibration": "Platt scaling fit on separate training-match holdout"
+      },
+      "weights": [
+        0.73125241,
+        0.27911387,
+        -1.60714284,
+        0.2272533,
+        -0.0326699,
+        -0.1969917,
+        -0.01131335,
+        0.21365177,
+        -0.0206106,
+        0.19603286,
+        -0.11587614,
+        0.14297402,
+        -0.25898153,
+        -0.42904853,
+        -0.02374124,
+        0.0362822,
+        -0.03474432
+      ],
+      "probability_calibration": {
+        "method": "platt_train_match_holdout",
+        "intercept": -0.7645897,
+        "slope": 2.47258362,
+        "matches": 255,
+        "samples": 946
+      },
+      "experimental_weights": [
+        0.73125241,
+        0.27911387,
+        -1.60714284,
+        0.2272533,
+        -0.0326699,
+        -0.1969917,
+        -0.01131335,
+        0.21365177,
+        -0.0206106,
+        0.19603286,
+        -0.11587614,
+        0.14297402,
+        -0.25898153,
+        -0.42904853,
+        -0.02374124,
+        0.0362822,
+        -0.03474432
+      ],
+      "experimental_probability_calibration": {
+        "method": "platt_train_match_holdout",
+        "intercept": -0.7645897,
+        "slope": 2.47258362,
+        "matches": 255,
+        "samples": 946
       }
     },
     "UNDER_5_5": {
       "status": "SHADOW_VALIDATED",
       "counts": {
-        "train": 3642,
+        "train": 3664,
         "validation": 1135,
-        "train_matches": 980,
+        "train_matches": 985,
         "validation_matches": 304,
-        "train_positive": 2938,
+        "train_positive": 2960,
         "train_negative": 704,
         "validation_positive": 918,
         "validation_negative": 217
       },
       "calibration_counts": {
-        "samples": 943,
-        "matches": 254
+        "samples": 946,
+        "matches": 255
       },
       "metrics": {
         "count": 1135,
@@ -463,74 +463,74 @@
         "accuracy": 0.7922,
         "brier": 0.1416,
         "baseline_brier": 0.1718,
-        "log_loss": 0.4462,
+        "log_loss": 0.4464,
         "baseline_log_loss": 0.5274,
         "calibration": {
           "method": "equal_width_probability_bins_match_weighted",
           "bin_count": 10,
           "populated_bins": 7,
-          "expected_calibration_error": 0.0737,
-          "maximum_calibration_error": 0.5454,
+          "expected_calibration_error": 0.0768,
+          "maximum_calibration_error": 0.5432,
           "bins": [
             {
               "range": "30-40",
               "count": 2,
               "matches_weight": 1.25,
-              "mean_predicted": 0.3847,
+              "mean_predicted": 0.3834,
               "observed_rate": 0,
-              "absolute_error": 0.3847
+              "absolute_error": 0.3834
             },
             {
               "range": "40-50",
               "count": 9,
               "matches_weight": 3.25,
-              "mean_predicted": 0.4668,
+              "mean_predicted": 0.4666,
               "observed_rate": 0.1026,
-              "absolute_error": 0.3642
+              "absolute_error": 0.3641
             },
             {
               "range": "50-60",
               "count": 34,
               "matches_weight": 10.05,
-              "mean_predicted": 0.5653,
+              "mean_predicted": 0.5631,
               "observed_rate": 0.0199,
-              "absolute_error": 0.5454
+              "absolute_error": 0.5432
             },
             {
               "range": "60-70",
-              "count": 63,
-              "matches_weight": 16.9167,
-              "mean_predicted": 0.6512,
-              "observed_rate": 0.3734,
-              "absolute_error": 0.2778
+              "count": 67,
+              "matches_weight": 17.9833,
+              "mean_predicted": 0.6516,
+              "observed_rate": 0.392,
+              "absolute_error": 0.2595
             },
             {
               "range": "70-80",
-              "count": 307,
-              "matches_weight": 81.25,
-              "mean_predicted": 0.7611,
-              "observed_rate": 0.728,
-              "absolute_error": 0.0331
+              "count": 320,
+              "matches_weight": 84.6667,
+              "mean_predicted": 0.7612,
+              "observed_rate": 0.7278,
+              "absolute_error": 0.0334
             },
             {
               "range": "80-90",
-              "count": 696,
-              "matches_weight": 184.8333,
-              "mean_predicted": 0.8508,
-              "observed_rate": 0.8903,
-              "absolute_error": 0.0394
+              "count": 686,
+              "matches_weight": 182.2167,
+              "mean_predicted": 0.85,
+              "observed_rate": 0.8957,
+              "absolute_error": 0.0457
             },
             {
               "range": "90-100",
-              "count": 24,
-              "matches_weight": 6.45,
-              "mean_predicted": 0.9105,
+              "count": 17,
+              "matches_weight": 4.5833,
+              "mean_predicted": 0.9123,
               "observed_rate": 1,
-              "absolute_error": 0.0895
+              "absolute_error": 0.0877
             }
           ]
         },
-        "relative_log_loss_gain": 0.154,
+        "relative_log_loss_gain": 0.1536,
         "relative_brier_gain": 0.1758
       },
       "calibration_gate": {
@@ -539,8 +539,8 @@
         "passing_bins": 2,
         "failed_bins": 2,
         "min_passing_bins": 2,
-        "max_reliable_error": 0.5454,
-        "max_passing_error": 0.0394,
+        "max_reliable_error": 0.5432,
+        "max_passing_error": 0.0457,
         "reason": null
       },
       "validation_note": null,
@@ -556,133 +556,133 @@
         "probability_calibration": "Platt scaling fit on separate training-match holdout"
       },
       "weights": [
-        1.37924302,
-        0.18538826,
-        -1.37817572,
-        0.103994,
-        0.01942466,
-        -0.1364036,
-        -0.03564354,
-        0.2611407,
-        0.02699914,
-        0.2031566,
-        -0.07620506,
-        0.11091763,
-        -0.27087221,
-        -0.3896679,
-        -0.04338658,
-        0.0575639,
-        0.00515308
+        1.38577974,
+        0.18449064,
+        -1.37244766,
+        0.10495897,
+        0.01222233,
+        -0.14207154,
+        -0.03621313,
+        0.25979923,
+        0.02449455,
+        0.20340091,
+        -0.07800982,
+        0.11598955,
+        -0.26834035,
+        -0.38855223,
+        -0.04465631,
+        0.05718773,
+        0.00594741
       ],
       "probability_calibration": {
         "method": "platt_train_match_holdout",
-        "intercept": -0.61862128,
-        "slope": 1.7242143,
-        "matches": 254,
-        "samples": 943
+        "intercept": -0.63559493,
+        "slope": 1.71545767,
+        "matches": 255,
+        "samples": 946
       },
       "experimental_weights": [
-        1.37924302,
-        0.18538826,
-        -1.37817572,
-        0.103994,
-        0.01942466,
-        -0.1364036,
-        -0.03564354,
-        0.2611407,
-        0.02699914,
-        0.2031566,
-        -0.07620506,
-        0.11091763,
-        -0.27087221,
-        -0.3896679,
-        -0.04338658,
-        0.0575639,
-        0.00515308
+        1.38577974,
+        0.18449064,
+        -1.37244766,
+        0.10495897,
+        0.01222233,
+        -0.14207154,
+        -0.03621313,
+        0.25979923,
+        0.02449455,
+        0.20340091,
+        -0.07800982,
+        0.11598955,
+        -0.26834035,
+        -0.38855223,
+        -0.04465631,
+        0.05718773,
+        0.00594741
       ],
       "experimental_probability_calibration": {
         "method": "platt_train_match_holdout",
-        "intercept": -0.61862128,
-        "slope": 1.7242143,
-        "matches": 254,
-        "samples": 943
+        "intercept": -0.63559493,
+        "slope": 1.71545767,
+        "matches": 255,
+        "samples": 946
       }
     },
     "OVER_2_5": {
       "status": "NOT_VALIDATED",
       "counts": {
-        "train": 3642,
+        "train": 3664,
         "validation": 1135,
-        "train_matches": 980,
+        "train_matches": 985,
         "validation_matches": 304,
-        "train_positive": 2703,
+        "train_positive": 2725,
         "train_negative": 939,
         "validation_positive": 839,
         "validation_negative": 296
       },
       "calibration_counts": {
-        "samples": 943,
-        "matches": 254
+        "samples": 946,
+        "matches": 255
       },
       "metrics": {
         "count": 1135,
         "matches": 304,
         "accuracy": 0.7664,
-        "brier": 0.1573,
+        "brier": 0.1575,
         "baseline_brier": 0.179,
-        "log_loss": 0.4793,
+        "log_loss": 0.4798,
         "baseline_log_loss": 0.5435,
         "calibration": {
           "method": "equal_width_probability_bins_match_weighted",
           "bin_count": 10,
           "populated_bins": 5,
-          "expected_calibration_error": 0.1037,
-          "maximum_calibration_error": 0.5863,
+          "expected_calibration_error": 0.1026,
+          "maximum_calibration_error": 0.5834,
           "bins": [
             {
               "range": "50-60",
-              "count": 4,
-              "matches_weight": 0.8333,
-              "mean_predicted": 0.5863,
+              "count": 2,
+              "matches_weight": 0.5,
+              "mean_predicted": 0.5834,
               "observed_rate": 0,
-              "absolute_error": 0.5863
+              "absolute_error": 0.5834
             },
             {
               "range": "60-70",
-              "count": 93,
-              "matches_weight": 25.6667,
-              "mean_predicted": 0.677,
-              "observed_rate": 0.3734,
-              "absolute_error": 0.3037
+              "count": 86,
+              "matches_weight": 24.0667,
+              "mean_predicted": 0.6766,
+              "observed_rate": 0.3677,
+              "absolute_error": 0.3089
             },
             {
               "range": "70-80",
-              "count": 597,
-              "matches_weight": 156.0667,
-              "mean_predicted": 0.7506,
-              "observed_rate": 0.6859,
-              "absolute_error": 0.0647
+              "count": 606,
+              "matches_weight": 158.35,
+              "mean_predicted": 0.7511,
+              "observed_rate": 0.6841,
+              "absolute_error": 0.0669
             },
             {
               "range": "80-90",
-              "count": 384,
-              "matches_weight": 104.1167,
-              "mean_predicted": 0.8385,
-              "observed_rate": 0.9513,
-              "absolute_error": 0.1128
+              "count": 385,
+              "matches_weight": 104.2667,
+              "mean_predicted": 0.839,
+              "observed_rate": 0.9495,
+              "absolute_error": 0.1105
             },
             {
               "range": "90-100",
-              "count": 57,
-              "matches_weight": 17.3167,
-              "mean_predicted": 0.9189,
+              "count": 56,
+              "matches_weight": 16.8167,
+              "mean_predicted": 0.919,
               "observed_rate": 1,
-              "absolute_error": 0.0811
+              "absolute_error": 0.081
             }
           ]
         },
-        "relative_log_loss_gain": 0.1181,
-        "relative_brier_gain": 0.1212
+        "relative_log_loss_gain": 0.1172,
+        "relative_brier_gain": 0.1201
       },
       "calibration_gate": {
         "passed": false,
@@ -690,8 +690,8 @@
         "passing_bins": 1,
         "failed_bins": 3,
         "min_passing_bins": 2,
-        "max_reliable_error": 0.3037,
-        "max_passing_error": 0.0647,
+        "max_reliable_error": 0.3089,
+        "max_passing_error": 0.0669,
         "reason": "INSUFFICIENT_WELL_CALIBRATED_BINS"
       },
       "validation_note": "Calibration gate failed after independent Platt calibration: at least two reliable validation bins must have absolute error <=8%; unreliable bins remain blocked.",
@@ -709,330 +709,139 @@
       "weights": null,
       "probability_calibration": null,
       "experimental_weights": [
-        1.11449662,
-        -0.21044303,
-        1.23438669,
-        -0.14195102,
-        -0.0683249,
-        0.17654346,
-        -0.0486699,
-        -0.20650182,
-        0.11474535,
-        -0.29489891,
-        0.12241966,
-        -0.06359465,
-        0.14526131,
-        0.43031163,
-        -0.0014896,
-        -0.04449847,
-        0.09528998
+        1.12245185,
+        -0.209424,
+        1.22929489,
+        -0.14041893,
+        -0.07490274,
+        0.17012374,
+        -0.04920525,
+        -0.20601548,
+        0.11224022,
+        -0.29273505,
+        0.12027156,
+        -0.05849911,
+        0.14645732,
+        0.42870221,
+        -0.00280023,
+        -0.044371,
+        0.09560696
       ],
       "experimental_probability_calibration": {
         "method": "platt_train_match_holdout",
-        "intercept": -0.67891163,
-        "slope": 1.60966361,
-        "matches": 254,
-        "samples": 943
+        "intercept": -0.67902096,
+        "slope": 1.6047962,
+        "matches": 255,
+        "samples": 946
       }
     },
     "OVER_3_5": {
       "status": "SHADOW_VALIDATED",
       "counts": {
-        "train": 3642,
+        "train": 3664,
         "validation": 1135,
-        "train_matches": 980,
+        "train_matches": 985,
         "validation_matches": 304,
-        "train_positive": 1958,
-        "train_negative": 1684,
+        "train_positive": 1967,
+        "train_negative": 1697,
         "validation_positive": 596,
         "validation_negative": 539
       },
       "calibration_counts": {
-        "samples": 943,
-        "matches": 254
+        "samples": 946,
+        "matches": 255
       },
       "metrics": {
         "count": 1135,
         "matches": 304,
-        "accuracy": 0.7052,
-        "brier": 0.1909,
+        "accuracy": 0.7061,
+        "brier": 0.1912,
         "baseline_brier": 0.2465,
-        "log_loss": 0.5598,
+        "log_loss": 0.5605,
         "baseline_log_loss": 0.6861,
         "calibration": {
           "method": "equal_width_probability_bins_match_weighted",
           "bin_count": 10,
           "populated_bins": 9,
-          "expected_calibration_error": 0.0704,
-          "maximum_calibration_error": 0.186,
+          "expected_calibration_error": 0.077,
+          "maximum_calibration_error": 0.1768,
           "bins": [
             {
               "range": "10-20",
               "count": 3,
               "matches_weight": 1.3333,
-              "mean_predicted": 0.1628,
+              "mean_predicted": 0.1618,
               "observed_rate": 0,
-              "absolute_error": 0.1628
+              "absolute_error": 0.1618
             },
             {
               "range": "20-30",
-              "count": 39,
-              "matches_weight": 9.5,
-              "mean_predicted": 0.265,
-              "observed_rate": 0.0789,
-              "absolute_error": 0.186
+              "count": 36,
+              "matches_weight": 8.6667,
+              "mean_predicted": 0.2634,
+              "observed_rate": 0.0865,
+              "absolute_error": 0.1768
             },
             {
               "range": "30-40",
-              "count": 181,
-              "matches_weight": 49.55,
-              "mean_predicted": 0.3584,
-              "observed_rate": 0.295,
-              "absolute_error": 0.0634
+              "count": 182,
+              "matches_weight": 49.9333,
+              "mean_predicted": 0.3586,
+              "observed_rate": 0.2927,
+              "absolute_error": 0.0659
             },
             {
               "range": "40-50",
-              "count": 216,
-              "matches_weight": 55.9833,
-              "mean_predicted": 0.4471,
-              "observed_rate": 0.3686,
-              "absolute_error": 0.0785
+              "count": 215,
+              "matches_weight": 55.65,
+              "mean_predicted": 0.4474,
+              "observed_rate": 0.3612,
+              "absolute_error": 0.0862
             },
             {
               "range": "50-60",
-              "count": 228,
-              "matches_weight": 61.6667,
-              "mean_predicted": 0.5487,
-              "observed_rate": 0.5484,
-              "absolute_error": 0.0004
+              "count": 227,
+              "matches_weight": 61.6,
+              "mean_predicted": 0.5483,
+              "observed_rate": 0.5568,
+              "absolute_error": 0.0085
             },
             {
               "range": "60-70",
-              "count": 210,
-              "matches_weight": 51.55,
-              "mean_predicted": 0.6487,
-              "observed_rate": 0.5946,
-              "absolute_error": 0.0541
+              "count": 209,
+              "matches_weight": 51.2167,
+              "mean_predicted": 0.647,
+              "observed_rate": 0.5763,
+              "absolute_error": 0.0707
             },
             {
               "range": "70-80",
-              "count": 133,
-              "matches_weight": 38.5167,
-              "mean_predicted": 0.7457,
-              "observed_rate": 0.8888,
-              "absolute_error": 0.1431
+              "count": 138,
+              "matches_weight": 39.7,
+              "mean_predicted": 0.7444,
+              "observed_rate": 0.8921,
+              "absolute_error": 0.1477
             },
             {
               "range": "80-90",
               "count": 79,
               "matches_weight": 21.1167,
-              "mean_predicted": 0.8482,
+              "mean_predicted": 0.8481,
               "observed_rate": 0.9716,
-              "absolute_error": 0.1234
+              "absolute_error": 0.1235
             },
             {
               "range": "90-100",
               "count": 46,
               "matches_weight": 14.7833,
-              "mean_predicted": 0.9365,
+              "mean_predicted": 0.9362,
               "observed_rate": 1,
-              "absolute_error": 0.0635
+              "absolute_error": 0.0638
             }
           ]
         },
-        "relative_log_loss_gain": 0.1841,
-        "relative_brier_gain": 0.2256
-      },
-      "calibration_gate": {
-        "passed": true,
-        "reliable_bins": 8,
-        "passing_bins": 5,
-        "failed_bins": 3,
-        "min_passing_bins": 2,
-        "max_reliable_error": 0.186,
-        "max_passing_error": 0.0785,
-        "reason": null
-      },
-      "validation_note": null,
-      "validation_policy": {
-        "min_train_matches": 100,
-        "min_validation_matches": 50,
-        "min_relative_log_loss_gain": 0.01,
-        "min_relative_brier_gain": 0.005,
-        "min_effective_match_weight_per_calibration_bin": 8,
-        "min_well_calibrated_bins": 2,
-        "max_absolute_calibration_error": 0.08,
-        "metrics_weighted_per_match": true,
-        "probability_calibration": "Platt scaling fit on separate training-match holdout"
-      },
-      "weights": [
-        0.16535726,
-        -0.25389141,
-        1.62352757,
-        -0.05089298,
-        0.03589057,
-        0.1845573,
-        0.00055901,
-        -0.33304988,
-        -0.08137992,
-        -0.27075932,
-        0.04855116,
-        -0.10264828,
-        0.26099609,
-        0.5188876,
-        0.00503581,
-        -0.04393507,
-        0.08345039
-      ],
-      "probability_calibration": {
-        "method": "platt_train_match_holdout",
-        "intercept": -0.5035497,
-        "slope": 2.5718938,
-        "matches": 254,
-        "samples": 943
-      },
-      "experimental_weights": [
-        0.16535726,
-        -0.25389141,
-        1.62352757,
-        -0.05089298,
-        0.03589057,
-        0.1845573,
-        0.00055901,
-        -0.33304988,
-        -0.08137992,
-        -0.27075932,
-        0.04855116,
-        -0.10264828,
-        0.26099609,
-        0.5188876,
-        0.00503581,
-        -0.04393507,
-        0.08345039
-      ],
-      "experimental_probability_calibration": {
-        "method": "platt_train_match_holdout",
-        "intercept": -0.5035497,
-        "slope": 2.5718938,
-        "matches": 254,
-        "samples": 943
-      }
-    },
-    "OVER_4_5": {
-      "status": "SHADOW_VALIDATED",
-      "counts": {
-        "train": 3642,
-        "validation": 1135,
-        "train_matches": 980,
-        "validation_matches": 304,
-        "train_positive": 1210,
-        "train_negative": 2432,
-        "validation_positive": 372,
-        "validation_negative": 763
-      },
-      "calibration_counts": {
-        "samples": 943,
-        "matches": 254
-      },
-      "metrics": {
-        "count": 1135,
-        "matches": 304,
-        "accuracy": 0.7545,
-        "brier": 0.1747,
-        "baseline_brier": 0.2327,
-        "log_loss": 0.5292,
-        "baseline_log_loss": 0.6581,
-        "calibration": {
-          "method": "equal_width_probability_bins_match_weighted",
-          "bin_count": 10,
-          "populated_bins": 10,
-          "expected_calibration_error": 0.0723,
-          "maximum_calibration_error": 0.1997,
-          "bins": [
-            {
-              "range": "0-10",
-              "count": 2,
-              "matches_weight": 0.3333,
-              "mean_predicted": 0.0987,
-              "observed_rate": 0,
-              "absolute_error": 0.0987
-            },
-            {
-              "range": "10-20",
-              "count": 90,
-              "matches_weight": 26.1,
-              "mean_predicted": 0.175,
-              "observed_rate": 0.099,
-              "absolute_error": 0.076
-            },
-            {
-              "range": "20-30",
-              "count": 343,
-              "matches_weight": 90.1833,
-              "mean_predicted": 0.249,
-              "observed_rate": 0.1582,
-              "absolute_error": 0.0908
-            },
-            {
-              "range": "30-40",
-              "count": 230,
-              "matches_weight": 60.2333,
-              "mean_predicted": 0.344,
-              "observed_rate": 0.293,
-              "absolute_error": 0.051
-            },
-            {
-              "range": "40-50",
-              "count": 209,
-              "matches_weight": 53.7167,
-              "mean_predicted": 0.4419,
-              "observed_rate": 0.4114,
-              "absolute_error": 0.0305
-            },
-            {
-              "range": "50-60",
-              "count": 109,
-              "matches_weight": 30.2167,
-              "mean_predicted": 0.5447,
-              "observed_rate": 0.5797,
-              "absolute_error": 0.035
-            },
-            {
-              "range": "60-70",
-              "count": 63,
-              "matches_weight": 17.4167,
-              "mean_predicted": 0.6431,
-              "observed_rate": 0.7311,
-              "absolute_error": 0.088
-            },
-            {
-              "range": "70-80",
-              "count": 49,
-              "matches_weight": 13.3667,
-              "mean_predicted": 0.7517,
-              "observed_rate": 0.9514,
-              "absolute_error": 0.1997
-            },
-            {
-              "range": "80-90",
-              "count": 34,
-              "matches_weight": 10.1833,
-              "mean_predicted": 0.8365,
-              "observed_rate": 1,
-              "absolute_error": 0.1635
-            },
-            {
-              "range": "90-100",
-              "count": 6,
-              "matches_weight": 2.25,
-              "mean_predicted": 0.9299,
-              "observed_rate": 1,
-              "absolute_error": 0.0701
-            }
-          ]
-        },
-        "relative_log_loss_gain": 0.1959,
-        "relative_brier_gain": 0.2492
+        "relative_log_loss_gain": 0.1831,
+        "relative_brier_gain": 0.2243
       },
       "calibration_gate": {
         "passed": true,
@@ -1040,8 +849,8 @@
         "passing_bins": 4,
         "failed_bins": 4,
         "min_passing_bins": 2,
-        "max_reliable_error": 0.1997,
-        "max_passing_error": 0.076,
+        "max_reliable_error": 0.1768,
+        "max_passing_error": 0.0707,
         "reason": null
       },
       "validation_note": null,
@@ -1057,56 +866,247 @@
         "probability_calibration": "Platt scaling fit on separate training-match holdout"
       },
       "weights": [
-        -0.72625504,
-        -0.27843743,
-        1.613416,
-        -0.22185851,
-        0.02115284,
-        0.18546445,
-        0.01220808,
-        -0.21785705,
-        0.02578204,
-        -0.19568309,
-        0.11509283,
-        -0.13836332,
-        0.26435885,
-        0.43330559,
-        0.02122864,
-        -0.03478361,
-        0.03508274
+        0.1616964,
+        -0.25280415,
+        1.62006549,
+        -0.05089546,
+        0.04667716,
+        0.19202154,
+        0.00022519,
+        -0.33257866,
+        -0.07947569,
+        -0.27709058,
+        0.05217355,
+        -0.0957164,
+        0.25256725,
+        0.51447364,
+        0.00728379,
+        -0.04747777,
+        0.08255351
       ],
       "probability_calibration": {
         "method": "platt_train_match_holdout",
-        "intercept": 0.75230924,
-        "slope": 2.47785173,
-        "matches": 254,
-        "samples": 943
+        "intercept": -0.49117887,
+        "slope": 2.56858594,
+        "matches": 255,
+        "samples": 946
       },
       "experimental_weights": [
-        -0.72625504,
-        -0.27843743,
-        1.613416,
-        -0.22185851,
-        0.02115284,
-        0.18546445,
-        0.01220808,
-        -0.21785705,
-        0.02578204,
-        -0.19568309,
-        0.11509283,
-        -0.13836332,
-        0.26435885,
-        0.43330559,
-        0.02122864,
-        -0.03478361,
-        0.03508274
+        0.1616964,
+        -0.25280415,
+        1.62006549,
+        -0.05089546,
+        0.04667716,
+        0.19202154,
+        0.00022519,
+        -0.33257866,
+        -0.07947569,
+        -0.27709058,
+        0.05217355,
+        -0.0957164,
+        0.25256725,
+        0.51447364,
+        0.00728379,
+        -0.04747777,
+        0.08255351
       ],
       "experimental_probability_calibration": {
         "method": "platt_train_match_holdout",
-        "intercept": 0.75230924,
-        "slope": 2.47785173,
-        "matches": 254,
-        "samples": 943
+        "intercept": -0.49117887,
+        "slope": 2.56858594,
+        "matches": 255,
+        "samples": 946
+      }
+    },
+    "OVER_4_5": {
+      "status": "SHADOW_VALIDATED",
+      "counts": {
+        "train": 3664,
+        "validation": 1135,
+        "train_matches": 985,
+        "validation_matches": 304,
+        "train_positive": 1214,
+        "train_negative": 2450,
+        "validation_positive": 372,
+        "validation_negative": 763
+      },
+      "calibration_counts": {
+        "samples": 946,
+        "matches": 255
+      },
+      "metrics": {
+        "count": 1135,
+        "matches": 304,
+        "accuracy": 0.7539,
+        "brier": 0.175,
+        "baseline_brier": 0.2327,
+        "log_loss": 0.53,
+        "baseline_log_loss": 0.6581,
+        "calibration": {
+          "method": "equal_width_probability_bins_match_weighted",
+          "bin_count": 10,
+          "populated_bins": 10,
+          "expected_calibration_error": 0.0731,
+          "maximum_calibration_error": 0.2022,
+          "bins": [
+            {
+              "range": "0-10",
+              "count": 1,
+              "matches_weight": 0.1667,
+              "mean_predicted": 0.0975,
+              "observed_rate": 0,
+              "absolute_error": 0.0975
+            },
+            {
+              "range": "10-20",
+              "count": 87,
+              "matches_weight": 24.65,
+              "mean_predicted": 0.174,
+              "observed_rate": 0.1048,
+              "absolute_error": 0.0692
+            },
+            {
+              "range": "20-30",
+              "count": 342,
+              "matches_weight": 89.6833,
+              "mean_predicted": 0.249,
+              "observed_rate": 0.1535,
+              "absolute_error": 0.0955
+            },
+            {
+              "range": "30-40",
+              "count": 232,
+              "matches_weight": 61.7,
+              "mean_predicted": 0.3441,
+              "observed_rate": 0.2982,
+              "absolute_error": 0.0459
+            },
+            {
+              "range": "40-50",
+              "count": 209,
+              "matches_weight": 53.5333,
+              "mean_predicted": 0.4421,
+              "observed_rate": 0.4019,
+              "absolute_error": 0.0402
+            },
+            {
+              "range": "50-60",
+              "count": 112,
+              "matches_weight": 31.05,
+              "mean_predicted": 0.5448,
+              "observed_rate": 0.5813,
+              "absolute_error": 0.0365
+            },
+            {
+              "range": "60-70",
+              "count": 62,
+              "matches_weight": 17.0833,
+              "mean_predicted": 0.6433,
+              "observed_rate": 0.7141,
+              "absolute_error": 0.0708
+            },
+            {
+              "range": "70-80",
+              "count": 50,
+              "matches_weight": 13.7,
+              "mean_predicted": 0.7504,
+              "observed_rate": 0.9526,
+              "absolute_error": 0.2022
+            },
+            {
+              "range": "80-90",
+              "count": 35,
+              "matches_weight": 10.4333,
+              "mean_predicted": 0.8372,
+              "observed_rate": 1,
+              "absolute_error": 0.1628
+            },
+            {
+              "range": "90-100",
+              "count": 5,
+              "matches_weight": 2,
+              "mean_predicted": 0.9333,
+              "observed_rate": 1,
+              "absolute_error": 0.0667
+            }
+          ]
+        },
+        "relative_log_loss_gain": 0.1947,
+        "relative_brier_gain": 0.248
+      },
+      "calibration_gate": {
+        "passed": true,
+        "reliable_bins": 8,
+        "passing_bins": 5,
+        "failed_bins": 3,
+        "min_passing_bins": 2,
+        "max_reliable_error": 0.2022,
+        "max_passing_error": 0.0708,
+        "reason": null
+      },
+      "validation_note": null,
+      "validation_policy": {
+        "min_train_matches": 100,
+        "min_validation_matches": 50,
+        "min_relative_log_loss_gain": 0.01,
+        "min_relative_brier_gain": 0.005,
+        "min_effective_match_weight_per_calibration_bin": 8,
+        "min_well_calibrated_bins": 2,
+        "max_absolute_calibration_error": 0.08,
+        "metrics_weighted_per_match": true,
+        "probability_calibration": "Platt scaling fit on separate training-match holdout"
+      },
+      "weights": [
+        -0.73125241,
+        -0.27911387,
+        1.60714284,
+        -0.2272533,
+        0.0326699,
+        0.1969917,
+        0.01131335,
+        -0.21365177,
+        0.0206106,
+        -0.19603286,
+        0.11587614,
+        -0.14297402,
+        0.25898153,
+        0.42904853,
+        0.02374124,
+        -0.0362822,
+        0.03474432
+      ],
+      "probability_calibration": {
+        "method": "platt_train_match_holdout",
+        "intercept": 0.7645897,
+        "slope": 2.47258362,
+        "matches": 255,
+        "samples": 946
+      },
+      "experimental_weights": [
+        -0.73125241,
+        -0.27911387,
+        1.60714284,
+        -0.2272533,
+        0.0326699,
+        0.1969917,
+        0.01131335,
+        -0.21365177,
+        0.0206106,
+        -0.19603286,
+        0.11587614,
+        -0.14297402,
+        0.25898153,
+        0.42904853,
+        0.02374124,
+        -0.0362822,
+        0.03474432
+      ],
+      "experimental_probability_calibration": {
+        "method": "platt_train_match_holdout",
+        "intercept": 0.7645897,
+        "slope": 2.47258362,
+        "matches": 255,
+        "samples": 946
       }
     }
   }
