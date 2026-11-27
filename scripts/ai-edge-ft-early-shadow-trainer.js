@@ -7,7 +7,7 @@ const late=require("./ai-edge-live-late-ft-trainer");
 const DATA=path.resolve(__dirname,"..","data"),FILE="ai-edge-ft-early-shadow-model.json";
 const FROM=45,TO=55,LAG=5,AUDIT_CUTOFF=Date.parse("2026-11-26T19:08:50Z"),MODE="HISTORICAL_AUDIT_LOCKED_FT_EARLY_45_55";
 function read(file,fallback){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code==="ENOENT")return fallback;throw e;}}
-function write(file,value){const tmp=file+".tmp";fs.writeFileSync(tmp,JSON.stringify(value,null,2)+"\\n");fs.renameSync(tmp,file);}
+function write(file,value){const tmp=file+".tmp";fs.writeFileSync(tmp,JSON.stringify(value,null,2)+"\n");fs.renameSync(tmp,file);}
 function buildSamples(rows,outcomes,startedAt){
  const grouped=new Map();
  for(const row of rows){
