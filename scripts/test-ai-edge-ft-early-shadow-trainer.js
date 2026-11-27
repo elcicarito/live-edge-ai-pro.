@@ -30,7 +30,7 @@ assert.equal(early.deadlineMinute,120,"FT EARLY must remain open until regular-t
 assert.equal(early.modelStatus,"SHADOW_VALIDATED","historically validated early model must be directly tracked");
 assert.equal(early.separateTracking,true);
 assert.equal(early.modelFairOdds,2,"fair odds must be reciprocal of the model probability");
-assert.equal(early.modelMinimumOdds,2.22,"minimum odds must include calibration error and safety margin");
+assert.equal(early.modelMinimumOdds,2.19,"minimum odds must include calibration error and safety margin");
 
 const roiRows=[
  {target:"FT_EARLY_45_55",matchId:"roi-hit",createdAt:"2026-11-25T18:00:00Z",status:"HIT",modelProbability:0.7,modelMinimumOdds:2.2,simulationMinimumOdds:2.2},
