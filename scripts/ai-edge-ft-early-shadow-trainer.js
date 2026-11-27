@@ -5,14 +5,14 @@ const fs=require("node:fs"),path=require("node:path");
 const base=require("./ai-edge-live-online-trainer");
 const late=require("./ai-edge-live-late-ft-trainer");
 const DATA=path.resolve(__dirname,"..","data"),FILE="ai-edge-ft-early-shadow-model.json";
-const FROM=45,TO=55,LAG=5,MODE="HISTORICAL_AUDIT_LOCKED_FT_EARLY_45_55";
+const FROM=45,TO=55,LAG=5,AUDIT_CUTOFF=Date.parse("2026-11-26T19:08:50Z"),MODE="HISTORICAL_AUDIT_LOCKED_FT_EARLY_45_55";
 function read(file,fallback){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code==="ENOENT")return fallback;throw e;}}
 function write(file,value){const tmp=file+".tmp";fs.writeFileSync(tmp,JSON.stringify(value,null,2)+"\\n");fs.renameSync(tmp,file);}
 function buildSamples(rows,outcomes,startedAt){
  const grouped=new Map();
  for(const row of rows){
   const id=String(row?.match_id||""),time=Date.parse(row?.snapshot?.collected_at||"");
-  if(!id||!Number.isFinite(time)||time<startedAt||!row.snapshot)continue;
+  if(!id||!Number.isFinite(time)||time<startedAt||time>AUDIT_CUTOFF||!row.snapshot)continue;
   if(!grouped.has(id))grouped.set(id,[]);
   grouped.get(id).push(row);
  }
@@ -75,7 +75,7 @@ async function run(dataDir=DATA,nowDate=new Date()){
  const validation=samples.filter(x=>x.split==="validation"),positive=validation.filter(x=>x.y===1).length;
  const output={
   schema_version:1,source:"Flashscore",mode:MODE,target:"At least one goal after the five-minute decision lag until confirmed regular-time full-time",
-  started_at:new Date(startedAt).toISOString(),updated_at:nowDate.toISOString(),lag_minutes:LAG,observation_minute_range:[FROM,TO],
+  started_at:new Date(startedAt).toISOString(),audit_cutoff_at:new Date(AUDIT_CUTOFF).toISOString(),updated_at:nowDate.toISOString(),lag_minutes:LAG,observation_minute_range:[FROM,TO],
   sample_policy:"Frozen historical audit model: latest eligible Flashscore snapshot in each five-minute bucket from 45' inclusive to 55' exclusive; confirmed regular-time outcomes only; score changes crossing the five-minute decision boundary excluded; match-level deterministic train/validation split.",
   feature_version:"late_ft_pressure_v2 with fixed 45-55 minute band; 38 features identical to the historical FT capture-window audit.",
   historical_audit:{samples:samples.length,matches:new Set(samples.map(x=>x.match_id)).size,validation_samples:validation.length,validation_matches:new Set(validation.map(x=>x.match_id)).size,validation_accuracy:trained.metrics?.accuracy??null,validation_goal_rate:validation.length?Number((positive/validation.length).toFixed(4)):null,metrics:trained.metrics,calibration_gate:trained.calibration_gate},
