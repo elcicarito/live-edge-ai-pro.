@@ -130,18 +130,17 @@ if(min>=1&&min<=90&&!/(half.?time|\bht\b|after extra time|penalt|abandoned|cance
    if(!items.some(x=>x.id===p.id))items.push(p);
   }
  }
- if(min>=45&&min<=55&&earlyFtModel?.source==="Flashscore"&&earlyFtModel?.mode==="FORWARD_ONLY_LIVE_TRAINING_FT_EARLY_45_55"){
+ if(min>=45&&min<55&&earlyFtModel?.source==="Flashscore"&&earlyFtModel?.mode==="HISTORICAL_AUDIT_LOCKED_FT_EARLY_45_55"&&earlyFtModel?.status==="SHADOW_VALIDATED"){
   const item=earlyFtModel.model||{},counts=item.counts||{},weights=item.weights;
   const ready=Array.isArray(weights)&&weights.length===38&&Number(counts.train)>=500&&Number(counts.validation)>=300&&Number(counts.train_matches)>=100&&Number(counts.validation_matches)>=50;
   if(ready){
    const x=lateFTFeatureVectorForMatch(m,hist,r.collected_at||collected);
    if(x){x.fill(0,22,26);x[22]=1;}
-   const probability=x?modelProbability(weights,x):null,experimental=earlyFtModel.status!=="SHADOW_VALIDATED";
-   const gateModel={...earlyFtModel,calibration_policy:{min_effective_match_weight:8,max_absolute_error:experimental?0.5:0.08}};
-   const gate=probability===null?{allowed:false,reason:"features_unavailable"}:modelCalibrationGate(item,probability,gateModel);
+   const probability=x?modelProbability(weights,x):null;
+   const gate=probability===null?{allowed:false,reason:"features_unavailable"}:modelCalibrationGate(item,probability,earlyFtModel);
    if(probability!==null&&gate.allowed){
     const minimumOdds=minimumOddsThreshold(probability,gate.absolute_error,0.05);
-    const p=make(m,"FT_EARLY_45_55",min,predictionTime,fx,{modelProbability:Number(probability.toFixed(6)),modelStatus:experimental?"EXPERIMENTAL":"SHADOW_VALIDATED",experimentalModel:experimental,modelCalibrationBin:gate.bin,modelCalibrationMatchesWeight:gate.matches_weight,modelCalibrationError:gate.absolute_error,modelMinimumOdds:minimumOdds,simulationMinimumOdds:minimumOdds,simulationOddsLockedAt:predictionTime,modelOddsSafetyMargin:0.05,modelUpdatedAt:earlyFtModel.updated_at,modelValidationMatches:counts.validation_matches,modelRelativeLogLossGain:item.metrics?.relative_log_loss_gain??null,modelRelativeBrierGain:item.metrics?.relative_brier_gain??null,modelTarget:"GOAL_UNTIL_REGULATION_FT",captureWindow:"45-55",separateTracking:true});
+    const p=make(m,"FT_EARLY_45_55",min,predictionTime,fx,{modelProbability:Number(probability.toFixed(6)),modelFairOdds:Number((1/probability).toFixed(2)),modelStatus:"SHADOW_VALIDATED",experimentalModel:false,modelCalibrationBin:gate.bin,modelCalibrationMatchesWeight:gate.matches_weight,modelCalibrationError:gate.absolute_error,modelMinimumOdds:minimumOdds,simulationMinimumOdds:minimumOdds,simulationOddsLockedAt:predictionTime,modelOddsSafetyMargin:0.05,modelUpdatedAt:earlyFtModel.updated_at,modelValidationMatches:counts.validation_matches,modelRelativeLogLossGain:item.metrics?.relative_log_loss_gain??null,modelRelativeBrierGain:item.metrics?.relative_brier_gain??null,modelTarget:"GOAL_UNTIL_REGULATION_FT",captureWindow:"45-55",separateTracking:true,historicalAuditSamples:earlyFtModel.total_labeled_samples});
     if(!items.some(x=>x.id===p.id))items.push(p);
    }
   }
