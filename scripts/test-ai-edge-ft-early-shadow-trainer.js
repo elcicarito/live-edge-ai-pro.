@@ -20,15 +20,17 @@ const liveStats=[stat("Shots on target",5,2),stat("Total shots",12,7),stat("Corn
 const currentMatch={id:"fixture-early-live",source:"Flashscore",status:"live",home:"Home",away:"Away",competition:"Test league",live_minute:50,home_score:1,away_score:0,stats_collected_at:new Date(now).toISOString(),stats:liveStats};
 const previous={time:now-5*60000,match:{...currentMatch,live_minute:45,collected_at:new Date(now-5*60000).toISOString(),stats:liveStats}};
 const liveFeed={source:"Flashscore",collected_at:new Date(now).toISOString(),recent_history:[previous],records:[{collected_at:new Date(now).toISOString(),match:currentMatch}]};
-const shadowModel={source:"Flashscore",mode:"FORWARD_ONLY_LIVE_TRAINING_FT_EARLY_45_55",status:"NOT_VALIDATED",updated_at:new Date(now).toISOString(),model:{status:"NOT_VALIDATED",weights:Array(38).fill(0),counts:{train:600,validation:320,train_matches:120,validation_matches:60},metrics:{calibration:{bins:[{range:"50-60",matches_weight:10,absolute_error:0.02}]}}}};
+const shadowModel={source:"Flashscore",mode:"HISTORICAL_AUDIT_LOCKED_FT_EARLY_45_55",status:"SHADOW_VALIDATED",updated_at:new Date(now).toISOString(),model:{status:"NOT_VALIDATED",weights:Array(38).fill(0),counts:{train:600,validation:320,train_matches:120,validation_matches:60},metrics:{calibration:{bins:[{range:"50-60",matches_weight:10,absolute_error:0.02}]}}}};
 const predictions=[];
 addPredictions(predictions,liveFeed,now,null,null,shadowModel);
 const early=predictions.find(x=>x.target==="FT_EARLY_45_55");
 assert.ok(early,"FT EARLY prediction should enter the prediction ledger");
 assert.equal(early.actionableAfterMinute,55);
 assert.equal(early.deadlineMinute,120,"FT EARLY must remain open until regular-time full-time");
-assert.equal(early.modelStatus,"EXPERIMENTAL","unvalidated early model must be clearly marked experimental");
+assert.equal(early.modelStatus,"SHADOW_VALIDATED","historically validated early model must be directly tracked");
 assert.equal(early.separateTracking,true);
+assert.equal(early.modelFairOdds,2,"fair odds must be reciprocal of the model probability");
+assert.equal(early.modelMinimumOdds,2.22,"minimum odds must include calibration error and safety margin");
 
 const roiRows=[
  {target:"FT_EARLY_45_55",matchId:"roi-hit",createdAt:"2026-11-25T18:00:00Z",status:"HIT",modelProbability:0.7,modelMinimumOdds:2.2,simulationMinimumOdds:2.2},
