@@ -53,8 +53,14 @@ async function run(dataDir=DATA,nowDate=new Date()){
  fs.mkdirSync(dataDir,{recursive:true});
  const modelPath=path.join(dataDir,FILE),existing=read(modelPath,null);
  if(existing){
-  if(existing.source!=="Flashscore"||existing.mode!==MODE||!Array.isArray(existing.model?.weights))throw new Error("Invalid frozen FT EARLY audit model; refusing to overwrite.");
-  return{created:false,started_at:existing.started_at,updated_at:existing.updated_at,samples:existing.total_labeled_samples,matches:existing.total_labeled_matches,status:existing.status};
+  if(existing.source==="Flashscore"&&existing.mode===MODE&&Array.isArray(existing.model?.weights)){
+   return{created:false,started_at:existing.started_at,updated_at:existing.updated_at,samples:existing.total_labeled_samples,matches:existing.total_labeled_matches,status:existing.status};
+  }
+  // Migrate the earlier empty forward-only warmup file produced by the first deployment attempt.
+  if(existing.source==="Flashscore"&&existing.mode==="FORWARD_ONLY_LIVE_TRAINING_FT_EARLY_45_55"&&
+     (!Array.isArray(existing.model?.weights)||existing.status!=="SHADOW_VALIDATED")){
+   fs.rmSync(modelPath,{force:true});
+  }else throw new Error("Invalid FT EARLY model state; refusing to overwrite.");
  }
  const lateModel=read(path.join(dataDir,"ai-edge-live-late-ft-model.json"),null);
  if(lateModel?.source!=="Flashscore"||lateModel?.mode!=="FORWARD_ONLY_LIVE_TRAINING_LATE_FT")throw new Error("Missing Flashscore late-FT audit baseline.");
