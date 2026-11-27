@@ -258,12 +258,12 @@
     return data;
   }
   async function loadTopLedger(){
-    const url="https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-top-opportunity-ledger.json?t="+Date.now();
+    const url="https://raw.githubusercontent.com/elcicarito/live-edge-ai-pro./live-data-v2/data/ai-edge-top-opportunity-live.json?t="+Date.now();
     const res=await fetch(url,{cache:"no-store",headers:{Accept:"application/json"}});
     if(res.status===404)return null;
     if(!res.ok)throw new Error("TOP história HTTP "+res.status);
     const data=await res.json();
-    if(data.source!=="Flashscore"||data.mode!=="TOP_OPPORTUNITY_LEDGER")throw new Error("Neplatný formát TOP histórie");
+    if(data.source!=="Flashscore"||data.mode!=="TOP_OPPORTUNITY_LEDGER_VIEW"||!Array.isArray(data.entries))throw new Error("Neplatný formát TOP histórie");
     return data;
   }
   async function loadMarketModel(url,expectedMode){
@@ -370,7 +370,7 @@
       const statsFreshness=Number.isFinite(Number(fx.age))?Number(fx.age):Infinity;
       const coreStats=Object.values(fx.values||{}).filter(value=>value&&Number.isFinite(Number(value.home))&&Number.isFinite(Number(value.away))).length;
       const occurrenceTime=row.fromTopLedger?Number(row.capturedAt||createdAt):Date.now();
-      const priorUses=capturedEntries.filter(entry=>String(entry.matchId||"")===String(row.matchId||"")&&String(entry.target||"")===String(row.target||"")&&String(entry.predictionId||"")!==String(row.predictionId||row.id||"")&&Number(entry.capturedAt)<occurrenceTime).length;
+      const priorUses=row.fromTopLedger?Number(row.priorUses||0):Number(topLedger?.priorUseCounts?.[groupId]||0);
       candidates.push({row,current,minute,conservative,after,deadline,target:row.target,market,oddsKey,entered,ev,min,statsFreshness,coreStats,activityReady:fx.delta?.ready===true,priorUses});
     };
     // Zobraziť už zachytené otvorené TOP tipy; register nesmie skryť aktívnu príležitosť.
