@@ -56,7 +56,21 @@ function buildTopLedger(dataDir=DATA,nowDate=new Date()){
  const summary={MODEL_25:summarize(entries,"MODEL_25"),MODEL_FT:summarize(entries,"MODEL_FT"),FT_EARLY_45_55:summarize(entries,"FT_EARLY_45_55"),CORNERS_UNDER:marketPredictions.summarizeMarketGroup(entries,"CORNERS_UNDER"),CARDS_OU:marketPredictions.summarizeMarketGroup(entries,"CARDS_OU"),CORNERS_BY_LINE:Object.fromEntries(marketPredictions.MARKET_LINES.filter(line=>line.marketType==="CORNERS").map(line=>[line.key,marketPredictions.summarizeMarketGroup(entries,"CORNERS_UNDER",line.target)])),CARDS_BY_LINE:Object.fromEntries(marketPredictions.MARKET_LINES.filter(line=>line.marketType==="CARDS").map(line=>[line.key,marketPredictions.summarizeMarketGroup(entries,"CARDS_OU",line.target)]))};
  const output={schema_version:1,source:"Flashscore",mode:"TOP_OPPORTUNITY_LEDGER",retention_policy:"permanent",updated_at:nowDate.toISOString(),feed_collected_at:feed.collected_at||null,total_entries:entries.length,summary,entries:entries.slice().sort((a,b)=>stamp(b.capturedAt)-stamp(a.capturedAt))};
  const tmp=file+".tmp";fs.writeFileSync(tmp,JSON.stringify(output,null,2)+"\n");fs.renameSync(tmp,file);
- return{total:entries.length,summary,updated_at:output.updated_at};
+ // The permanent ledger can grow to many thousands of rows. Publish a compact UI view
+ // so mobile clients only download open opportunities, summary metrics and repeat counts.
+ const priorUseCounts={};
+ for(const entry of entries){const group=String(entry.matchId||"")+"|"+String(entry.target||"");priorUseCounts[group]=(priorUseCounts[group]||0)+1;}
+ const liveView={
+  schema_version:1,source:"Flashscore",mode:"TOP_OPPORTUNITY_LEDGER_VIEW",
+  retention_policy:"compact_live_view; permanent_full_history_in_ai-edge-top-opportunity-ledger.json",
+  updated_at:output.updated_at,feed_collected_at:output.feed_collected_at,
+  total_entries:entries.length,summary,
+  priorUseCounts,
+  entries:entries.filter(x=>x.status==="OPEN").map(x=>({...x,priorUses:Math.max(0,(priorUseCounts[String(x.matchId||"")+"|"+String(x.target||"")]||1)-1)})).sort((a,b)=>stamp(b.capturedAt)-stamp(a.capturedAt))
+ };
+ const viewFile=path.join(dataDir,"ai-edge-top-opportunity-live.json"),viewTmp=viewFile+".tmp";
+ fs.writeFileSync(viewTmp,JSON.stringify(liveView)+"\n");fs.renameSync(viewTmp,viewFile);
+ return{total:entries.length,open:liveView.entries.length,summary,updated_at:output.updated_at,live_view:"ai-edge-top-opportunity-live.json"};
 }
 if(require.main===module){try{console.log("AI EDGE TOP OPPORTUNITY LEDGER",JSON.stringify(buildTopLedger()));}catch(e){console.error("AI EDGE TOP LEDGER FAILED:",e.message);process.exit(1);}}
 module.exports={summarize,buildTopLedger,topEntryKey,hasCaptured};
