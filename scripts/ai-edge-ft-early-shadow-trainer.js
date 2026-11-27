@@ -72,7 +72,7 @@ async function run(dataDir=DATA,nowDate=new Date()){
   started_at:new Date(startedAt).toISOString(),updated_at:nowDate.toISOString(),lag_minutes:LAG,observation_minute_range:[FROM,TO],
   sample_policy:"Frozen historical audit model: latest eligible Flashscore snapshot in each five-minute bucket from 45' inclusive to 55' exclusive; confirmed regular-time outcomes only; score changes crossing the five-minute decision boundary excluded; match-level deterministic train/validation split.",
   feature_version:"late_ft_pressure_v2 with fixed 45-55 minute band; 38 features identical to the historical FT capture-window audit.",
-  historical_audit:{samples:samples.length,matches:new Set(samples.map(x=>x.match_id)).size,validation_samples:validation.length,validation_matches:new Set(validation.map(x=>x.match_id)).size,validation_accuracy:validation.length?Number((Math.max(positive,validation.length-positive)/validation.length).toFixed(4)):null,validation_goal_rate:validation.length?Number((positive/validation.length).toFixed(4)):null,metrics:trained.metrics,calibration_gate:trained.calibration_gate},
+  historical_audit:{samples:samples.length,matches:new Set(samples.map(x=>x.match_id)).size,validation_samples:validation.length,validation_matches:new Set(validation.map(x=>x.match_id)).size,validation_accuracy:trained.metrics?.accuracy??null,validation_goal_rate:validation.length?Number((positive/validation.length).toFixed(4)):null,metrics:trained.metrics,calibration_gate:trained.calibration_gate},
   validation_policy:trained.validation_policy,
   calibration_policy:{min_effective_match_weight:8,max_absolute_error:0.08,abstain_outside_reliable_bins:true},
   total_labeled_samples:samples.length,total_labeled_matches:new Set(samples.map(x=>x.match_id)).size,
